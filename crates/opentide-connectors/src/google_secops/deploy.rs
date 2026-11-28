@@ -16,7 +16,7 @@ use opentide_compile::Json;
 use opentide_compile::google_secops::{RunState, scope_id};
 use opentide_schema::objects::platform::google_secops::assemble::AssembledRule;
 
-use crate::connector::TenantContext;
+use crate::connector::{CodedError, TenantContext};
 use crate::error::ConnectorError;
 
 use super::auth::Authorizer;
@@ -213,14 +213,15 @@ fn health(rule: &Json, deployment: &Json, outcome: &mut RuleOutcome) {
 ///
 /// # Errors
 ///
-/// The tenant's [`ConnectorError`].
+/// The tenant's [`ConnectorError`], under Google SecOps's code when it names
+/// one ([`CodedError`]).
 pub async fn deploy_rule(
     cx: TenantContext<'_>,
     auth: &Authorizer,
     endpoint: &str,
     instance: &str,
     rule: &RuleDeploy,
-) -> Result<RuleOutcome, ConnectorError> {
+) -> Result<RuleOutcome, CodedError> {
     let client = Client::new(cx, auth, endpoint, instance);
     let mut outcome = RuleOutcome {
         state: StateChange::Keep,
@@ -236,7 +237,7 @@ pub async fn deploy_rule(
 }
 
 /// A failure the rule records, or the tenant's error.
-fn api(failure: Failure) -> Result<ApiError, ConnectorError> {
+fn api(failure: Failure) -> Result<ApiError, CodedError> {
     match failure {
         Failure::Api(error) => Ok(error),
         Failure::Tenant(error) => Err(error),
@@ -249,7 +250,7 @@ async fn verify(
     client: &Client<'_>,
     assembled: &AssembledRule,
     outcome: &mut RuleOutcome,
-) -> Result<Option<VerifyOutcome>, ConnectorError> {
+) -> Result<Option<VerifyOutcome>, CodedError> {
     let verified = match client.verify(&assembled.text).await {
         Ok(answer) => read_verify_answer(&answer),
         Err(failure) => {
@@ -323,7 +324,7 @@ async fn create(
     client: &Client<'_>,
     rule: &RuleDeploy,
     outcome: &mut RuleOutcome,
-) -> Result<(), ConnectorError> {
+) -> Result<(), CodedError> {
     let Some(verified) = verify(client, &rule.assembled, outcome).await? else {
         return Ok(());
     };
@@ -337,9 +338,12 @@ async fn create(
     {
         Ok(created) => created,
         // Sent, and no answer: the rule may exist with an id opentide never saw.
-        Err(Failure::Tenant(
-            error @ (ConnectorError::Timeout { .. } | ConnectorError::Answer { .. }),
-        )) => {
+        Err(Failure::Tenant(error))
+            if matches!(
+                *error.error,
+                ConnectorError::Timeout { .. } | ConnectorError::Answer { .. }
+            ) =>
+        {
             outcome.fail(
                 "google_secops_create_unconfirmed",
                 format!("the create of rule {name} got no answer ({error}), {UNCONFIRMED}"),
@@ -393,7 +397,7 @@ async fn update(
     rule: &RuleDeploy,
     rule_id: &str,
     outcome: &mut RuleOutcome,
-) -> Result<(), ConnectorError> {
+) -> Result<(), CodedError> {
     let disabling = rule.disabling;
     let read = async {
         let remote = client.get_rule(rule_id).await?;
@@ -500,7 +504,7 @@ async fn gone(
     client: &Client<'_>,
     rule: &RuleDeploy,
     outcome: &mut RuleOutcome,
-) -> Result<(), ConnectorError> {
+) -> Result<(), CodedError> {
     if rule.retiring {
         outcome.warn(
             "google_secops_rule_missing",
@@ -526,7 +530,7 @@ async fn retire(
     rule: &RuleDeploy,
     rule_id: &str,
     outcome: &mut RuleOutcome,
-) -> Result<(), ConnectorError> {
+) -> Result<(), CodedError> {
     if !rule.delete {
         return archive(client, rule_id, outcome).await;
     }
@@ -556,7 +560,7 @@ async fn archive(
     client: &Client<'_>,
     rule_id: &str,
     outcome: &mut RuleOutcome,
-) -> Result<(), ConnectorError> {
+) -> Result<(), CodedError> {
     let steps = async {
         let remote = client.get_deployment(rule_id).await?;
         if remote.get("archived").is_some_and(Json::is_true) {

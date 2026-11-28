@@ -23,6 +23,7 @@ mod catalog;
 mod deploy;
 #[cfg(any(target_os = "wasi", test))]
 pub(crate) mod fetch;
+mod graph;
 mod plugin;
 mod queries;
 mod resources;
@@ -73,6 +74,7 @@ pub const TOOLS: &[&str] = &[
     "search",
     "get_chaining",
     "coverage",
+    "graph",
     "validate_rule",
     "validation_report",
     "explain",

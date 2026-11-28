@@ -9,8 +9,8 @@ use std::time::Duration;
 
 use opentide_compile::google_secops::RunState;
 use opentide_connectors::connector::{
-    DeployRequest, DeployScope, Deployer, LiveValidator, Operation, QueryRequest, QueryRunner,
-    TenantContext, TimeWindow,
+    CodedError, DeployRequest, DeployScope, Deployer, LiveValidator, Operation, QueryRequest,
+    QueryRunner, TenantContext, TimeWindow,
 };
 use opentide_connectors::credentials::Mode;
 use opentide_connectors::google_secops::deploy::{
@@ -153,7 +153,7 @@ async fn deploy_with(
     api: &MockServer,
     settings: &HttpSettings,
     rule: &RuleDeploy,
-) -> Result<RuleOutcome, ConnectorError> {
+) -> Result<RuleOutcome, CodedError> {
     with_tenant(api, "", settings, async |cx, connector| {
         let authorizer = connector.authorizer(cx.tenant).unwrap();
         deploy_rule(cx, &authorizer, &api.uri(), RESOURCE, rule).await
@@ -351,7 +351,8 @@ fn credentials_the_instance_refuses_stop_the_tenant_without_the_token() {
         let error = deploy_with(&api, &settings, &rule(Action::Create))
             .await
             .unwrap_err();
-        let ConnectorError::Authentication { message, .. } = &error else {
+        assert_eq!(error.code, Some("google_secops_tenant_unauthorized"));
+        let ConnectorError::Authentication { message, .. } = &*error.error else {
             panic!("{error:?}")
         };
         assert!(message.starts_with("google_secops_tenant_unauthorized: tenant secops-eu"));
@@ -941,8 +942,9 @@ fn a_token_endpoint_that_cannot_be_reached_is_unreachable_not_unauthorized() {
         };
         let authorizer = GoogleSecops::new(env).authorizer(&tenant).unwrap();
         let error = authorizer.token(cx).await.unwrap_err();
+        assert_eq!(error.code, None);
         assert!(
-            matches!(error, ConnectorError::Unreachable { .. }),
+            matches!(*error.error, ConnectorError::Unreachable { .. }),
             "{error:?}"
         );
         let shown = format!("{error} {error:?}");

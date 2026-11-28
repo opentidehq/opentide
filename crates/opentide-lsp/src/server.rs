@@ -73,7 +73,9 @@ fn warm_up() {
             opentide_workspace::validate::objects::warm_up("rule::1.1");
             // What the editor reads of the models until a root's workspace
             // has loaded, and the configuration files' schemas.
-            crate::models::default_catalog();
+            // Whether they are the engine's own, which the first request
+            // after they arrive asks (#2169).
+            crate::models::is_compiled_in(&crate::models::default_catalog());
             crate::models::configuration_schemas();
         });
     // The KQL catalogs (the Azure Monitor tables, parsed from TOML on first

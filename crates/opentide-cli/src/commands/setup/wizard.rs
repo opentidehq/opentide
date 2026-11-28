@@ -82,10 +82,11 @@ pub const CI: [(Ci, &str); 3] = [
 ];
 
 /// The MCP hosts (`MCP_LABELS`).
-pub const MCP: [(&str, &str); 4] = [
+pub const MCP: [(&str, &str); 5] = [
     ("vscode", "VS Code"),
     ("cursor", "Cursor"),
     ("claude-code", "Claude Code"),
+    ("claude-desktop", "Claude Desktop"),
     ("generic", "Generic (opentide.mcp.json)"),
 ];
 
@@ -835,7 +836,7 @@ pub(crate) mod tests {
                 "select CI/CD platform [\"Configure later\", \"GitHub Actions\", \"GitLab CI\", \"Azure Pipelines\"] [0]",
                 "checkbox CI workflow features [\"Staging deployments on pull requests\", \"Inflight preview shards\", \"Automatic status promotion\", \"Sharing on the default branch\", \"Explorer pages\"] [0, 1] required=false",
                 "confirm Configure opentide MCP? [false]",
-                "checkbox MCP hosts [\"VS Code\", \"Cursor\", \"Claude Code\", \"Generic (opentide.mcp.json)\"] [] required=true",
+                "checkbox MCP hosts [\"VS Code\", \"Cursor\", \"Claude Code\", \"Claude Desktop\", \"Generic (opentide.mcp.json)\"] [] required=true",
                 "confirm Install agent skills? [false]",
                 "confirm Apply this setup plan? [true]",
             ]
@@ -1066,7 +1067,7 @@ pub(crate) mod tests {
         );
         assert!(String::from_utf8(out).unwrap().ends_with("Target: /r/x\n"));
         let mut script = Script::new(vec![
-            Reply::Checkbox(Some(vec![0, 3])),
+            Reply::Checkbox(Some(vec![0, 4])),
             Reply::Confirm(Some(false)),
         ]);
         let mut out = Vec::new();

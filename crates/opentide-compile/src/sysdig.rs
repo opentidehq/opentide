@@ -10,6 +10,7 @@
 use opentide_core::falco::{
     flatten_lists, is_list_comparison, list_inside, normalize_comp, resolve_list, upsert,
 };
+use opentide_schema::objects::platform::SysdigConfig;
 use opentide_schema::objects::platform::falco_text::{
     check_position_names, join_lines, substitute_macros,
 };
@@ -18,11 +19,19 @@ use crate::elastic::rule_techniques;
 use crate::json::{Json, Object};
 use crate::rule::{CompileError, Rule};
 use crate::strategy::StatusStrategy;
-use crate::{Context, attack};
+use crate::{Context, attack, typed};
 use opentide_schema::node::{Node, Value};
 
 /// The platform's display name, in a failure's message.
 pub const DISPLAY: &str = "Sysdig";
+
+/// The platform's key under `configurations`.
+const PLATFORM: &str = "sysdig";
+
+/// The keys Falco reads as the file writes them ([`falco_block`]): the
+/// compile reads them from the rule's node, not from the model, which reads
+/// the rule's JSON and would lose a scalar's text (`1.50` would be `1.5`).
+const FALCO_KEYS: [&str; 3] = ["macros", "lists", "exceptions"];
 
 /// The priority of a rule with no `response`, or an unknown severity.
 pub const DEFAULT_PRIORITY: &str = "WARNING";
@@ -400,17 +409,14 @@ fn definitions(block: &Json, list: &str, key: &str) -> Vec<(String, Json)> {
 }
 
 /// The text of a field that is set: a non-empty string.
-fn text<'a>(block: &'a Json, key: &str) -> Option<&'a str> {
-    block
-        .get(key)
-        .and_then(Json::as_str)
-        .filter(|text| !text.is_empty())
+fn filled(text: Option<&str>) -> Option<&str> {
+    text.filter(|text| !text.is_empty())
 }
 
 /// The block's priority, else `response.alert_severity`'s, else `WARNING`
 /// (`derive_priority`).
-fn derive_priority(rule: &Rule, block: &Json) -> String {
-    if let Some(priority) = text(block, "priority") {
+fn derive_priority(rule: &Rule, block: &SysdigConfig) -> String {
+    if let Some(priority) = filled(block.priority.as_deref()) {
         let value = priority.trim().to_uppercase();
         return if value == "INFO" {
             "INFORMATIONAL".to_owned()
@@ -470,6 +476,17 @@ pub fn compile(
     strategy: StatusStrategy,
     tenant_tags: &[String],
 ) -> Result<FalcoRule, CompileError> {
+    compile_config(cx, rule, &config_of(rule)?, strategy, tenant_tags)
+}
+
+/// [`compile`], of `config`, the rule's block read by the model.
+fn compile_config(
+    cx: &Context<'_>,
+    rule: &Rule,
+    config: &SysdigConfig,
+    strategy: StatusStrategy,
+    tenant_tags: &[String],
+) -> Result<FalcoRule, CompileError> {
     let block = &falco_block(rule)?;
     let macros: Vec<(String, String)> = definitions(block, "macros", "condition")
         .into_iter()
@@ -489,18 +506,15 @@ pub fn compile(
         })
         .collect::<Result<_, CompileError>>()?;
     let expander = Expander::new(&macros, &lists)?;
-    let condition = text(block, "condition").map(|condition| expander.expand(condition));
+    let condition = filled(config.condition.as_deref()).map(|condition| expander.expand(condition));
     let mut exceptions = Vec::new();
     if let Some(Json::Array(entries)) = block.get("exceptions") {
         for entry in entries {
             exceptions.push(expander.exception(entry)?);
         }
     }
-    let minimum_engine_version = match block.get("minimum_engine_version") {
-        Some(Json::Int(version)) => Some(*version),
-        _ => None,
-    };
-    if let Some(tuned) = text(block, "append_to_rule") {
+    let minimum_engine_version = config.minimum_engine_version;
+    if let Some(tuned) = filled(config.append_to_rule.as_deref()) {
         return Ok(FalcoRule {
             uuid: rule.uuid.clone(),
             name: tuned.to_owned(),
@@ -515,13 +529,15 @@ pub fn compile(
             minimum_engine_version,
         });
     }
-    let name = text(block, "name").unwrap_or(&rule.name).to_owned();
-    let source = text(block, "source").unwrap_or(DEFAULT_SOURCE).to_owned();
-    let output = match text(block, "output") {
+    let name = filled(Some(&config.name)).unwrap_or(&rule.name).to_owned();
+    let source = filled(config.source.as_deref())
+        .unwrap_or(DEFAULT_SOURCE)
+        .to_owned();
+    let output = match filled(config.output.as_deref()) {
         Some(output) => join_lines(output),
         None => format!("{name}{}", default_output_fields(&source)),
     };
-    let mut tags = strings(block.get("tags"));
+    let mut tags = config.tags.clone().unwrap_or_default();
     tags.extend(attack_tags(cx, &rule_techniques(cx, rule)));
     tags.push(maturity_tag(strategy).to_owned());
     tags.extend(tenant_tags.iter().cloned());
@@ -543,7 +559,7 @@ pub fn compile(
             .collect::<Vec<_>>()
             .join(" "),
         output,
-        priority: derive_priority(rule, block),
+        priority: derive_priority(rule, config),
         source,
         tags: unique,
         minimum_engine_version,
@@ -560,14 +576,37 @@ fn block_of(rule: &Rule) -> Result<&Json, CompileError> {
     })
 }
 
+/// The rule's Sysdig block read by the model `validate` checks it with
+/// (`SysdigConfig`, #1951; [`typed::read_block`]), or the error naming the
+/// rule or the fields whose shape the model refuses.
+///
+/// [`FALCO_KEYS`] are left out of the read: the compile takes them from the
+/// rule's node ([`falco_block`]), and refuses their faults with its own
+/// messages, as it always has.
+fn config_of(rule: &Rule) -> Result<SysdigConfig, CompileError> {
+    let block = match block_of(rule)? {
+        Json::Object(object) => {
+            let mut object = object.clone();
+            for key in FALCO_KEYS {
+                object.shift_remove(key);
+            }
+            Json::Object(object)
+        }
+        other => other.clone(),
+    };
+    typed::read_block(&block, PLATFORM, DISPLAY)
+}
+
+/// The strategy `block`'s status maps to.
+fn status_strategy(cx: &Context<'_>, block: &SysdigConfig) -> Result<StatusStrategy, CompileError> {
+    cx.statuses
+        .strategy(&block.status)
+        .map_err(|error| CompileError::failed(DISPLAY, &error.to_string()))
+}
+
 /// The strategy the block's status maps to.
 pub fn strategy(cx: &Context<'_>, rule: &Rule) -> Result<StatusStrategy, CompileError> {
-    let status = block_of(rule)?
-        .get("status")
-        .map_or_else(|| "null".to_owned(), Json::to_text);
-    cx.statuses
-        .strategy(&status)
-        .map_err(|error| CompileError::failed(DISPLAY, &error.to_string()))
+    status_strategy(cx, &config_of(rule)?)
 }
 
 /// The tags a tenant's `setup` adds.
@@ -577,11 +616,8 @@ pub fn tenant_tags(tenant: &Json) -> Vec<String> {
 
 /// The runtime policies the rule's block names (`policies`), which a deploy
 /// takes before the tenant's; `None` when it names none.
-pub fn block_policies(rule: &Rule) -> Option<Vec<String>> {
-    match rule.block("sysdig")?.get("policies")? {
-        Json::Array(items) => Some(items.iter().map(Json::to_text).collect()),
-        _ => None,
-    }
+pub fn block_policies(rule: &Rule) -> Result<Option<Vec<String>>, CompileError> {
+    Ok(config_of(rule)?.policies)
 }
 
 /// The body `rule` deploys on `tenant` (none for a dry run), under its
@@ -591,9 +627,34 @@ pub fn compile_body(
     rule: &Rule,
     tenant: Option<&Json>,
 ) -> Result<Json, CompileError> {
+    body_of(cx, rule, &config_of(rule)?, tenant)
+}
+
+/// [`compile_body`], of `config`, the rule's block read by the model.
+fn body_of(
+    cx: &Context<'_>,
+    rule: &Rule,
+    config: &SysdigConfig,
+    tenant: Option<&Json>,
+) -> Result<Json, CompileError> {
     let tags = tenant.map(tenant_tags).unwrap_or_default();
-    let strategy = strategy(cx, rule)?;
-    api_body(&compile(cx, rule, strategy, &tags)?)
+    let strategy = status_strategy(cx, config)?;
+    api_body(&compile_config(cx, rule, config, strategy, &tags)?)
+}
+
+/// What a deploy sends for `rule` on `tenant` (none for a dry run): the body
+/// ([`compile_body`]) and the policies the block names ([`block_policies`]),
+/// from one read of the block.
+pub fn compile_deployment(
+    cx: &Context<'_>,
+    rule: &Rule,
+    tenant: Option<&Json>,
+) -> Result<SysdigRule, CompileError> {
+    let config = config_of(rule)?;
+    Ok(SysdigRule {
+        body: body_of(cx, rule, &config, tenant)?,
+        policies: config.policies,
+    })
 }
 
 /// What a Sysdig deploy sends for a rule on one tenant

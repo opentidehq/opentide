@@ -25,6 +25,9 @@ Options:
       --claude-code
           Configure Claude Code (.mcp.json)
 
+      --claude-desktop
+          Configure Claude Desktop (its claude_desktop_config.json, outside the repository)
+
       --generic
           Configure any MCP host (opentide.mcp.json)
 

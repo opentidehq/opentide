@@ -62,13 +62,24 @@ fn objective_techniques(objective: &Node, index: &Index) -> Vec<String> {
 /// The objective a rule implements: its `detection_model`, or the owner of
 /// the signal it names.
 pub fn rule_objective<'i>(rule: &Node, index: &'i Index) -> Option<&'i Node> {
+    lookup(index, "objective", rule_objective_uuid(rule, index)?)
+}
+
+/// The UUID of the objective a rule implements, as the index keys it: its
+/// `detection_model`, or the owner of the signal it names. `None` when that
+/// is no objective of the index.
+pub fn rule_objective_uuid<'i>(rule: &Node, index: &'i Index) -> Option<&'i str> {
     let Some(Value::Str(target)) = get(rule, "detection_model").map(|n| &n.value) else {
         return None;
     };
     let owner = index
         .signal(target)
         .map_or(target.as_str(), |signal| signal.owner.as_str());
-    lookup(index, "objective", owner)
+    index
+        .objects
+        .get("objective")?
+        .get_key_value(owner)
+        .map(|(uuid, _)| uuid.as_str())
 }
 
 /// What an object gets from its parents: a rule its objective's

@@ -503,6 +503,63 @@ impl From<ConnectorError> for DeployError {
     }
 }
 
+/// A tenant's [`ConnectorError`] with the platform's own failure code when
+/// the request that raised it names one (`graylog_tenant_unauthorized`,
+/// ...). The code travels as data, so a platform never reads it back out of
+/// the message; the message is the one users see, with its `code: ` prefix.
+#[derive(Debug, thiserror::Error)]
+#[error("{error}")]
+pub struct CodedError {
+    /// The platform's code, or `None` for the connector error's own
+    /// ([`DeployError::from`]).
+    pub code: Option<&'static str>,
+    /// The error, its message unchanged (boxed: the pair stays a small
+    /// `Err`).
+    pub error: Box<ConnectorError>,
+}
+
+impl CodedError {
+    /// *error* under the platform's *code*.
+    #[must_use]
+    pub fn new(code: &'static str, error: ConnectorError) -> Self {
+        Self {
+            code: Some(code),
+            error: Box::new(error),
+        }
+    }
+
+    /// The tenant's failure: each of its rules would fail the same way, so
+    /// it fails the tenant, under the platform's code when there is one,
+    /// else as [`DeployError::from`] codes the connector error.
+    #[must_use]
+    pub fn into_tenant_failure(self) -> DeployError {
+        let mut failed = DeployError::from(*self.error);
+        failed.scope = DeployScope::Tenant;
+        if let Some(code) = self.code {
+            failed.failure.code = code;
+        }
+        failed
+    }
+}
+
+impl From<ConnectorError> for CodedError {
+    /// A connector error no platform code names.
+    fn from(error: ConnectorError) -> Self {
+        Self {
+            code: None,
+            error: Box::new(error),
+        }
+    }
+}
+
+impl From<CodedError> for ConnectorError {
+    /// The error alone, for a caller that reports the connector error's own
+    /// code (a live check, a query, a probe).
+    fn from(coded: CodedError) -> Self {
+        *coded.error
+    }
+}
+
 /// A connector error's code (the facade's) and what it stops in a deploy.
 fn deploy_code(error: &ConnectorError) -> (&'static str, DeployScope) {
     use DeployScope::{Rule, Tenant};
@@ -1112,9 +1169,42 @@ impl Registry {
 #[cfg(test)]
 mod tests {
     use super::{
-        ConnectorError, DeployError, DeployEvent, DeployFailure, DeployOutcome, DeployRequest,
-        DeployScope, DeployWarning, Operation, kql_code, kql_with_limit,
+        CodedError, ConnectorError, DeployError, DeployEvent, DeployFailure, DeployOutcome,
+        DeployRequest, DeployScope, DeployWarning, Operation, kql_code, kql_with_limit,
     };
+
+    /// The code is the producer's, never read back from the message: a
+    /// refusal that quotes a code (a name in Graylog's own answer, say) keeps
+    /// the connector error's code, and the message is never touched.
+    #[test]
+    fn a_tenant_failure_takes_the_code_the_producer_gave() {
+        let message = "graylog_version_unsupported: tenant soc runs Graylog \"é😀\"";
+        let coded = CodedError::new(
+            "graylog_version_unsupported",
+            ConnectorError::refused("graylog", "soc", message, None),
+        )
+        .into_tenant_failure();
+        assert_eq!(coded.scope, DeployScope::Tenant);
+        assert_eq!(coded.failure.code, "graylog_version_unsupported");
+        assert_eq!(coded.failure.message, message);
+
+        let quoted = CodedError::from(ConnectorError::refused("graylog", "soc", message, None))
+            .into_tenant_failure();
+        assert_eq!(quoted.scope, DeployScope::Tenant);
+        assert_eq!(quoted.failure.code, "tenant_refused");
+        assert_eq!(quoted.failure.message, message);
+
+        let unauthorized = CodedError::from(ConnectorError::authentication(
+            "graylog",
+            "soc",
+            "graylog_tenant_unauthorized: HTTP 401",
+        ));
+        assert_eq!(unauthorized.to_string(), unauthorized.error.to_string());
+        assert_eq!(
+            unauthorized.into_tenant_failure().failure.code,
+            "authentication_failed"
+        );
+    }
 
     #[test]
     fn a_connector_error_fails_the_rule_or_the_tenant() {

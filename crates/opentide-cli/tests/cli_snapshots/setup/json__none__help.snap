@@ -97,9 +97,9 @@ Options:
           Run setup vscode: the extension recommendation and snippets (the opentide VS Code extension is the recommended path)
 
       --mcp <HOST>
-          Write MCP configuration for vscode, cursor, claude-code or generic (repeatable)
+          Write MCP configuration for vscode, cursor, claude-code, claude-desktop or generic (repeatable)
           
-          [possible values: vscode, cursor, claude-code, generic]
+          [possible values: vscode, cursor, claude-code, claude-desktop, generic]
 
       --skills <TARGET>
           Install agent skills for claude-code, cursor, github-copilot or generic (repeatable)

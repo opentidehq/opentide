@@ -157,7 +157,8 @@ pub fn block_statuses(body: &Node) -> Vec<String> {
         .collect()
 }
 
-fn summary(uuid: &str, family: &str, body: &Node) -> Json {
+/// One object as `search` lists it: `{uuid, type, title, status}`.
+pub(super) fn summary(uuid: &str, family: &str, body: &Node) -> Json {
     let title = match body.get("name").map(|node| &node.value) {
         None | Some(Value::Null | Value::Bool(false)) => Json::str(uuid),
         Some(Value::Str(text)) if text.is_empty() => Json::str(uuid),
