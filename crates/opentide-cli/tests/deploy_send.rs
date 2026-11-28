@@ -3123,6 +3123,113 @@ fn a_datadog_deploy_sends_the_body_its_dry_run_shows() {
     assert_eq!(&request.get("body").unwrap().to_compact(), body);
 }
 
+/// The rule body a Sysdig deploy sends is, byte for byte, the `api_request`
+/// the dry run shows for that tenant (#1952: both compile through
+/// `compiler::Sysdig`), and the policy the rule is added to is the one the
+/// dry run shows beside it. The dry run compiles for the run's first tenant,
+/// so the body carries the tenant's tags; it used to compile for no tenant
+/// and leave them out. The rule's non-ASCII text goes through as written.
+#[test]
+fn a_sysdig_deploy_sends_the_body_its_dry_run_shows() {
+    use wiremock::matchers::{method, path};
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let server = rt.block_on(wiremock::MockServer::start());
+    rt.block_on(async {
+        wiremock::Mock::given(method("POST"))
+            .and(path("/api/secure/rules"))
+            .respond_with(wiremock::ResponseTemplate::new(201).set_body_string(r#"{"id": 43}"#))
+            .expect(1)
+            .mount(&server)
+            .await;
+        wiremock::Mock::given(method("GET"))
+            .and(path("/api/v2/policies"))
+            .respond_with(wiremock::ResponseTemplate::new(200).set_body_string(
+                r#"[{"id": 7, "name": "Blöck 😀", "ruleNames": []}, {"id": 8, "name": "managed"}]"#,
+            ))
+            .mount(&server)
+            .await;
+        wiremock::Mock::given(method("PUT"))
+            .and(path("/api/v2/policies/7"))
+            .respond_with(wiremock::ResponseTemplate::new(200).set_body_string("{}"))
+            .expect(1)
+            .mount(&server)
+            .await;
+    });
+    let block = "  sysdig:\n    schema: platform::sysdig::1.0\n    status: STAGING\n    condition: \
+                 spawned_process and proc.name = \"é😀\"\n    tags: [container]\n    \
+                 policies: [\"Blöck 😀\"]\n";
+    let ws = workspace(
+        "sysdig",
+        "lab",
+        &format!(
+            "url = \"{}\"\napi_token = \"$SYSDIG_SECURE_API_TOKEN\"\npolicies = [\"managed\"]\n\
+             tags = [\"team:é😀\"]\n",
+            server.uri()
+        ),
+        &[(
+            "a.yaml",
+            rule(
+                "Ünïcode rule 😀",
+                "00000000-0000-4000-8099-000000000205",
+                "Dé😀.",
+                block,
+            ),
+        )],
+    );
+    let (code, stdout, stderr) = cli(
+        ws.path(),
+        &[
+            "--json",
+            "deploy",
+            "--dry-run",
+            "--platform",
+            "sysdig",
+            "--strategy",
+            "PREVIEW",
+            "--strategy",
+            "RELEASE",
+            "--all",
+        ],
+        &[],
+    );
+    assert_eq!(code, 0, "{stdout}\n{stderr}");
+    let document = Json::parse(&stdout).unwrap();
+    let entry = document
+        .get("result")
+        .unwrap_or(&document)
+        .get("payloads")
+        .and_then(|payloads| payloads.get("sysdig"))
+        .and_then(Json::as_array)
+        .and_then(|entries| entries.first())
+        .unwrap()
+        .clone();
+    let env = Env::from_pairs([("SYSDIG_SECURE_API_TOKEN".to_owned(), "token".to_owned())]);
+    let (sent, err) = deploy(
+        ws.path(),
+        "sysdig",
+        &env,
+        &opentide_connectors::builtin(),
+        0,
+    );
+    rt.block_on(server.verify());
+    assert_eq!(rows(&sent), vec![("deployed".to_owned(), None)], "{err}");
+    let created = bodies_on(
+        &rt,
+        &server,
+        &wiremock::http::Method::POST,
+        "/api/secure/rules",
+    );
+    assert_eq!(created.len(), 1, "{err}");
+    let body = &created[0];
+    assert!(body.contains("team:é😀") && body.contains("é😀"), "{body}");
+    assert_eq!(&entry.get("api_request").unwrap().to_compact(), body);
+    assert_eq!(entry.get("tenant").and_then(Json::as_str), Some("lab"));
+    assert_eq!(
+        entry.get("policies").map(Json::to_compact).as_deref(),
+        Some(r#"["Blöck 😀"]"#)
+    );
+}
+
 /// A definition the tenant lost while git ignores deployment state is not
 /// created again: the warning, then the state's refusal; and a tenant that
 /// refuses the token on a rule stops there.

@@ -597,6 +597,18 @@ pub fn compile_body(
     api_body(&compile(cx, rule, strategy, &tags)?)
 }
 
+/// What a Sysdig deploy sends for a rule on one tenant
+/// ([`crate::compiler::Sysdig`]).
+#[derive(Debug, Clone, PartialEq)]
+pub struct SysdigRule {
+    /// The `/api/secure/rules` body ([`compile_body`]).
+    pub body: Json,
+    /// The runtime policies the block names ([`block_policies`]), which the
+    /// deploy adds the rule to before the tenant's; `None` when it names
+    /// none, and the tenant's `policies` are taken.
+    pub policies: Option<Vec<String>>,
+}
+
 /// The `/api/secure/rules` payload (`api_body`, sysdig-1.0 "Deploy: api").
 pub fn api_body(compiled: &FalcoRule) -> Result<Json, CompileError> {
     let mut details = Object::new();
