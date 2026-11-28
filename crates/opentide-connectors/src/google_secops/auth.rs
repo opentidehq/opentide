@@ -33,7 +33,7 @@ use opentide_compile::Json;
 
 use crate::Environment;
 use crate::answer::Answer;
-use crate::connector::TenantContext;
+use crate::connector::{CodedError, TenantContext};
 use crate::credentials::{Credential, Secret};
 use crate::error::ConnectorError;
 
@@ -408,23 +408,30 @@ impl std::fmt::Debug for Authorizer {
     }
 }
 
-fn unauthorized(cx: TenantContext<'_>, message: String) -> ConnectorError {
-    ConnectorError::Authentication {
-        platform: PLATFORM.to_owned(),
-        tenant: cx.tenant.label.tenant.clone(),
-        message: format!("{TENANT_UNAUTHORIZED}: {message}"),
-        detail: None,
-    }
+fn unauthorized(cx: TenantContext<'_>, message: String) -> CodedError {
+    CodedError::new(
+        TENANT_UNAUTHORIZED,
+        ConnectorError::Authentication {
+            platform: PLATFORM.to_owned(),
+            tenant: cx.tenant.label.tenant.clone(),
+            message: format!("{TENANT_UNAUTHORIZED}: {message}"),
+            detail: None,
+        },
+    )
 }
 
-/// The error of credentials that are missing or cannot be read.
-pub fn credentials_missing(tenant: &str, error: &LoadError) -> ConnectorError {
-    ConnectorError::Authentication {
-        platform: PLATFORM.to_owned(),
-        tenant: tenant.to_owned(),
-        message: format!("{CREDENTIALS_MISSING}: {}", error.0),
-        detail: None,
-    }
+/// The error of credentials that are missing or cannot be read
+/// ([`CREDENTIALS_MISSING`]).
+pub fn credentials_missing(tenant: &str, error: &LoadError) -> CodedError {
+    CodedError::new(
+        CREDENTIALS_MISSING,
+        ConnectorError::Authentication {
+            platform: PLATFORM.to_owned(),
+            tenant: tenant.to_owned(),
+            message: format!("{CREDENTIALS_MISSING}: {}", error.0),
+            detail: None,
+        },
+    )
 }
 
 impl Authorizer {
@@ -447,11 +454,12 @@ impl Authorizer {
     ///
     /// # Errors
     ///
-    /// [`ConnectorError::Authentication`] when no token can be obtained.
+    /// [`ConnectorError::Authentication`] when no token can be obtained,
+    /// under [`TENANT_UNAUTHORIZED`] or [`CREDENTIALS_MISSING`].
     pub async fn headers(
         &self,
         cx: TenantContext<'_>,
-    ) -> Result<Vec<(&'static str, String)>, ConnectorError> {
+    ) -> Result<Vec<(&'static str, String)>, CodedError> {
         let token = self.token(cx).await?;
         let mut headers = vec![("Authorization", format!("Bearer {}", token.expose()))];
         if let Some(project) = self.credentials.quota_project() {
@@ -465,8 +473,9 @@ impl Authorizer {
     ///
     /// # Errors
     ///
-    /// [`ConnectorError::Authentication`] when no token can be obtained.
-    pub async fn token(&self, cx: TenantContext<'_>) -> Result<Secret, ConnectorError> {
+    /// [`ConnectorError::Authentication`] when no token can be obtained,
+    /// under [`TENANT_UNAUTHORIZED`] or [`CREDENTIALS_MISSING`].
+    pub async fn token(&self, cx: TenantContext<'_>) -> Result<Secret, CodedError> {
         let now = (self.clock)();
         if let Some(token) = self
             .token
@@ -483,7 +492,7 @@ impl Authorizer {
         Ok(secret)
     }
 
-    async fn fetch(&self, cx: TenantContext<'_>, now: Timestamp) -> Result<Token, ConnectorError> {
+    async fn fetch(&self, cx: TenantContext<'_>, now: Timestamp) -> Result<Token, CodedError> {
         let tenant = cx.tenant.label.tenant.clone();
         let request = match &self.credentials {
             Credentials::ServiceAccount {
@@ -543,11 +552,11 @@ impl Authorizer {
         };
         let answer = match crate::answer::exchange(cx, request).await {
             Ok(answer) => answer,
-            Err(ConnectorError::Cancelled) => return Err(ConnectorError::Cancelled),
+            Err(ConnectorError::Cancelled) => return Err(ConnectorError::Cancelled.into()),
             // The token endpoint could not be reached, or sent no answer in
             // time: the network's failure, not the credentials' (#1658, D5).
             Err(error @ (ConnectorError::Unreachable { .. } | ConnectorError::Timeout { .. })) => {
-                return Err(error);
+                return Err(error.into());
             }
             Err(error) => {
                 return Err(unauthorized(
@@ -570,7 +579,7 @@ impl Authorizer {
         cx: TenantContext<'_>,
         host: &str,
         now: Timestamp,
-    ) -> Result<Token, ConnectorError> {
+    ) -> Result<Token, CodedError> {
         let tenant = cx.tenant.label.tenant.clone();
         let missing = |reason: String| {
             credentials_missing(
@@ -583,7 +592,7 @@ impl Authorizer {
         };
         let answer = match metadata_answer(cx, host).await {
             Ok(answer) => answer,
-            Err(ConnectorError::Cancelled) => return Err(ConnectorError::Cancelled),
+            Err(ConnectorError::Cancelled) => return Err(ConnectorError::Cancelled.into()),
             Err(error) => return Err(missing(error.to_string())),
         };
         Self::token_from(cx, &answer, now)
@@ -595,7 +604,7 @@ impl Authorizer {
         cx: TenantContext<'_>,
         answer: &Answer,
         now: Timestamp,
-    ) -> Result<Token, ConnectorError> {
+    ) -> Result<Token, CodedError> {
         let tenant = cx.tenant.label.tenant.clone();
         let body = answer.json().unwrap_or(Json::Null);
         let token = body

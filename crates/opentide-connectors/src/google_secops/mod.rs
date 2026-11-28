@@ -28,9 +28,9 @@ use opentide_schema::objects::platform::google_secops::assemble::{AssembledRule,
 use opentide_schema::objects::platform::google_secops::yaral::SECTION_KEYS;
 
 use crate::connector::{
-    BoxFuture, CREDENTIALS_UNAVAILABLE, DeployError, DeployEvent, DeployFailure, DeployOutcome,
-    DeployRequest, DeployScope, DeployWarning, Deployer, LiveCheck, LiveValidator, Operation,
-    Platform, Prober, QueryOutcome, QueryRequest, QueryRunner, TenantContext,
+    BoxFuture, CREDENTIALS_UNAVAILABLE, CodedError, DeployError, DeployEvent, DeployFailure,
+    DeployOutcome, DeployRequest, DeployScope, DeployWarning, Deployer, LiveCheck, LiveValidator,
+    Operation, Platform, Prober, QueryOutcome, QueryRequest, QueryRunner, TenantContext,
 };
 use crate::error::ConnectorError;
 use crate::http::HttpSettings;
@@ -144,9 +144,10 @@ impl GoogleSecops {
     ///
     /// # Errors
     ///
-    /// [`ConnectorError::Authentication`] (`google_secops_credentials_missing`)
-    /// when the credentials are missing or cannot be read.
-    pub fn authorizer(&self, tenant: &crate::Tenant) -> Result<Arc<Authorizer>, ConnectorError> {
+    /// [`ConnectorError::Authentication`] under
+    /// [`CREDENTIALS_MISSING`](auth::CREDENTIALS_MISSING) when the
+    /// credentials are missing or cannot be read.
+    pub fn authorizer(&self, tenant: &crate::Tenant) -> Result<Arc<Authorizer>, CodedError> {
         let mut authorizers = self
             .authorizers
             .lock()
@@ -189,7 +190,7 @@ pub async fn check_rule(
 ) -> Result<RuleCheck, ConnectorError> {
     let answer = match client.verify(&assembled.text).await {
         Ok(answer) => answer,
-        Err(Failure::Tenant(error)) => return Err(error),
+        Err(Failure::Tenant(error)) => return Err(error.into()),
         Err(Failure::Api(error)) => {
             let status = if error.status.is_empty() {
                 error.http_status.to_string()
@@ -296,7 +297,7 @@ impl QueryRunner for GoogleSecops {
             let client = Client::new(cx, &authorizer, &instance.endpoint, &instance.resource);
             match client.udm_search(&search::params(request)).await {
                 Ok(answer) => Ok(search::search_result(&answer, request.limit)),
-                Err(Failure::Tenant(error)) => Err(error),
+                Err(Failure::Tenant(error)) => Err(error.into()),
                 Err(Failure::Api(error)) => {
                     let status = if error.status.is_empty() {
                         format!("HTTP {}", error.http_status)
@@ -325,17 +326,29 @@ impl GoogleSecops {
     async fn signed_in(
         &self,
         cx: TenantContext<'_>,
-    ) -> Result<(Instance, Arc<Authorizer>), ConnectorError> {
+    ) -> Result<(Instance, Arc<Authorizer>), CodedError> {
         let instance = Instance::of(cx.tenant)?;
         let authorizer = self.authorizer(cx.tenant)?;
         authorizer.token(cx).await?;
         Ok((instance, authorizer))
     }
+
+    /// What [`Deployer::open`] does, with the failure's code as data: Google
+    /// SecOps's ([`CREDENTIALS_MISSING`](auth::CREDENTIALS_MISSING),
+    /// [`TENANT_UNAUTHORIZED`](auth::TENANT_UNAUTHORIZED)) when the sign-in
+    /// names one, so `opentide deploy` never reads it back from the message.
+    ///
+    /// # Errors
+    ///
+    /// The tenant's [`CodedError`].
+    pub async fn sign_in(&self, cx: TenantContext<'_>) -> Result<(), CodedError> {
+        self.signed_in(cx).await.map(|_| ())
+    }
 }
 
 impl GoogleSecops {
     /// The sign-in a deploy makes, then one `GET rules?pageSize=1`.
-    async fn read_rules(&self, cx: TenantContext<'_>) -> Result<(), ConnectorError> {
+    async fn read_rules(&self, cx: TenantContext<'_>) -> Result<(), CodedError> {
         let (instance, authorizer) = self.signed_in(cx).await?;
         let client = Client::new(cx, &authorizer, &instance.endpoint, &instance.resource);
         let request = opentide_compile::google_secops::Request {
@@ -361,13 +374,14 @@ impl GoogleSecops {
                     error.http_status
                 ),
                 None,
-            )),
-            Err(Failure::Api(error)) => crate::connector::probe_verdict(
+            )
+            .into()),
+            Err(Failure::Api(error)) => Ok(crate::connector::probe_verdict(
                 PLATFORM,
                 tenant,
                 "listing the rules",
                 error.http_status,
-            ),
+            )?),
         }
     }
 }
@@ -388,22 +402,22 @@ impl Prober for GoogleSecops {
             let metadata_only = !cx.tenant.setup.contains_key("credentials")
                 && !auth::has_local_default_credentials(&self.env);
             match self.read_rules(cx).await {
-                Err(ConnectorError::Authentication { message, .. })
-                    if metadata_only && message.starts_with(auth::CREDENTIALS_MISSING) =>
-                {
-                    Err(DeployError::tenant(DeployFailure::new(
-                        CREDENTIALS_UNAVAILABLE,
-                        format!(
-                            "{PLATFORM} tenant '{}' names no credentials and none are set up \
+                Err(CodedError {
+                    code: Some(auth::CREDENTIALS_MISSING),
+                    ..
+                }) if metadata_only => Err(DeployError::tenant(DeployFailure::new(
+                    CREDENTIALS_UNAVAILABLE,
+                    format!(
+                        "{PLATFORM} tenant '{}' names no credentials and none are set up \
                              (no {}, no gcloud credentials file, \
                              and the metadata server did not answer)",
-                            cx.tenant.label.tenant,
-                            auth::credentials_variable()
-                        ),
-                    )))
-                }
+                        cx.tenant.label.tenant,
+                        auth::credentials_variable()
+                    ),
+                ))),
+                // The connector error's own code (`authentication_failed`, ...).
                 other => other.map_err(|error| {
-                    let mut failed = DeployError::from(error);
+                    let mut failed = DeployError::from(ConnectorError::from(error));
                     failed.scope = DeployScope::Tenant;
                     failed
                 }),
@@ -419,7 +433,9 @@ impl Deployer for GoogleSecops {
         &'a self,
         cx: TenantContext<'a>,
     ) -> BoxFuture<'a, Result<(), crate::connector::DeployError>> {
-        crate::connector::opening(async move { self.signed_in(cx).await.map(|_| ()) })
+        crate::connector::opening(
+            async move { self.sign_in(cx).await.map_err(ConnectorError::from) },
+        )
     }
 
     /// One rule from its plan payload: the `rules.create` body's `text`,
@@ -559,25 +575,12 @@ fn outcome_of(
 pub const RULE_CREATED: &str = "google_secops_rule_created";
 
 /// A tenant's failure (its instance, its credentials, an answer it did not
-/// give): Google SecOps's code when the error names one
-/// (`google_secops_credentials_missing`, `google_secops_tenant_unauthorized`),
-/// else the connector error's own (`tenant_unreachable`, `tenant_timeout`,
-/// `interrupted`, ...).
-fn tenant_failure(error: ConnectorError) -> DeployError {
-    let text = error.text();
-    let named = text.split_once(": ").map(|(code, _)| code);
-    let mut failed = DeployError::from(error);
-    failed.scope = crate::connector::DeployScope::Tenant;
-    match named {
-        Some("google_secops_credentials_missing") => {
-            failed.failure.code = "google_secops_credentials_missing";
-        }
-        Some(auth::TENANT_UNAUTHORIZED) => {
-            failed.failure.code = auth::TENANT_UNAUTHORIZED;
-        }
-        _ => {}
-    }
-    failed
+/// give): Google SecOps's code when the request that raised it names one
+/// ([`CREDENTIALS_MISSING`](auth::CREDENTIALS_MISSING),
+/// [`TENANT_UNAUTHORIZED`](auth::TENANT_UNAUTHORIZED)), else the connector
+/// error's own (`tenant_unreachable`, `tenant_timeout`, `interrupted`, ...).
+fn tenant_failure(error: impl Into<CodedError>) -> DeployError {
+    error.into().into_tenant_failure()
 }
 
 /// The rule a plan payload carries: its `text`, its `name` (else the one

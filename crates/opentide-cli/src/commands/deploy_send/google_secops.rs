@@ -5,6 +5,7 @@ use opentide_compile::compiler::{Compiler, GoogleSecops};
 use opentide_connectors::connector::{
     DeployError, DeployFailure, DeployOutcome, DeployRequest, DeployScope, Deployer,
 };
+use opentide_connectors::google_secops::auth::{CREDENTIALS_MISSING, TENANT_UNAUTHORIZED};
 use opentide_connectors::tenant_codes;
 use opentide_schema::platforms::PlatformId;
 
@@ -38,6 +39,7 @@ impl Sender<'_, '_> {
         batch: &Batch,
         log: &mut DeployLog<'_>,
     ) -> Result<(), Raised> {
+        use opentide_connectors::connector::CodedError;
         use opentide_connectors::google_secops::Instance;
         let platform = PlatformId::GoogleSecops.as_str();
         let tenant = batch.tenant.name.clone();
@@ -50,23 +52,21 @@ impl Sender<'_, '_> {
         };
         // The instance and credentials, then the sign-in, once: the
         // rules reuse the token (#1701).
+        // `sign_in` is what `Deployer::open` does, with the failure's code.
         let ready = Instance::of(&connection.tenant)
+            .map_err(CodedError::from)
             .and_then(|_| connector.authorizer(&connection.tenant))
             .and_then(|_| {
-                self.block(async {
-                    Ok(connector
-                        .open(self.context(&connection))
-                        .await
-                        .map_err(DeployError::into_connector))
-                })
-                .and_then(|opened| opened)
+                self.block(async { Ok(connector.sign_in(self.context(&connection)).await) })
+                    .map_err(CodedError::from)
+                    .and_then(|signed_in| signed_in)
             });
         match ready {
             Ok(()) => connection.mark_opened(),
             Err(error) => {
                 // Unset or unreadable credentials: no rule on the tenant can deploy.
-                let text = error.text();
-                self.google_secops_tenant_failed(&tenant, &text);
+                let text = error.error.text();
+                self.google_secops_tenant_failed(&tenant, error.code, &text);
                 self.unusable(platform, Some(&tenant), &text);
                 log.unreached_on(
                     platform,
@@ -212,8 +212,13 @@ impl Sender<'_, '_> {
             Err(error) => {
                 // Refused credentials or an unreachable instance fail every rule on it.
                 let before_any = self.before_any_rule(connection, platform, &tenant, log);
+                // The connector's `tenant_failure` put Google SecOps's code
+                // on the failure when the error named one.
+                let code = [CREDENTIALS_MISSING, TENANT_UNAUTHORIZED]
+                    .into_iter()
+                    .find(|code| *code == error.failure.code);
                 let text = error.into_connector().text();
-                self.google_secops_tenant_failed(&tenant, &text);
+                self.google_secops_tenant_failed(&tenant, code, &text);
                 if before_any {
                     // The sign-in or the connection failed on the tenant's
                     // first request: no rule was sent (#1701).
@@ -270,15 +275,10 @@ impl Sender<'_, '_> {
     }
 
     /// A Google SecOps tenant no rule can deploy to (`_tenant_failed`): its
-    /// code (`google_secops_credentials_missing`,
-    /// `google_secops_tenant_unauthorized`) when the error names one, else
-    /// `google_secops_tenant_unreachable`.
-    fn google_secops_tenant_failed(&mut self, tenant: &str, text: &str) {
-        let code = text
-            .split_once(": ")
-            .map(|(code, _)| code)
-            .filter(|code| code.starts_with("google_secops_") && !code.contains(' '))
-            .unwrap_or(tenant_codes::GOOGLE_SECOPS.unreachable);
+    /// *code* ([`CREDENTIALS_MISSING`], [`TENANT_UNAUTHORIZED`]) when the
+    /// error names one, else `google_secops_tenant_unreachable`.
+    fn google_secops_tenant_failed(&mut self, tenant: &str, code: Option<&str>, text: &str) {
+        let code = code.unwrap_or(tenant_codes::GOOGLE_SECOPS.unreachable);
         tracing::error!(
             code,
             tenant,
