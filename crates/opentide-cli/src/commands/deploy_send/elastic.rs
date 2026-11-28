@@ -33,7 +33,6 @@ impl Sender<'_, '_> {
             return Ok(());
         };
         let mut tenant_state = ElasticTenant {
-            setup: opentide_compile::elastic::Setup::from_tenant(&batch.table),
             suppression_off: matches!(
                 opentide_compile::deploy::setup(&batch.table, "suppression"),
                 Some(CJson::Bool(false))
@@ -129,7 +128,7 @@ impl Sender<'_, '_> {
             log.finished(result);
             return Ok(false);
         }
-        let request = match self.elastic_request(rule, raw, strategy, tenant_state, &tenant) {
+        let request = match self.elastic_request(rule, raw, strategy, tenant_state, batch) {
             Ok(request) => request,
             Err(text) => {
                 self.rule_error(&mut result, &text);
@@ -198,18 +197,20 @@ impl Sender<'_, '_> {
         Ok(false)
     }
 
-    /// The request an Elastic rule sends, compiled for its tenant (a
-    /// deletion compiles nothing), after its warnings: suppression the
-    /// tenant's licence omits, techniques outside the enterprise matrix.
-    /// `Err` is the reason the rule fails.
+    /// The request an Elastic rule sends, compiled for its tenant as the dry
+    /// run compiles it (`compiler::Elastic`; a deletion compiles nothing),
+    /// after its warnings: suppression the tenant's licence omits, techniques
+    /// outside the enterprise matrix. `Err` is the reason the rule fails.
     fn elastic_request(
         &mut self,
         rule: &opentide_compile::Rule,
         raw: &CJson,
         strategy: StatusStrategy,
         tenant_state: &mut ElasticTenant,
-        tenant: &str,
+        batch: &Batch,
     ) -> Result<DeployRequest, String> {
+        use opentide_compile::compiler::{Compiler, Elastic};
+        let tenant = batch.tenant.name.as_str();
         let block = opentide_compile::preview::config_dump(PlatformId::Elastic, raw);
         if strategy != StatusStrategy::Deletion
             && tenant_state.suppression_off
@@ -227,11 +228,11 @@ impl Sender<'_, '_> {
             );
             tenant_state.warned_rules.push(rule.uuid.clone());
         }
-        let payload = if strategy == StatusStrategy::Deletion {
-            CJson::Null
+        let compiled = if strategy == StatusStrategy::Deletion {
+            None
         } else {
-            match opentide_compile::elastic::compile(self.compile, rule, &tenant_state.setup) {
-                Ok(payload) => payload,
+            match Elastic::compile(self.compile, rule, Some(&batch.table)) {
+                Ok(compiled) => Some(compiled),
                 Err(error) => {
                     return Err(format!("Rule {} ({}): {error}", rule.uuid, rule.name));
                 }
@@ -249,11 +250,11 @@ impl Sender<'_, '_> {
         if non_enterprise {
             self.warned = true;
         }
-        Ok(match strategy {
-            StatusStrategy::Deletion => DeployRequest::delete(rule.uuid.clone()),
-            _ => {
-                // The body `deploy_plan` shows for it.
-                let body = opentide_compile::preview::elastic_request(rule, payload);
+        Ok(match compiled {
+            None => DeployRequest::delete(rule.uuid.clone()),
+            Some(compiled) => {
+                // The body the dry run shows for it.
+                let body = Elastic::body(&compiled);
                 let operation = if strategy == StatusStrategy::Disablement {
                     Operation::Disable
                 } else {
@@ -331,10 +332,9 @@ fn elastic_done_action(done: &DeployOutcome) -> Option<&'static str> {
         })
 }
 
-/// What an Elastic tenant's rules share: its `setup`, whether it turns
-/// suppression off, and the rules already warned about that.
+/// What an Elastic tenant's rules share: whether it turns suppression off,
+/// and the rules already warned about that.
 struct ElasticTenant {
-    setup: opentide_compile::elastic::Setup,
     suppression_off: bool,
     warned_rules: Vec<String>,
 }

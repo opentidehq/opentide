@@ -19,7 +19,8 @@ use crate::json::Json;
 use crate::rule::{CompileError, Rule};
 use crate::strategy::StatusStrategy;
 use crate::{
-    Context, bitdefender, datadog, deploy, exabeam, google_secops, graylog, sentinel, sysdig,
+    Context, bitdefender, datadog, deploy, elastic, exabeam, google_secops, graylog, preview,
+    sentinel, sysdig,
 };
 
 /// The compile of one platform's rules, shared by the dry run and the deploy.
@@ -258,5 +259,48 @@ impl Compiler for Bitdefender {
 
     fn body(compiled: &bitdefender::GravityZoneRule) -> Json {
         bitdefender::create_params(compiled)
+    }
+}
+
+/// Elastic Security: the Kibana rule for one tenant, whose `setup` gives its
+/// `index`, `tags` and whether it sends alert suppression
+/// ([`elastic::Setup`]), with the rule's block beside it for the
+/// Elasticsearch checks. Its body is the deploy body
+/// ([`elastic::deploy_body`]).
+///
+/// The rule is the one the deploy sends to that tenant: the platform's
+/// `[[modifiers]]` for it already applied
+/// ([`crate::modifiers::rule_for_tenant`]), as the deploy's batches hold it
+/// and as the dry run applies them before it compiles.
+#[derive(Debug, Clone, Copy)]
+pub struct Elastic;
+
+impl Compiler for Elastic {
+    const PLATFORM: PlatformId = PlatformId::Elastic;
+
+    /// The tenant's table. `None` in a dry run that reaches no tenant (and
+    /// `validate`'s compile check): no `index` or `tags` of its own, and
+    /// suppression on ([`elastic::Setup::none`]).
+    type Target<'t> = Option<&'t Json>;
+
+    type Compiled = elastic::ElasticRule;
+
+    fn compile(
+        cx: &Context<'_>,
+        rule: &Rule,
+        tenant: Option<&Json>,
+    ) -> Result<elastic::ElasticRule, CompileError> {
+        let setup = tenant.map_or_else(elastic::Setup::none, elastic::Setup::from_tenant);
+        Ok(elastic::ElasticRule {
+            payload: elastic::compile(cx, rule, &setup)?,
+            block: rule
+                .block(Self::PLATFORM.as_str())
+                .filter(|block| block.is_filled())
+                .map(|block| preview::config_dump(Self::PLATFORM, block)),
+        })
+    }
+
+    fn body(compiled: &elastic::ElasticRule) -> Json {
+        elastic::deploy_body(compiled)
     }
 }
