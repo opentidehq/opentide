@@ -148,11 +148,11 @@ pub struct Outcome {
     /// The outcome in one sentence.
     pub message: String,
     /// The command's own keys, in order.
-    pub data: Vec<(String, Json)>,
+    pub data: Object,
     /// The process exit code.
     pub exit_code: ExitCode,
     /// Counts behind the outcome.
-    pub summary: Vec<(String, Json)>,
+    pub summary: Object,
     /// What to run next.
     pub next_actions: Vec<NextAction>,
     /// Why it failed; `None` exactly when the exit code is 0.
@@ -166,9 +166,9 @@ impl Outcome {
             command: command.to_owned(),
             status: Status::Failed,
             message: failure.message.clone(),
-            data: vec![("error".into(), Json::str(&failure.message))],
+            data: Object::from([("error".to_owned(), Json::str(&failure.message))]),
             exit_code,
-            summary: Vec::new(),
+            summary: Object::new(),
             next_actions: Vec::new(),
             failure: Some(failure),
         }
@@ -181,13 +181,13 @@ impl Outcome {
 
     /// The document, with `duration_ms` as given.
     pub fn document(&self, duration_ms: i64) -> Json {
-        let mut members: Vec<(String, Json)> = self.data.clone();
-        members.push(("ok".into(), Json::Bool(self.ok())));
-        members.push(("status".into(), Json::str(self.status.as_str())));
-        members.push(("message".into(), Json::str(&self.message)));
+        let mut members: Object = self.data.clone();
+        members.insert("ok".to_owned(), Json::Bool(self.ok()));
+        members.insert("status".to_owned(), Json::str(self.status.as_str()));
+        members.insert("message".to_owned(), Json::str(&self.message));
         // `error`, unless the command put it among its own keys, goes after
         // those keys and the message.
-        if self.exit_code != ExitCode::Success && !members.iter().any(|(k, _)| k == "error") {
+        if self.exit_code != ExitCode::Success && !members.contains_key("error") {
             let message = if self.message.is_empty() {
                 self.failure
                     .as_ref()
@@ -196,18 +196,18 @@ impl Outcome {
             } else {
                 self.message.clone()
             };
-            members.push(("error".into(), Json::Str(message)));
+            members.insert("error".to_owned(), Json::Str(message));
         }
-        members.push(("schema_version".into(), Json::Int(SCHEMA_VERSION)));
-        members.push(("command".into(), Json::str(&self.command)));
-        members.push(("duration_ms".into(), Json::Int(duration_ms)));
-        members.push((
-            "exit_code".into(),
+        members.insert("schema_version".to_owned(), Json::Int(SCHEMA_VERSION));
+        members.insert("command".to_owned(), Json::str(&self.command));
+        members.insert("duration_ms".to_owned(), Json::Int(duration_ms));
+        members.insert(
+            "exit_code".to_owned(),
             Json::Int(i64::from(self.exit_code.code())),
-        ));
-        members.push(("summary".into(), Json::object(self.summary.clone())));
-        members.push((
-            "next_actions".into(),
+        );
+        members.insert("summary".to_owned(), Json::Object(self.summary.clone()));
+        members.insert(
+            "next_actions".to_owned(),
             Json::Array(
                 self.next_actions
                     .iter()
@@ -219,12 +219,12 @@ impl Outcome {
                     })
                     .collect(),
             ),
-        ));
-        members.push((
-            "failure".into(),
+        );
+        members.insert(
+            "failure".to_owned(),
             self.failure.as_ref().map_or(Json::Null, Failure::to_json),
-        ));
-        Json::object(members)
+        );
+        Json::Object(members)
     }
 }
 
@@ -301,7 +301,7 @@ mod tests {
             ExitCode::Failure,
             Failure::new("command_failed", "exports: broken"),
         );
-        outcome.data = vec![("phase".into(), Json::str("exports"))];
+        outcome.data = Object::from([("phase".to_owned(), Json::str("exports"))]);
         let text = document_text(&outcome.document(0), false);
         assert!(
             text.starts_with(
@@ -318,9 +318,9 @@ mod tests {
             command: "commands".into(),
             status: Status::Completed,
             message: "58 commands".into(),
-            data: vec![("program".into(), Json::str("opentide"))],
+            data: Object::from([("program".to_owned(), Json::str("opentide"))]),
             exit_code: ExitCode::Success,
-            summary: vec![("commands".into(), Json::Int(58))],
+            summary: Object::from([("commands".to_owned(), Json::Int(58))]),
             next_actions: vec![NextAction::new("opentide validate", "check")],
             failure: None,
         };
@@ -340,9 +340,9 @@ mod tests {
             command: "x".into(),
             status: Status::Issues,
             message: String::new(),
-            data: Vec::new(),
+            data: Object::new(),
             exit_code: ExitCode::Failure,
-            summary: Vec::new(),
+            summary: Object::new(),
             next_actions: Vec::new(),
             failure: Some(Failure::new("issues_found", "found")),
         };

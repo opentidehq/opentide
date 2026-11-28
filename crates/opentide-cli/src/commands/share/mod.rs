@@ -30,7 +30,7 @@ use super::result::{ExitCode, Status};
 use super::{Block as BodyBlock, Report, USAGE_INVALID_CHOICE, USAGE_INVALID_VALUE, placement};
 use crate::env::Env;
 use crate::envelope::{Failure, USAGE_EXIT_CODE};
-use crate::json::Json;
+use crate::json::{Json, Object};
 use crate::render::glyphs;
 use crate::render::outcome::OutcomeKind;
 use crate::render::progress::{columns, plural};
@@ -331,7 +331,7 @@ impl Payload {
         report.outcome.message = self.message;
         report.outcome.status = Status::from_text(&self.status);
         report.outcome.exit_code = ExitCode::of_service(self.exit_code);
-        report.outcome.summary = self.summary;
+        report.outcome.summary = Object::from_iter(self.summary);
         report.warnings = self.warnings;
         report.body = self.body;
         if self.exit_code != 0 {

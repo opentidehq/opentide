@@ -23,7 +23,7 @@ use super::result::{CommandResult, ExitCode, FailureDetail, Status};
 use super::{Block, ISSUES_FOUND, Report, Terminal, placement};
 use crate::env::Env;
 use crate::envelope::{Failure, NextAction, code};
-use crate::json::Json;
+use crate::json::{Json, Object};
 use crate::queries::{CheckedQuery, Finding, Profiles, REPORTED_AS_WARNING_NOTE};
 use crate::render::diagnostic::{Diagnostic, Severity, SourceFiles, relative_path};
 use crate::render::outcome::OutcomeKind;
@@ -312,14 +312,14 @@ fn refused(
 ) -> Report {
     let failure = Failure::new(failure_code, message);
     let mut report = Report::failed(COMMAND, exit_code, failure);
-    report.outcome.data = vec![
+    report.outcome.data = Object::from_iter([
         (
             "platform".into(),
             Json::opt_str(platform.map(str::to_owned)),
         ),
         ("mode".into(), Json::str("offline")),
         ("supported".into(), Json::Bool(true)),
-    ];
+    ]);
     report
 }
 
@@ -400,11 +400,11 @@ pub fn unsupported(args: &Args) -> Option<Report> {
     let message = format!("query validation not supported for {platform}");
     let mut report = Report::error(COMMAND, message);
     // The envelope writes `error` after the message.
-    report.outcome.data = vec![
+    report.outcome.data = Object::from_iter([
         ("platform".to_owned(), Json::str(platform)),
         ("valid".to_owned(), Json::Null),
         ("supported".to_owned(), Json::Bool(false)),
-    ];
+    ]);
     Some(report)
 }
 
@@ -774,11 +774,11 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
                     format!("query validation not supported for {name}"),
                 ),
             );
-            report.outcome.data = vec![
+            report.outcome.data = Object::from_iter([
                 ("platform".into(), Json::str(name)),
                 ("valid".into(), Json::Null),
                 ("supported".into(), Json::Bool(false)),
-            ];
+            ]);
             return report;
         }
         let mut report = refused(
@@ -840,10 +840,10 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
             &format!("No such query file: {}", missing.join(", ")),
             ExitCode::Usage,
         );
-        report.outcome.data.push((
-            "unmatched".into(),
+        report.outcome.data.insert(
+            "unmatched".to_owned(),
             Json::Array(missing.iter().map(Json::str).collect()),
-        ));
+        );
         return report;
     }
     if let Some(name) = platform {
@@ -936,10 +936,10 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
                     ),
                     ExitCode::Failure,
                 );
-                report.outcome.data.push((
-                    "unmatched".into(),
+                report.outcome.data.insert(
+                    "unmatched".to_owned(),
                     Json::Array(unmatched.iter().map(Json::str).collect()),
-                ));
+                );
                 return report;
             }
             rule_files = scope.files;
@@ -1071,7 +1071,7 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
     if !cannot_read.is_empty() {
         let message = format!("Cannot check {}", cannot_read.join("; "));
         let mut report = Report::error(COMMAND, message);
-        report.outcome.data = base();
+        report.outcome.data = Object::from_iter(base());
         return report;
     }
     let progress = crate::render::progress::Progress::from_env(cx.env);
@@ -1103,10 +1103,10 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
         let mut report = Report::completed(COMMAND, data);
         report.outcome.status = Status::Skipped;
         report.outcome.message = message;
-        report.outcome.summary = vec![
+        report.outcome.summary = Object::from_iter([
             ("queries".into(), Json::from(0usize)),
             ("files".into(), Json::from(0usize)),
-        ];
+        ]);
         report.warnings = warnings;
         report.stderr_first = stderr_first;
         return report;
@@ -1229,7 +1229,7 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
     } else {
         format!("{checked} valid")
     };
-    report.outcome.summary = summary;
+    report.outcome.summary = Object::from_iter(summary);
     if failed {
         report.outcome.exit_code = ExitCode::Failure;
         report.outcome.failure = Some(Failure::new(ISSUES_FOUND, report.outcome.message.clone()));

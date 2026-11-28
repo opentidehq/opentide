@@ -40,7 +40,7 @@ use super::{COMMAND_FAILED, Report, placement};
 use crate::commands::result::ExitCode;
 use crate::env::Env;
 use crate::envelope::{Failure, code};
-use crate::json::Json;
+use crate::json::{Json, Object};
 
 /// `failure.code` when neither `.opentide/` nor `objects/` marks a workspace.
 pub const WORKSPACE_NOT_FOUND: &str = "workspace_not_found";
@@ -1193,13 +1193,13 @@ pub fn run(args: &NewArgs, cx: &Context<'_>) -> Report {
     }
     let mut report = Report::completed(&command, data);
     report.outcome.message = message;
-    report.outcome.summary = vec![
+    report.outcome.summary = Object::from_iter([
         ("created".into(), Json::Int(1)),
         (
             "placeholders".into(),
             Json::Int(i64::try_from(count).unwrap_or(i64::MAX)),
         ),
-    ];
+    ]);
     if in_catalogue {
         // Outside the catalogue, validate --file refuses the file.
         report.next(

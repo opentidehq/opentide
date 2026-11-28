@@ -14,7 +14,7 @@ use super::result::{ExitCode, Status};
 use super::{Block, Report, Terminal, placement};
 use crate::env::Env;
 use crate::envelope::{Failure, NextAction};
-use crate::json::Json;
+use crate::json::{Json, Object};
 use crate::queries::EngineLintQueries;
 use crate::render::diagnostic::{Diagnostic, SourceFiles};
 use crate::render::outcome::OutcomeKind;
@@ -204,7 +204,7 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
     if let Some(summary) = &lint.summary {
         report.outcome.summary = match super::json(summary) {
             Json::Object(members) => members.into_iter().collect(),
-            _ => Vec::new(),
+            _ => Object::new(),
         };
     }
     report.outcome.next_actions = lint

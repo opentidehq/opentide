@@ -168,10 +168,10 @@ fn report(platform: &str, started: Instant, written: usize, outcome: Outcome) ->
             let mut report = Report::completed(&command, data);
             report.outcome.message = message;
             report.outcome.status = Status::from_text(&status);
-            report.outcome.summary = vec![
+            report.outcome.summary = Object::from_iter([
                 ("imported".into(), Json::from(count)),
                 ("skipped".into(), Json::from(skipped)),
-            ];
+            ]);
             report.steps = vec![step];
             report
         }

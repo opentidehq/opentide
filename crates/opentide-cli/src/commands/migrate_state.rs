@@ -32,7 +32,7 @@ use super::result::{ExitCode, Status};
 use super::{Report, counted, placement};
 use crate::env::Env;
 use crate::envelope::Failure;
-use crate::json::Json;
+use crate::json::{Json, Object};
 
 /// The command's path.
 pub const COMMAND: &str = "deploy migrate-state";
@@ -742,11 +742,11 @@ fn outcome(
         ("rules_edited".to_owned(), int(rules)),
     ];
     let mut report = Report::completed(COMMAND, Vec::new());
-    report.outcome.summary = vec![
+    report.outcome.summary = Object::from_iter([
         ("ids".to_owned(), int(ids)),
         ("rules".to_owned(), int(rules)),
         ("shards".to_owned(), int(shards_written)),
-    ];
+    ]);
     if !errors.is_empty() {
         let detail: Vec<String> = errors
             .iter()
@@ -769,7 +769,7 @@ fn outcome(
     } else {
         "No vendor rule ids left on rules".clone_into(&mut report.outcome.message);
     }
-    report.outcome.data = data;
+    report.outcome.data = Object::from_iter(data);
     report.warnings = warnings;
     report
 }
@@ -789,7 +789,7 @@ fn refused(rule: &deploy_state::IgnoreRule) -> Report {
         deploy_state::ignored_message(rule)
     );
     let mut report = Report::completed(COMMAND, Vec::new());
-    report.outcome.data = vec![
+    report.outcome.data = Object::from_iter([
         ("code".to_owned(), Json::str("deployment_state_ignored")),
         (
             "ignore".to_owned(),
@@ -813,7 +813,7 @@ fn refused(rule: &deploy_state::IgnoreRule) -> Report {
         ("migrated".to_owned(), Json::Array(Vec::new())),
         ("unused".to_owned(), Json::Array(Vec::new())),
         ("errors".to_owned(), Json::Array(Vec::new())),
-    ];
+    ]);
     failed(&mut report, message, ExitCode::Failure);
     report
 }
@@ -840,13 +840,11 @@ mod tests {
     }
 
     fn data<'r>(report: &'r Report, key: &str) -> &'r Json {
-        &report
+        report
             .outcome
             .data
-            .iter()
-            .find(|(name, _)| name == key)
+            .get(key)
             .unwrap_or_else(|| panic!("no {key}"))
-            .1
     }
 
     fn rule(configurations: &str) -> String {

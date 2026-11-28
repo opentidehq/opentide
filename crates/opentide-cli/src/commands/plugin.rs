@@ -27,7 +27,7 @@ use super::{Report, open, placement};
 use crate::commands::result::{ExitCode, Status};
 use crate::env::Env;
 use crate::envelope::{Failure, Outcome};
-use crate::json::Json;
+use crate::json::{Json, Object};
 
 /// What a run reads besides its options.
 pub struct Context<'a> {
@@ -207,9 +207,9 @@ fn finished(
             command: command.to_owned(),
             status: Status::Failed,
             message: first.clone(),
-            data,
+            data: Object::from_iter(data),
             exit_code: ExitCode::Failure,
-            summary,
+            summary: Object::from_iter(summary),
             next_actions: Vec::new(),
             failure: Some(Failure::new(super::COMMAND_FAILED, first)),
         },
@@ -217,9 +217,9 @@ fn finished(
             command: command.to_owned(),
             status: Status::Completed,
             message,
-            data,
+            data: Object::from_iter(data),
             exit_code: ExitCode::Success,
-            summary,
+            summary: Object::from_iter(summary),
             next_actions: Vec::new(),
             failure: None,
         },
@@ -255,11 +255,11 @@ pub fn validate_live(
                 format!("query validation not supported for {platform}"),
             ),
         );
-        report.outcome.data = vec![
+        report.outcome.data = Object::from_iter([
             ("platform".into(), Json::str(platform)),
             ("valid".into(), Json::Null),
             ("supported".into(), Json::Bool(false)),
-        ];
+        ]);
         return report;
     };
     let all = Selection {

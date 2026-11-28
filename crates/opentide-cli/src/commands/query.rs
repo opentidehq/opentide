@@ -28,7 +28,7 @@ use super::result::{ExitCode, Status};
 use super::{Block, Report, Terminal, open, placement};
 use crate::env::Env;
 use crate::envelope::{Failure, Outcome, code};
-use crate::json::Json;
+use crate::json::{Json, Object};
 use crate::render::progress::{Progress, TenantEvent};
 use crate::render::text::Text;
 use anstyle::{AnsiColor, Style};
@@ -216,7 +216,7 @@ fn usage_with(
         ));
     }
     // The envelope writes `error` after the message.
-    outcome.data = data;
+    outcome.data = Object::from_iter(data);
     let mut report = Report::failed(COMMAND, ExitCode::Usage, Failure::new("", ""));
     report.outcome = outcome;
     report
@@ -805,10 +805,13 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
             Ok(workspace) => crate::app::release(workspace),
             Err(mut refused) => {
                 // Every `query` document names its platform, as `usage_with` does.
-                refused
-                    .outcome
-                    .data
-                    .insert(0, ("platform".to_owned(), Json::str(platform)));
+                if !refused.outcome.data.contains_key("platform") {
+                    refused.outcome.data.shift_insert(
+                        0,
+                        "platform".to_owned(),
+                        Json::str(platform),
+                    );
+                }
                 return *refused;
             }
         }
@@ -908,7 +911,7 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
     // `doctor` do, not as a `--tenant` that names nothing.
     if let Some(mut refused) = super::no_workspace(COMMAND, cx.repo, cx.env, cx.cwd) {
         // Every `query` document names its platform, as `usage_with` does.
-        refused.outcome.data = vec![("platform".to_owned(), Json::str(platform))];
+        refused.outcome.data = Object::from_iter([("platform".to_owned(), Json::str(platform))]);
         return refused;
     }
     let (available, config_path) = configured(cx, platform);
@@ -1107,9 +1110,9 @@ fn payload(
             command: COMMAND.into(),
             status: Status::Failed,
             message: message.clone(),
-            data,
+            data: Object::from_iter(data),
             exit_code: ExitCode::Failure,
-            summary,
+            summary: Object::from_iter(summary),
             next_actions: Vec::new(),
             failure: Some(Failure::new(super::COMMAND_FAILED, message)),
         }
@@ -1131,9 +1134,9 @@ fn payload(
             command: COMMAND.into(),
             status: Status::Completed,
             message,
-            data,
+            data: Object::from_iter(data),
             exit_code: ExitCode::Success,
-            summary,
+            summary: Object::from_iter(summary),
             next_actions: Vec::new(),
             failure: None,
         }
@@ -1737,12 +1740,12 @@ mod tests {
                 "detail"
             ]
         );
-        assert_eq!(outcome.data[8].1, Json::str("bad"));
+        assert_eq!(outcome.data[8], Json::str("bad"));
         assert_eq!(
-            compact_of(&outcome.data[2].1),
+            compact_of(&outcome.data[2]),
             r#"{"from":"2099-01-01T00:00:00.000Z","to":"2099-01-01T01:00:00.000Z"}"#
         );
-        assert_eq!(outcome.data[6].1, Json::Int(1));
+        assert_eq!(outcome.data[6], Json::Int(1));
         let summary: Vec<String> = outcome
             .summary
             .iter()

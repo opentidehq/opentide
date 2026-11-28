@@ -16,7 +16,7 @@ use super::result::{ExitCode, Status};
 use super::{COMMAND_FAILED, placement};
 use crate::env::Env;
 use crate::envelope::{Failure, NextAction, Outcome, code};
-use crate::json::Json;
+use crate::json::{Json, Object};
 use crate::render::diagnostic::{Diagnostic, Severity};
 use crate::render::glyphs;
 use crate::render::progress::{columns, plural};
@@ -139,14 +139,10 @@ impl DryRun {
     }
 
     fn data_str(&self, key: &str) -> Option<String> {
-        self.outcome
-            .data
-            .iter()
-            .find(|(name, _)| name == key)
-            .and_then(|(_, value)| match value {
-                Json::Str(text) if !text.is_empty() => Some(text.clone()),
-                _ => None,
-            })
+        self.outcome.data.get(key).and_then(|value| match value {
+            Json::Str(text) if !text.is_empty() => Some(text.clone()),
+            _ => None,
+        })
     }
 
     /// The JSON document, `duration_ms` as given: the command's keys, then
@@ -380,7 +376,7 @@ fn with_retirements(
     if let Some(retirable) = found.retirable_json() {
         dry.outcome
             .data
-            .push(("retirable".to_owned(), retirable.clone()));
+            .insert("retirable".to_owned(), retirable.clone());
         if let Json::Object(members) = &mut dry.result {
             members.insert("retirable".to_owned(), retirable);
         }
@@ -412,13 +408,6 @@ fn with_retirements(
     let message = opentide_compile::plan::message(&planned);
     let summary = opentide_compile::plan::summary(&planned, platforms.len(), tenants.len());
     let changes = Json::Array(changes);
-    let set = |items: &mut Vec<(String, Json)>, key: &str, value: Json| match items
-        .iter_mut()
-        .find(|(name, _)| name == key)
-    {
-        Some(entry) => entry.1 = value,
-        None => items.push((key.to_owned(), value)),
-    };
     let was_skipped = dry.outcome.status == Status::Skipped;
     if was_skipped {
         // Nothing else to deploy: the retirements are the plan.
@@ -428,27 +417,27 @@ fn with_retirements(
         dry.outcome.next_actions.clear();
         dry.outcome
             .data
-            .retain(|(key, _)| !matches!(key.as_str(), "advice" | "detail"));
+            .retain(|key, _| !matches!(key.as_str(), "advice" | "detail"));
         dry.plan_kind = true;
     }
-    set(&mut dry.outcome.data, "changes", changes.clone());
+    dry.outcome
+        .data
+        .insert("changes".to_owned(), changes.clone());
     dry.outcome.message.clone_from(&message);
     dry.outcome_line = Some(message.clone());
     // The plan's counts again, the rest of the summary (`skipped`) kept.
     if let Json::Object(members) = summary {
         for (key, count) in members {
-            set(&mut dry.outcome.summary, &key, count);
+            dry.outcome.summary.insert(key, count);
         }
     }
     if let Json::Object(members) = &mut dry.result {
-        let mut items: Vec<(String, Json)> = std::mem::take(members).into_iter().collect();
-        set(&mut items, "changes", changes);
-        set(&mut items, "message", Json::str(message));
-        set(&mut items, "status", Json::str(dry.outcome.status.as_str()));
+        members.insert("changes".to_owned(), changes);
+        members.insert("message".to_owned(), Json::str(message));
+        members.insert("status".to_owned(), Json::str(dry.outcome.status.as_str()));
         if was_skipped {
-            items.retain(|(key, _)| !matches!(key.as_str(), "advice" | "detail"));
+            members.retain(|key, _| !matches!(key.as_str(), "advice" | "detail"));
         }
-        *members = items.into_iter().collect();
     }
 }
 
@@ -660,9 +649,9 @@ fn from_outcome(outcome: dry_run::Outcome, at_root: bool) -> DryRun {
             command: COMMAND.to_owned(),
             status: Status::from_text(&status),
             message,
-            data,
+            data: Object::from_iter(data),
             exit_code: ExitCode::of_service(exit_code),
-            summary,
+            summary: Object::from_iter(summary),
             next_actions,
             failure,
         },
@@ -775,7 +764,7 @@ fn json_text(value: Option<&Json>) -> String {
 
 /// The plan grouped by platform, then tenant (`plan_view`).
 #[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
-fn plan_view(result: &Json, summary: &[(String, Json)]) -> Vec<(Text, Option<usize>)> {
+fn plan_view(result: &Json, summary: &Object) -> Vec<(Text, Option<usize>)> {
     let Some(Json::Array(changes)) = result.get("changes") else {
         return Vec::new();
     };
@@ -783,13 +772,10 @@ fn plan_view(result: &Json, summary: &[(String, Json)]) -> Vec<(Text, Option<usi
         return Vec::new();
     }
     let count = |key: &str| {
-        summary
-            .iter()
-            .find(|(name, _)| name == key)
-            .and_then(|(_, value)| match value {
-                Json::Int(number) => usize::try_from(*number).ok(),
-                _ => None,
-            })
+        summary.get(key).and_then(|value| match value {
+            Json::Int(number) => usize::try_from(*number).ok(),
+            _ => None,
+        })
     };
     let scope = match (count("platforms"), count("tenants")) {
         (Some(platforms), Some(tenants)) => Some(format!(

@@ -894,13 +894,13 @@ fn plan_report(
         count("create"),
         count("merge")
     );
-    report.outcome.summary = vec![
+    report.outcome.summary = Object::from_iter([
         ("create".into(), Json::from(count("create"))),
         ("merge".into(), Json::from(count("merge"))),
         ("skip".into(), Json::from(count("skip"))),
         ("delete".into(), Json::from(count("delete"))),
         ("steps".into(), Json::from(steps.len())),
-    ];
+    ]);
     report.outcome_kind = Some(OutcomeKind::Plan);
     report.warnings = warnings;
     if cx.mode != Mode::Json {
@@ -1739,13 +1739,7 @@ mod tests {
     }
 
     fn files_of(report: &Report) -> Vec<(String, String, String)> {
-        let Some(Json::Array(steps)) = report
-            .outcome
-            .data
-            .iter()
-            .find(|(k, _)| k == "steps")
-            .map(|(_, v)| v)
-        else {
+        let Some(Json::Array(steps)) = report.outcome.data.get("steps") else {
             return Vec::new();
         };
         let mut out = Vec::new();

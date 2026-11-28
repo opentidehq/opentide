@@ -32,7 +32,7 @@ use super::{Block, Report, USAGE_INVALID_VALUE};
 use crate::commands::result::{ExitCode, Status};
 use crate::env::Env;
 use crate::envelope::Failure;
-use crate::json::Json;
+use crate::json::{Json, Object};
 use crate::mode::Mode;
 use crate::render::outcome::OutcomeKind;
 use crate::render::table::columns;
@@ -1303,13 +1303,13 @@ fn plan(root: &Path, run: &Run) -> Report {
     report.outcome.message = format!(
         "Plan: {writes} {noun} to write ({created} new, {merged} changed) · nothing written"
     );
-    report.outcome.summary = vec![
+    report.outcome.summary = Object::from_iter([
         ("create".into(), Json::Int(created)),
         ("merge".into(), Json::Int(merged)),
         ("skip".into(), Json::Int(skipped)),
         ("delete".into(), Json::Int(0)),
         ("steps".into(), Json::Int(1)),
-    ];
+    ]);
     report.outcome_kind = Some(OutcomeKind::Plan);
     report.warnings = warnings;
     let bold = Style::new().bold();

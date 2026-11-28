@@ -9,7 +9,7 @@ use pulldown_cmark::{Event, HeadingLevel, Parser, Tag, TagEnd};
 
 use super::{Block, Report, Terminal, USAGE_INVALID_CHOICE};
 use crate::explain::{self, Page};
-use crate::json::Json;
+use crate::json::{Json, Object};
 use crate::mode::Mode;
 use crate::render::text::{Text, layer};
 use anstyle::{AnsiColor, Style};
@@ -91,7 +91,7 @@ fn list(terminal: &Terminal) -> Report {
     );
     let mut report = Report::completed("explain", vec![("codes".into(), codes)]);
     report.outcome.message = format!("{} diagnostic codes", pages.len());
-    report.outcome.summary = vec![("codes".into(), Json::from(pages.len()))];
+    report.outcome.summary = Object::from_iter([("codes".into(), Json::from(pages.len()))]);
     if terminal.text() {
         report.body.push(Block::Raw(index_text(&pages, terminal)));
     }
