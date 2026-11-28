@@ -442,7 +442,9 @@ fn a_block_the_model_refuses_fails_at_its_field() {
     let cases: [(String, &str); 4] = [
         (block_rule("alert: 'yes'"), "alert"),
         (block_rule("surprise: 1"), "surprise"),
-        (block_rule("streams: [1, 2]"), "streams"),
+        // The items' type, which `graylog_list_shape` also refuses: the
+        // refusal names the first item, not the check's finding (#1951).
+        (block_rule("streams: [1, 2]"), "streams.0"),
         (
             fixture("block-graylog.yaml").replace(
                 "    query: 'EventID:1 AND image_lc:/.*\\\\mshta\\.exe/'",
@@ -454,11 +456,11 @@ fn a_block_the_model_refuses_fails_at_its_field() {
     for (rule, field) in cases {
         let error = error_of(&rule);
         assert_eq!(error.code, "compile_failed", "{field}: {error}");
-        assert_eq!(
-            error.field,
-            ["configurations", "graylog", field],
-            "{field}: {error}"
-        );
+        let at: Vec<&str> = ["configurations", "graylog"]
+            .into_iter()
+            .chain(field.split('.'))
+            .collect();
+        assert_eq!(error.field, at, "{field}: {error}");
         assert!(
             error
                 .reason
@@ -473,6 +475,29 @@ fn a_block_the_model_refuses_fails_at_its_field() {
             "{field}: {error}"
         );
     }
+}
+
+/// #1951: a value only the block's own check refuses does not hide a fault
+/// of the block's shape. `graylog_constraints` refuses the event limit, and
+/// its refusal stops the model's conversion of the fields; the refusal still
+/// names each field whose shape is wrong, not the check's finding.
+#[test]
+fn a_value_the_check_refuses_does_not_hide_a_shape_error() {
+    let rule = block_rule("event_limit: 5000\nalert: 'yes'\nsurprisé: 😀");
+    let error = error_of(&rule);
+    assert_eq!(error.code, "compile_failed", "{error}");
+    assert_eq!(
+        error.field,
+        ["configurations", "graylog", "alert"],
+        "{error}"
+    );
+    for part in [
+        "configurations.graylog.alert: Input should be a valid boolean",
+        "configurations.graylog.surprisé: Extra inputs are not permitted",
+    ] {
+        assert!(error.reason.contains(part), "{part} not in {error}");
+    }
+    assert!(!error.reason.contains("event_limit"), "{error}");
 }
 
 /// #1951: a value only the block's own check refuses (`graylog_constraints`:

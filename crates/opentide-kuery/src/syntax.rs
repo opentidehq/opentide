@@ -195,7 +195,7 @@ fn word_unit(rest: &str) -> usize {
     if c != '\\' {
         return 0;
     }
-    let after = &rest[1..];
+    let after = chars.as_str();
     let Some(e) = after.chars().next() else {
         return 0;
     };
@@ -231,7 +231,8 @@ fn word(lex: &mut logos::Lexer<'_, Token>) {
     // The first unit is already matched; take the longest run after it.
     let mut taken = 0;
     loop {
-        let n = word_unit(&lex.remainder()[taken..]);
+        // `taken` adds up whole units: characters, or escapes of them.
+        let n = word_unit(crate::cut(lex.remainder(), taken, lex.remainder().len()));
         if n == 0 {
             break;
         }
@@ -322,7 +323,12 @@ mod tests {
     fn kinds(source: &str) -> Vec<(SyntaxKind, &str)> {
         lex(source, true)
             .iter()
-            .map(|l| (SyntaxKind::from_raw(l.kind), &source[l.range]))
+            .map(|l| {
+                (
+                    SyntaxKind::from_raw(l.kind),
+                    source.get(std::ops::Range::<usize>::from(l.range)).unwrap(),
+                )
+            })
             .collect()
     }
 

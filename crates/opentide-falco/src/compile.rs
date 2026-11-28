@@ -527,6 +527,9 @@ fn class_parse<'c>(
     };
     let starts = |s: &str| full.starts_with(s);
     let after = |name: &str| full.as_bytes().get(name.len()).copied();
+    // `full` starts with the field name being read, ASCII, and every offset
+    // below is past it (and past the ASCII byte `after` reads), or a `]`'s.
+    let from = |start: usize, end: usize| crate::cut(full, start, end);
     let named = |name: &str| field_named(fields, name);
     match class {
         "event" => {
@@ -542,7 +545,7 @@ fn class_parse<'c>(
                             );
                         }
                         let end = full.find(']').unwrap_or(full.len());
-                        let num = &full[name.len() + 1..end.max(name.len() + 1)];
+                        let num = from(name.len() + 1, end.max(name.len() + 1));
                         if name == "evt.around" {
                             if !scanf_int(num) {
                                 return ClassParse::Throw(format!("{num} is not a valid number"));
@@ -556,7 +559,7 @@ fn class_parse<'c>(
                         if name == "evt.around" {
                             return ClassParse::Throw("wrong syntax for evt.around".into());
                         }
-                        let rest = &full[name.len() + 1..];
+                        let rest = from(name.len() + 1, full.len());
                         match longest_param(catalog, rest) {
                             Some(p) => ClassParse::Len(
                                 name.len() + p.name.len() + 1,
@@ -596,7 +599,7 @@ fn class_parse<'c>(
                 if after("evt.type.is") != Some(b'.') {
                     return ClassParse::Throw(format!("filter syntax error: {full}"));
                 }
-                let itype = &full[12..];
+                let itype = from("evt.type.is.".len(), full.len());
                 let known = (!itype.is_empty() && itype.bytes().all(|b| b.is_ascii_digit()))
                     || catalog.event(itype).is_some();
                 return ClassParse::Len(if known { full.len() } else { 0 }, field, None);
@@ -618,7 +621,7 @@ fn class_parse<'c>(
                 };
                 if after(name) == Some(b'[')
                     && let Some(end) = full.find(']')
-                    && scanf_int(&full[name.len() + 1..end])
+                    && scanf_int(from(name.len() + 1, end))
                 {
                     return ClassParse::Len(end + 1, field, None);
                 }
@@ -643,7 +646,7 @@ fn class_parse<'c>(
                         return ClassParse::NoMatch;
                     };
                     if after(name) == Some(b'[')
-                        && let Some(end) = full[name.len()..].find(']')
+                        && let Some(end) = from(name.len(), full.len()).find(']')
                     {
                         return ClassParse::Len(name.len() + end + 1, field, None);
                     }
@@ -657,7 +660,7 @@ fn class_parse<'c>(
                 if after("thread.cgroup") != Some(b'.') {
                     return ClassParse::Throw(format!("filter syntax error: {full}"));
                 }
-                let n = full[14..]
+                let n = from("thread.cgroup.".len(), full.len())
                     .bytes()
                     .take_while(|b| b.is_ascii_alphabetic() || *b == b'_')
                     .count();
@@ -672,7 +675,7 @@ fn class_parse<'c>(
                 };
                 if after("fd.types") == Some(b'[') {
                     let end = full.find(']').unwrap_or(full.len());
-                    let num = &full[9..end.max(9)];
+                    let num = from("fd.types[".len(), end.max("fd.types[".len()));
                     if !scanf_int(num) {
                         return ClassParse::Throw(format!("{num} is not a valid number"));
                     }
@@ -713,13 +716,14 @@ fn plugin_parse<'c>(fields: ClassFields<'c, '_>, full: &str) -> ClassParse<'c> {
             field.name
         ));
     }
-    let Some(arg_len) = val[argstart..].find(']') else {
+    // Past the `[` at `arg_pos`, to a `]`.
+    let Some(arg_len) = crate::cut(val, argstart, val.len()).find(']') else {
         return ClassParse::Throw(format!(
             "filter '{val}': {} has unbalanced argument brackets",
             field.name
         ));
     };
-    let arg = &val[argstart..argstart + arg_len];
+    let arg = crate::cut(val, argstart, argstart + arg_len);
     if field.arg == ArgRule::None {
         return ClassParse::Throw(format!(
             "filter '{val}': {} does not allow nor require an argument but one is provided: {arg}",
@@ -1040,8 +1044,11 @@ impl<'c> Compiler<'c> {
         }
         // A field name (resolved exactly), used as a string by mistake.
         let (fname, farg) = match nospaces.split_once('[') {
-            Some((n, rest)) if rest.ends_with(']') => (n, Some(&rest[..rest.len() - 1])),
-            _ => (nospaces.as_str(), None),
+            Some((n, rest)) => match rest.strip_suffix(']') {
+                Some(arg) => (n, Some(arg)),
+                None => (nospaces.as_str(), None),
+            },
+            None => (nospaces.as_str(), None),
         };
         if fname.contains('.') && resolve(self.catalog, &self.source, fname, farg).is_ok() {
             self.warn(
@@ -1473,8 +1480,8 @@ pub fn output_prefixes(rest: &str) -> Vec<(Expr, usize)> {
     let mut found = Vec::new();
     let mut size = rest.len();
     while size > 0 {
-        if rest.is_char_boundary(size) {
-            let mut p = Parser::new(&rest[..size]);
+        if let Some(head) = rest.get(..size) {
+            let mut p = Parser::new(head);
             if let Ok(e) = p.parse_field_or_transformer() {
                 let consumed = p.pos();
                 found.push((e, consumed));

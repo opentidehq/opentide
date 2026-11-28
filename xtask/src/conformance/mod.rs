@@ -204,12 +204,12 @@ impl Manifest {
 pub fn placeholders(value: &str) -> Vec<&str> {
     let mut out = Vec::new();
     let mut rest = value;
-    while let Some(open) = rest.find('{') {
-        let Some(close) = rest[open..].find('}') else {
+    while let Some((_, after)) = rest.split_once('{') {
+        let Some((name, next)) = after.split_once('}') else {
             break;
         };
-        out.push(&rest[open + 1..open + close]);
-        rest = &rest[open + close + 1..];
+        out.push(name);
+        rest = next;
     }
     out
 }
@@ -551,6 +551,7 @@ mod tests {
         assert_eq!(placeholders("{a}:{b}"), ["a", "b"]);
         assert!(placeholders("$S1_API_TOKEN").is_empty());
         assert!(placeholders("{unclosed").is_empty());
+        assert_eq!(placeholders("é{😀}é{é😀}{"), ["😀", "é😀"]);
     }
 
     #[test]

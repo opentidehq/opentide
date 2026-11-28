@@ -131,6 +131,21 @@ fn at(start: u32, end: u32) -> TextRange {
     TextRange::new(TextSize::from(start), TextSize::from(end))
 }
 
+/// Errors on multi-byte characters restart the lexer on a char boundary:
+/// every suffix of such a text lexes back to itself (#1946).
+#[test]
+fn every_suffix_of_multi_byte_text_lexes_losslessly() {
+    let source = "é😀 a(é) 😀?é\n😀";
+    for (at, _) in source.char_indices() {
+        let rest = source.get(at..).unwrap();
+        let text: String = toy_lex(rest)
+            .iter()
+            .map(|l| rest.get(std::ops::Range::<usize>::from(l.range)).unwrap())
+            .collect();
+        assert_eq!(text, rest);
+    }
+}
+
 #[test]
 fn the_lexer_is_lossless_and_an_error_is_one_character() {
     let source = "ab é😀(x)\n ?";

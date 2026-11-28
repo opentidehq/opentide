@@ -5,6 +5,7 @@
 
 use std::sync::Arc;
 
+use opentide_schema::from_node::Context;
 use opentide_schema::node::{Entry, Mark, Node, Value};
 use opentide_schema::{ErrorKind, FromNode, SchemaError};
 use serde::de::DeserializeOwned;
@@ -19,8 +20,9 @@ pub(crate) const REFUSED_HINT: &str =
 /// `block`, the rule's `configurations.<platform>`, read by the model `T`.
 ///
 /// A refusal names the field path the rule wrote and the model's reason
-/// (`configurations.sentinel.alert: Field required`), every one the block
-/// earns, at the first one's field, as `compile_failed` for `display`.
+/// (`configurations.sentinel.alert: Field required`) for every fault of the
+/// block's shape, at the first one's field, as `compile_failed` for
+/// `display`.
 ///
 /// Only the block's shape is refused (a missing field, an unknown key, a
 /// wrong type, a value outside a closed set). A block whose only faults are
@@ -29,8 +31,13 @@ pub(crate) const REFUSED_HINT: &str =
 /// which runs no check, and the compile deals with those values as it always
 /// has; `validate` reports them. Serde reads the block's text, not
 /// `serde_json::Value`, so an `IndexMap` keeps its keys' order. When serde
-/// cannot read it either (a named check's refusal hid a wrong type), the
-/// block is refused with the model's findings.
+/// cannot read it either, the block is refused with the model's findings.
+///
+/// A named check that refuses the block stops the model's conversion of its
+/// fields, so a fault of their shape would hide behind the check's finding.
+/// The fields are converted again without the model's checks
+/// ([`Context::without_model_checks`]), and the refusal names every shape
+/// fault that conversion finds, not the check's.
 ///
 /// The block is the one the deploy sends (`modifiers::rule_for_tenant` may
 /// have changed it), so it is read from the rule's JSON, not its node.
@@ -39,32 +46,57 @@ where
     T: FromNode + DeserializeOwned,
 {
     let node = json_node(block);
-    let mut cx = opentide_schema::from_node::Context::new();
-    let config = cx.at_key("configurations", |cx| {
-        cx.at_key(platform, |cx| T::from_node(&node, cx))
-    });
-    let errors = cx.into_errors();
+    let (config, errors) = convert::<T>(&node, platform, Context::new());
     if let (Some(config), true) = (config, errors.is_empty()) {
         return Ok(config);
     }
-    if !errors.is_empty()
-        && errors.iter().all(is_field_check)
+    let (_, unchecked) = convert::<T>(&node, platform, Context::without_model_checks());
+    let mut shape: Vec<&SchemaError> = unchecked
+        .iter()
+        .filter(|error| !is_field_check(error))
+        .collect();
+    for error in errors.iter().filter(|error| !is_field_check(error)) {
+        if !shape
+            .iter()
+            .any(|known| known.to_string() == error.to_string())
+        {
+            shape.push(error);
+        }
+    }
+    if shape.is_empty()
         && let Ok(config) = serde_json::from_str(&block.to_compact())
     {
         return Ok(config);
     }
-    // A block serde cannot read either has a fault of its shape behind the
-    // check's: a named check that refuses the block stops the conversion of
-    // its fields. Its findings name the fields, as `validate` does.
+    // The model's findings name the fields, as `validate` does: the shape
+    // faults, or, when serde cannot read a block that has none, every one.
+    let errors: Vec<&SchemaError> = if shape.is_empty() {
+        errors.iter().collect()
+    } else {
+        shape
+    };
     let field = errors
         .first()
-        .map(SchemaError::field_path)
+        .map(|error| error.field_path())
         .unwrap_or_default();
     let field: Vec<&str> = field.iter().map(String::as_str).collect();
     let reasons: Vec<String> = errors.iter().map(ToString::to_string).collect();
     let mut error = CompileError::failed(display, &reasons.join("; "));
     error.hint = Some(REFUSED_HINT.to_owned());
     Err(error.at(&field))
+}
+
+/// `node`, the block at `configurations.<platform>`, converted by the model
+/// `T` in `cx`, with the errors the conversion found.
+fn convert<T: FromNode>(
+    node: &Node,
+    platform: &str,
+    mut cx: Context,
+) -> (Option<T>, Vec<SchemaError>) {
+    let config = cx.at_key("configurations", |cx| {
+        cx.at_key(platform, |cx| T::from_node(node, cx))
+    });
+    (config, cx.into_errors())
 }
 
 /// Whether the model refused a value a field's or the block's own check

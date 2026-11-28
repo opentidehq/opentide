@@ -1092,7 +1092,7 @@ mod tests {
             .iter()
             .map(|l| {
                 let r = std::ops::Range::<usize>::from(l.range);
-                (K::from_raw(l.kind), &source[r])
+                (K::from_raw(l.kind), source.get(r).unwrap())
             })
             .filter(|(k, _)| *k != K::WHITESPACE)
             .collect()

@@ -392,7 +392,9 @@ pub fn lex(source: &str) -> Vec<Lexeme> {
         context = context.after(K::WHITESPACE);
     }
     'restart: while base < source.len() {
-        let mut lexer = Tok::lexer_with_extras(&source[base..], context);
+        // `base` is 0, past the byte order mark, or an error token's end,
+        // which `ceil_char_boundary` puts on a char boundary.
+        let mut lexer = Tok::lexer_with_extras(crate::cut(source, base, source.len()), context);
         while let Some(token) = lexer.next() {
             let span = lexer.span();
             let start = base + span.start;
@@ -469,7 +471,7 @@ mod tests {
             .map(|l| {
                 (
                     K::from_raw(l.kind),
-                    &source[std::ops::Range::<usize>::from(l.range)],
+                    source.get(std::ops::Range::<usize>::from(l.range)).unwrap(),
                 )
             })
             .collect()

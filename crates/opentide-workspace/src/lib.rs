@@ -29,6 +29,11 @@
 //! Internal to opentide, with no stability promise: depend on the
 //! [`opentide`](https://docs.rs/opentide) crate, its Rust SDK, instead.
 
+// Slicing a `str` by byte index panics off a char boundary, and this crate
+// reads user files: every slice is checked or says why it is safe (#1946;
+// the lint moves to `[workspace.lints]` once every crate is clean).
+#![warn(clippy::string_slice)]
+
 pub mod catalogue;
 pub mod config;
 pub mod coverage;
@@ -58,3 +63,12 @@ pub use index::{Index, Object};
 pub use root::RootOptions;
 pub use session::{Session, SessionStats};
 pub use workspace::{Change, ChangeKind, Invalidation, OpenError, Options, Stats, Workspace};
+
+/// `text[start..end]`, a range this crate computes: a match's bounds, a
+/// character's, or an ASCII byte's, so its ends are char boundaries. A range
+/// that is not fails a debug assertion and reads as empty.
+pub(crate) fn cut(text: &str, start: usize, end: usize) -> &str {
+    let piece = text.get(start..end);
+    debug_assert!(piece.is_some(), "{start}..{end} in {} bytes", text.len());
+    piece.unwrap_or_default()
+}

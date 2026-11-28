@@ -151,26 +151,28 @@ type OccurrenceKey = (String, Option<PathBuf>, Vec<String>, Option<String>);
 /// Each file's document, read once for every finding in it.
 pub struct Sources<'a> {
     fs: &'a dyn FileSystem,
+    /// The index whose documents stand for their files, looked up on the
+    /// first finding in a file ([`Self::indexed`]).
+    index: Option<&'a Index>,
+    /// How many files were looked for in [`Self::index`] one by one.
+    looked_up: usize,
     by_path: HashMap<PathBuf, Option<Arc<Document>>>,
     texts: HashMap<PathBuf, Option<String>>,
 }
 
 impl<'a> Sources<'a> {
     /// The documents the index holds, and `fs` for any other file.
-    pub fn new(fs: &'a dyn FileSystem, index: &Index) -> Self {
-        let mut by_path = HashMap::new();
-        for object in index.objects.values().flat_map(|objects| objects.values()) {
-            by_path.insert(object.path.clone(), Some(Arc::clone(&object.document)));
-        }
-        for duplicate in &index.duplicates {
-            by_path.insert(
-                duplicate.path.clone(),
-                Some(Arc::clone(&duplicate.document)),
-            );
-        }
+    ///
+    /// Nothing is read or hashed before a finding asks for its file: a run
+    /// narrowed to one file of a large workspace (an editor's, on each
+    /// keystroke) places its few findings without a table of every object
+    /// (#2122).
+    pub fn new(fs: &'a dyn FileSystem, index: &'a Index) -> Self {
         Self {
             fs,
-            by_path,
+            index: Some(index),
+            looked_up: 0,
+            by_path: HashMap::new(),
             texts: HashMap::new(),
         }
     }
@@ -180,6 +182,8 @@ impl<'a> Sources<'a> {
     pub fn files(fs: &'a dyn FileSystem) -> Self {
         Self {
             fs,
+            index: None,
+            looked_up: 0,
             by_path: HashMap::new(),
             texts: HashMap::new(),
         }
@@ -205,9 +209,64 @@ impl<'a> Sources<'a> {
             .clone()
     }
 
+    /// How many files are looked for in the index one by one before every
+    /// object's file is put in [`Self::by_path`] at once.
+    const LOOKED_UP_ONE_BY_ONE: usize = 8;
+
+    /// The document the index holds for `path`, if it holds one: a
+    /// duplicate's displaced file's, else its object's, the last of each
+    /// when several name the file (as a table of every object's file, then
+    /// every duplicate's, holds it). The first few files are looked for one
+    /// by one; then the table of every file is made once, so that a run with
+    /// findings in many files reads the index once. `None`: the index holds
+    /// no document of `path`.
+    fn indexed(&mut self, path: &Path) -> Option<Arc<Document>> {
+        let index = self.index?;
+        if self.looked_up < Self::LOOKED_UP_ONE_BY_ONE {
+            self.looked_up += 1;
+            let duplicate = index
+                .duplicates
+                .iter()
+                .rev()
+                .find(|duplicate| duplicate.path == path)
+                .map(|duplicate| &duplicate.document);
+            let document = duplicate.or_else(|| {
+                index
+                    .objects
+                    .values()
+                    .flat_map(|objects| objects.values())
+                    .rfind(|object| object.path == path)
+                    .map(|object| &object.document)
+            })?;
+            let found = Arc::clone(document);
+            self.by_path
+                .insert(path.to_path_buf(), Some(Arc::clone(&found)));
+            return Some(found);
+        }
+        self.index = None;
+        let mut table: HashMap<&Path, &Arc<Document>> = HashMap::new();
+        for object in index.objects.values().flat_map(|objects| objects.values()) {
+            table.insert(&object.path, &object.document);
+        }
+        for duplicate in &index.duplicates {
+            table.insert(&duplicate.path, &duplicate.document);
+        }
+        // What `by_path` holds already is either the table's own entry or a
+        // file the index does not hold.
+        for (file, document) in table {
+            self.by_path
+                .entry(file.to_path_buf())
+                .or_insert_with(|| Some(Arc::clone(document)));
+        }
+        self.by_path.get(path).cloned().flatten()
+    }
+
     fn document(&mut self, path: &Path) -> Option<Arc<Document>> {
         if let Some(found) = self.by_path.get(path) {
             return found.clone();
+        }
+        if let Some(found) = self.indexed(path) {
+            return Some(found);
         }
         let toml = path
             .extension()

@@ -201,8 +201,10 @@ pub fn parse(proxy: &str) -> Result<url::Url, String> {
     let (scheme, rest) = proxy.split_once("://").unwrap_or(("http", proxy));
     // The URL standard ends the authority at the first of these; any `@`
     // after it is a user or password that was not percent-encoded.
-    let end = rest.find(['/', '?', '#', '\\']).unwrap_or(rest.len());
-    if rest[end..].contains('@') {
+    if rest
+        .split_once(['/', '?', '#', '\\'])
+        .is_some_and(|(_, after)| after.contains('@'))
+    {
         return Err(
             "an `@` follows a `/`, `?`, `#` or `\\`: if it ends a user or password, \
              percent-encode those characters in it (`%2F`, `%3F`, `%23`, `%5C`, and \
@@ -382,5 +384,12 @@ mod tests {
         assert!(!direct("https://splunk.example.com/x"));
         let handed = url::Url::parse("https://10.1.2.3/x").map(|url| proxies.proxy_for(&url));
         assert_eq!(handed, Ok(None));
+    }
+
+    #[test]
+    fn an_at_after_the_authority_is_refused_in_multi_byte_text() {
+        assert!(parse("http://é😀/a@b").is_err());
+        assert!(parse("é😀?@").is_err());
+        assert!(parse("http://user@proxy.example:8080/é😀").is_ok());
     }
 }

@@ -3362,6 +3362,75 @@ fn a_google_secops_deploy_sends_the_body_its_dry_run_shows() {
     );
 }
 
+/// The `createCustomRule` request a Bitdefender deploy sends is, byte for
+/// byte and but for its per-request `id`, the `api_request` the dry run
+/// shows for that tenant (#1952: both compile through
+/// `compiler::Bitdefender`): the tenant's tags and `companyId`, and the
+/// non-ASCII text of the rule.
+#[test]
+fn a_bitdefender_deploy_sends_the_body_its_dry_run_shows() {
+    use wiremock::matchers::{method, path};
+    const RPC: &str = "/api/v1.0/jsonrpc/incidents";
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let server = rt.block_on(wiremock::MockServer::start());
+    rt.block_on(
+        wiremock::Mock::given(method("POST"))
+            .and(path(RPC))
+            .respond_with(|request: &wiremock::Request| {
+                let body: serde_json::Value = serde_json::from_slice(&request.body).unwrap();
+                wiremock::ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                    "jsonrpc": "2.0", "id": body["id"], "result": "aaaaaaaaaaaaaaaaaaaaaaaa"
+                }))
+            })
+            .expect(1)
+            .mount(&server),
+    );
+    let block = bitdefender_block(false).replace("evil.exe", "é😀.exe");
+    let setup = format!(
+        "ssl = false\nurl = \"{}/api\"\napi_key = \"$GRAVITYZONE_API_KEY\"\ncompany_id = \
+         \"c0ffee\"\ntags = [\"équipe 😀\"]\n",
+        server.uri()
+    );
+    let ws = workspace(
+        "bitdefender",
+        "lab",
+        &setup,
+        &[(
+            "a.yaml",
+            rule(
+                "Ünïcode rule 😀",
+                "00000000-0000-4000-8099-000000000206",
+                "Dé😀.",
+                &block,
+            ),
+        )],
+    );
+    let shown = dry_run_requests(ws.path(), "bitdefender");
+    let env = Env::from_pairs([("GRAVITYZONE_API_KEY".to_owned(), "key".to_owned())]);
+    let (sent, err) = deploy(
+        ws.path(),
+        "bitdefender",
+        &env,
+        &opentide_connectors::builtin(),
+        0,
+    );
+    rt.block_on(server.verify());
+    assert_eq!(rows(&sent), vec![("deployed".to_owned(), None)], "{err}");
+    let posted = bodies_on(&rt, &server, &wiremock::http::Method::POST, RPC);
+    assert_eq!(posted.len(), 1, "{err}");
+    let Json::Object(mut members) = Json::parse(&posted[0]).unwrap() else {
+        panic!("not an object: {}", posted[0]);
+    };
+    assert!(members.shift_remove("id").is_some(), "{}", posted[0]);
+    let body = Json::Object(members).to_compact();
+    for part in ["c0ffee", "équipe 😀", "é😀.exe", "Ünïcode rule 😀"] {
+        assert!(body.contains(part), "{part} not in {body}");
+    }
+    assert_eq!(shown.len(), 1);
+    assert_eq!(shown[0].1.as_deref(), Some("lab"));
+    assert_eq!(shown[0].0, body);
+}
+
 /// A definition the tenant lost while git ignores deployment state is not
 /// created again: the warning, then the state's refusal; and a tenant that
 /// refuses the token on a rule stops there.

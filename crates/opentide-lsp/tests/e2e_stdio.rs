@@ -2814,3 +2814,49 @@ fn at_uri(uri: &str, line: u32, character: usize) -> Value {
         "position": { "line": line, "character": character }
     })
 }
+
+/// Completion, rename and folding read the document around every position
+/// of multi-byte text, the middle of a surrogate pair included (#1946): the
+/// server answers each request and stays up.
+#[test]
+fn editor_requests_read_multi_byte_documents_whole() {
+    let mut lsp = Lsp::spawn();
+    lsp.request("initialize", json!({ "capabilities": {} }));
+    lsp.notify("initialized", json!({}));
+    let documents = [
+        (
+            "file:///tmp/multi.yar",
+            "yara",
+            "rule é😀 {\n  strings:\n    $é = \"😀\" /* é😀\n */\n  condition:\n    #é > 1 and $é\n}\n",
+        ),
+        (
+            "file:///tmp/multi.kql",
+            "kql",
+            "Sécurité😀 | whére é😀.process.na == \"😀\" | projéct-awy é",
+        ),
+    ];
+    for (uri, language, text) in documents {
+        published_codes(&mut lsp, uri, language, text);
+        for (line_number, line) in text.split('\n').enumerate() {
+            let units = line.encode_utf16().count();
+            for character in 0..=units + 1 {
+                let position = json!({
+                    "textDocument": { "uri": uri },
+                    "position": { "line": line_number, "character": character }
+                });
+                for method in ["textDocument/completion", "textDocument/prepareRename"] {
+                    let answer = lsp.request(method, position.clone());
+                    assert!(
+                        answer.get("result").is_some() || answer.get("error").is_some(),
+                        "{method} at {line_number}:{character}: {answer}"
+                    );
+                }
+            }
+        }
+        let folding = lsp.request(
+            "textDocument/foldingRange",
+            json!({ "textDocument": { "uri": uri } }),
+        );
+        assert!(folding.get("result").is_some(), "{folding}");
+    }
+}

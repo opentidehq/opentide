@@ -321,6 +321,12 @@ fn selected_columns_are_the_select_list() {
         ("SELECT a,, b", vec!["a", "b"]),
         ("SELECT 'it\\'s', c", vec!["'it\\'s'", "c"]),
         ("SELECT", vec![]),
+        (
+            "SELECT é😀, COUNT(😀) AS n WHERE é😀 GROUP-BY é",
+            vec!["é😀", "n"],
+        ),
+        ("é😀 SELECT 😀 | where é", vec![]),
+        ("SELECT 😀 | where é", vec!["😀"]),
     ] {
         assert_eq!(selected_columns(query), columns, "{query}");
     }
