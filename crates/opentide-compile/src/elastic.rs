@@ -368,6 +368,30 @@ impl Setup {
     }
 }
 
+/// A rule compiled for one tenant ([`crate::compiler::Elastic`]): the
+/// Kibana rule, and the rule's `elastic` block as the model dumps it, which
+/// the Elasticsearch checks read before the rule is written.
+#[derive(Debug, Clone)]
+pub struct ElasticRule {
+    /// The Detection Engine body ([`compile`]).
+    pub payload: Json,
+    /// The block as the model dumps it ([`crate::preview::config_dump`]);
+    /// `None` when the rule has no filled `elastic` block.
+    pub block: Option<Json>,
+}
+
+/// The body a deploy sends for `compiled` (the connector's deploy body):
+/// `{"payload": <Kibana rule>, "block": <elastic block>}`, without `block`
+/// when there is none.
+pub fn deploy_body(compiled: &ElasticRule) -> Json {
+    let mut request = Object::new();
+    request.insert("payload".into(), compiled.payload.clone());
+    if let Some(block) = &compiled.block {
+        request.insert("block".into(), block.clone());
+    }
+    Json::Object(request)
+}
+
 /// The tag every rule opentide writes to Kibana carries first: the product
 /// name, lower case, as every other platform's marker writes it.
 pub const MARKER_TAG: &str = "opentide";

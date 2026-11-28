@@ -253,7 +253,7 @@ impl Transport for Wire {
 }
 
 impl TransportFactory for Wire {
-    fn make(&self, spec: &TransportSpec<'_>) -> Result<Arc<dyn Transport>, String> {
+    fn make(&self, spec: &TransportSpec<'_>) -> Result<Arc<dyn Transport>, transport::SetupError> {
         let metadata = url::Url::parse("http://metadata.google.internal/").unwrap();
         Ok(Arc::new(Self {
             proxied: spec.proxies.route(&metadata).is_some(),

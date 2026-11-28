@@ -17,6 +17,7 @@ use opentide_schema::migration::vocab_scope::{
 use opentide_schema::node;
 use opentide_schema::vocab::bundled;
 
+use super::result::{ExitCode, Status};
 use super::{ISSUES_FOUND, Report, placement};
 use crate::env::Env;
 use crate::envelope::Failure;
@@ -390,14 +391,14 @@ fn report(migration: &Migration, args: &Args) -> Report {
             "{} file(s) could not be migrated safely and were left unchanged.",
             migration.failed_files.len()
         );
-        issues(&mut report, message, 1, ISSUES_FOUND);
+        issues(&mut report, message, ExitCode::Failure, ISSUES_FOUND);
     } else if blocked > 0 && !args.force {
         let message = format!(
             "{verb} {files}; {blocked} value(s) are defined under several stages and cannot be \
              inferred. Choose a stage for each by hand, then re-run. Pass --force to treat this \
              as success."
         );
-        issues(&mut report, message, 2, NEEDS_HUMAN_DECISION);
+        issues(&mut report, message, ExitCode::Usage, NEEDS_HUMAN_DECISION);
     } else if !args.apply {
         // A dry run wrote nothing: its line takes no glyph.
         report.outcome_kind = Some(OutcomeKind::Plan);
@@ -407,10 +408,10 @@ fn report(migration: &Migration, args: &Args) -> Report {
 
 /// The run found what it could not do: `issues`, with its exit code and
 /// failure, and the document still `ok`.
-fn issues(report: &mut Report, message: String, exit_code: i32, code: &str) {
-    "issues".clone_into(&mut report.outcome.status);
+fn issues(report: &mut Report, message: String, exit: ExitCode, code: &str) {
+    report.outcome.set_status(Status::Issues);
     report.outcome.message.clone_from(&message);
-    report.outcome.exit_code = exit_code;
+    report.outcome.set_exit(exit);
     report.outcome.failure = Some(Failure::new(code, message));
 }
 
@@ -458,7 +459,7 @@ objective:
     fn a_dry_run_reports_and_writes_nothing() {
         let dir = workspace(&[("objects/objectives/o.yaml", OBJECTIVE)]);
         let report = run_in(dir.path(), &Args::default());
-        assert_eq!(report.outcome.exit_code, 0);
+        assert_eq!(report.outcome.exit(), ExitCode::Success);
         assert_eq!(report.outcome.message, "Would rewrite 1 file · 1 scanned");
         assert_eq!(report.outcome_kind, Some(OutcomeKind::Plan));
         assert_eq!(
@@ -478,7 +479,7 @@ objective:
             ..Args::default()
         };
         let report = run_in(dir.path(), &args);
-        assert_eq!(report.outcome.exit_code, 0);
+        assert_eq!(report.outcome.exit(), ExitCode::Success);
         assert_eq!(report.outcome.message, "Rewrote 1 file · 1 scanned");
         let written =
             std::fs::read_to_string(dir.path().join("objects/objectives/o.yaml")).unwrap();
@@ -503,7 +504,7 @@ objective:
             apply: true,
             ..Args::default()
         };
-        assert_eq!(run_in(dir.path(), &args).outcome.exit_code, 0);
+        assert_eq!(run_in(dir.path(), &args).outcome.exit(), ExitCode::Success);
         assert_eq!(std::fs::read_to_string(&before).unwrap(), OBJECTIVE);
         assert_ne!(std::fs::read_to_string(&file).unwrap(), OBJECTIVE);
         assert!(!dir.path().join("objects/objectives/.o.yaml.tmp").exists());
@@ -523,7 +524,7 @@ objective:
             ..Args::default()
         };
         let report = run_in(dir.path(), &args);
-        assert_eq!(report.outcome.exit_code, 0);
+        assert_eq!(report.outcome.exit(), ExitCode::Success);
         assert!(std::fs::symlink_metadata(&link).unwrap().is_symlink());
         let written = std::fs::read_to_string(dir.path().join("shared/o.yaml")).unwrap();
         assert!(written.contains("- Host::Process"), "{written}");
@@ -538,8 +539,8 @@ objective:
             ..Args::default()
         };
         let report = run_in(dir.path(), &args);
-        assert_eq!(report.outcome.exit_code, 2);
-        assert_eq!(report.outcome.status, "issues");
+        assert_eq!(report.outcome.exit(), ExitCode::Usage);
+        assert_eq!(report.outcome.status(), Status::Issues);
         assert!(report.outcome.ok());
         assert_eq!(
             report.outcome.failure.as_ref().unwrap().code,
@@ -558,7 +559,7 @@ objective:
                 ..Args::default()
             },
         );
-        assert_eq!(forced.outcome.exit_code, 0);
+        assert_eq!(forced.outcome.exit(), ExitCode::Success);
         assert!(forced.outcome.failure.is_none());
     }
 
@@ -569,7 +570,7 @@ objective:
             ("objects/b.yaml", "threat:\n  surface: [Windows]\n"),
         ]);
         let report = run_in(dir.path(), &Args::default());
-        assert_eq!(report.outcome.exit_code, 1);
+        assert_eq!(report.outcome.exit(), ExitCode::Failure);
         assert_eq!(report.outcome.failure.as_ref().unwrap().code, ISSUES_FOUND);
         assert_eq!(
             report.outcome.message,
@@ -595,8 +596,8 @@ objective:
                 ..Args::default()
             },
         );
-        assert_eq!(report.outcome.exit_code, 1);
-        assert_eq!(report.outcome.status, "issues");
+        assert_eq!(report.outcome.exit(), ExitCode::Failure);
+        assert_eq!(report.outcome.status(), Status::Issues);
         assert_eq!(report.outcome.failure.as_ref().unwrap().code, ISSUES_FOUND);
         let Json::Object(failed) = data(&report, "failed_files") else {
             panic!("failed_files is an object");
@@ -625,7 +626,7 @@ objective:
             ("objects/t.yaml", "threat:\n  surface: [OS::Windows]\n"),
         ]);
         let report = run_in(dir.path(), &Args::default());
-        assert_eq!(report.outcome.exit_code, 0);
+        assert_eq!(report.outcome.exit(), ExitCode::Success);
         assert!(report.outcome.failure.is_none());
         assert_eq!(data(&report, "changed_files"), &Json::Array(Vec::new()));
         let Json::Object(fields) = data(&report, "fields") else {
@@ -667,7 +668,12 @@ objective:
                 ..Args::default()
             },
         );
-        assert_eq!(report.outcome.exit_code, 0, "{}", report.outcome.message);
+        assert_eq!(
+            report.outcome.exit(),
+            ExitCode::Success,
+            "{}",
+            report.outcome.message
+        );
         assert!(report.outcome.failure.is_none());
         assert_eq!(data(&report, "failed_files"), &Json::Object(Object::new()));
         assert_eq!(data(&report, "scanned"), &Json::Int(1));
@@ -689,7 +695,7 @@ objective:
         // 0 files · 0 scanned" and exited 0.
         let dir = tempfile::tempdir().unwrap();
         let report = run_in(dir.path(), &Args::default());
-        assert_eq!(report.outcome.exit_code, 1);
+        assert_eq!(report.outcome.exit(), ExitCode::Failure);
         assert_eq!(
             report.outcome.failure.as_ref().map(|f| f.code.as_str()),
             Some("workspace_not_found")
@@ -709,7 +715,7 @@ objective:
             ..Args::default()
         };
         let report = run_in(dir.path(), &args);
-        assert_eq!(report.outcome.exit_code, 1);
+        assert_eq!(report.outcome.exit(), ExitCode::Failure);
         assert_eq!(
             report.outcome.message,
             "Unknown scoped field(s) nope. Known scoped fields: entities, surface."
@@ -739,7 +745,7 @@ objective:
                 ..Args::default()
             },
         );
-        assert_eq!(report.outcome.exit_code, 0);
+        assert_eq!(report.outcome.exit(), ExitCode::Success);
         let written = std::fs::read_to_string(dir.path().join("objects/t.yaml")).unwrap();
         assert_eq!(written, text.replace("- Windows", "- OS::Windows"));
     }

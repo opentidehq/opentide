@@ -8,7 +8,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use opentide_compile::{Json, Owned, Rule, deploy, elastic, modifiers, preview};
-use opentide_schema::platforms::PlatformKey;
+use opentide_schema::platforms::{PlatformId, PlatformKey};
 use opentide_schema::vocab::Vocabularies;
 use opentide_workspace::{FileSystem, MemoryFs, Options, RootOptions, Workspace};
 
@@ -81,10 +81,13 @@ fn a_dry_run_shows_the_body_a_deploy_compiles_for_the_first_tenant() {
         &rule,
         "basic",
     );
-    let sent = preview::elastic_request(
-        &modified,
-        elastic::compile(&cx, &modified, &elastic::Setup::from_tenant(table)).unwrap(),
-    );
+    let sent = elastic::deploy_body(&elastic::ElasticRule {
+        payload: elastic::compile(&cx, &modified, &elastic::Setup::from_tenant(table)).unwrap(),
+        block: Some(preview::config_dump(
+            PlatformId::Elastic,
+            modified.block("elastic").unwrap(),
+        )),
+    });
     assert_eq!(shown.to_compact(), sent.to_compact());
     // The modifier is in it: hourly, in the Kibana rule and the block.
     assert!(

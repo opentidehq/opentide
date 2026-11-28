@@ -11,13 +11,14 @@ use serde::Serialize;
 use serde::de::DeserializeOwned;
 
 use crate::compiler::{
-    Bitdefender, Compiler, Datadog, Exabeam, GoogleSecops, Graylog, GraylogTarget, Sentinel, Sysdig,
+    Bitdefender, Compiler, Datadog, Elastic, Exabeam, GoogleSecops, Graylog, GraylogTarget,
+    Sentinel, Sysdig,
 };
 use crate::json::{Json, Object};
 use crate::rule::{CompileError, Rule};
 use crate::{
-    Context, bitdefender, carbon_black, crowdstrike, datadog, deploy, elastic, exabeam,
-    google_secops, graylog, harfanglab, microsoft_defender, plan, sentinel_one, splunk,
+    Context, bitdefender, carbon_black, crowdstrike, datadog, deploy, exabeam, google_secops,
+    graylog, harfanglab, microsoft_defender, plan, sentinel_one, splunk,
 };
 
 /// The tenant a preview compiles for: exclusions scoped to a tenant name are
@@ -59,7 +60,7 @@ pub fn compile_offline(
 ) -> Option<Result<Json, CompileError>> {
     match platform {
         PlatformId::Sentinel => Some(sentinel_body(cx, rule, PREVIEW_TENANT)),
-        PlatformId::Elastic => Some(elastic::compile(cx, rule, &elastic::Setup::none())),
+        PlatformId::Elastic => Some(Elastic::compile(cx, rule, None).map(|sent| sent.payload)),
         PlatformId::Sysdig => {
             Some(Sysdig::compile(cx, rule, None).map(|compiled| Sysdig::body(&compiled)))
         }
@@ -190,10 +191,7 @@ pub fn compile_tenant(
         PlatformId::Datadog => {
             Datadog::compile(cx, rule, known).map(|compiled| datadog::create_request(&compiled))
         }
-        PlatformId::Elastic => {
-            let setup = known.map_or_else(elastic::Setup::none, elastic::Setup::from_tenant);
-            elastic::compile(cx, rule, &setup)
-        }
+        PlatformId::Elastic => Elastic::compile(cx, rule, known).map(|sent| sent.payload),
     }
 }
 
@@ -780,7 +778,7 @@ fn datadog_preview(cx: &Context<'_>, rule: &Rule, tenants: &[String]) -> Json {
 /// The preview of `rule` on `platform` (`preview_rule_deployment`), the
 /// entry the dry run's `payloads` lists. Every platform but Elastic reports
 /// a rule it cannot compile as a failure; Elastic shows its deploy body
-/// ([`elastic_request`]) or falls back to the block's dump, and the
+/// ([`crate::elastic::deploy_body`]) or falls back to the block's dump, and the
 /// [`deployers`] show the writes a deploy sends (`requests_preview`). It
 /// compiles for no tenant: [`preview_on`] compiles for the run's.
 pub fn preview(cx: &Context<'_>, platform: &PlatformKey, rule: &Rule) -> Json {
@@ -813,19 +811,15 @@ pub fn preview(cx: &Context<'_>, platform: &PlatformKey, rule: &Rule) -> Json {
     }
 }
 
-/// The deploy body an Elastic deploy would send (`elastic_request`),
-/// compiled for the first tenant the run sends the rule to, as `opentide
-/// deploy` compiles it: the platform's `[[modifiers]]` for that tenant
-/// applied, the tenant's `tags`, `index` and `suppression` in it, and the
-/// entry naming the tenant. With no tenant, the rule is
-/// compiled without one. A rule that does not compile is shown as its
-/// block's dump.
+/// The deploy body an Elastic deploy would send, compiled for the first
+/// tenant the run sends the rule to as `opentide deploy` compiles it
+/// ([`Elastic`]): the platform's `[[modifiers]]` for that tenant applied,
+/// the tenant's `tags`, `index` and `suppression` in it, and the entry
+/// naming the tenant. With no tenant, the rule is compiled without one. A
+/// rule that does not compile is shown as its block's dump.
 fn elastic_preview(cx: &Context<'_>, rule: &Rule, tenants: &[String]) -> Json {
     let first = tenants.iter().find_map(|name| {
         deploy::tenant(cx, &PlatformId::Elastic.into(), name).map(|table| (name.as_str(), table))
-    });
-    let setup = first.map_or_else(elastic::Setup::none, |(_, table)| {
-        elastic::Setup::from_tenant(table)
     });
     // The rule as the deploy sends it to that tenant: its modifiers applied.
     let sent = first.map(|(name, _)| {
@@ -837,9 +831,9 @@ fn elastic_preview(cx: &Context<'_>, rule: &Rule, tenants: &[String]) -> Json {
         )
     });
     let rule = sent.as_ref().unwrap_or(rule);
-    match elastic::compile(cx, rule, &setup) {
-        Ok(body) => {
-            let mut entry = compiled(rule, elastic_request(rule, body));
+    match Elastic::compile(cx, rule, first.map(|(_, table)| table)) {
+        Ok(sent) => {
+            let mut entry = compiled(rule, Elastic::body(&sent));
             if let (Json::Object(fields), Some((name, _))) = (&mut entry, first) {
                 fields.insert("tenant".into(), name.into());
             }
@@ -847,19 +841,6 @@ fn elastic_preview(cx: &Context<'_>, rule: &Rule, tenants: &[String]) -> Json {
         }
         Err(_) => dump_entry("elastic", rule),
     }
-}
-
-/// What a deploy sends for an Elastic rule (`opentide deploy`'s and the
-/// connectors' deploy body): the Kibana rule (`payload`), and the rule's
-/// `elastic` block as the model dumps it (`block`), which the Elasticsearch
-/// checks read before the rule is written.
-pub fn elastic_request(rule: &Rule, payload: Json) -> Json {
-    let mut request = Object::new();
-    request.insert("payload".into(), payload);
-    if let Some(block) = rule.block("elastic").filter(|block| block.is_filled()) {
-        request.insert("block".into(), config_dump(PlatformId::Elastic, block));
-    }
-    Json::Object(request)
 }
 
 /// Graylog's preview (`_graylog_compile_preview`): the create request for
