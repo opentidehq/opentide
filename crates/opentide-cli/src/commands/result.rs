@@ -250,7 +250,7 @@ impl CommandResult {
             message,
             data: report.outcome.data,
             exit_code: self.exit,
-            summary: self.summary,
+            summary: Object::from_iter(self.summary),
             next_actions: self.next_actions,
             failure,
         };

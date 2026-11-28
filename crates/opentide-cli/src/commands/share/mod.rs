@@ -328,7 +328,7 @@ impl Payload {
         report.outcome.message = self.message;
         report.outcome.status = Status::from_text(&self.status);
         report.outcome.exit_code = ExitCode::of_service(self.exit_code);
-        report.outcome.summary = self.summary;
+        report.outcome.summary = Object::from_iter(self.summary);
         report.warnings = self.warnings;
         report.body = self.body;
         if self.exit_code != 0 {

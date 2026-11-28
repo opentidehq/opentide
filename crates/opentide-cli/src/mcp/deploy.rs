@@ -150,7 +150,7 @@ fn preview(uuid: &str, status: &str, platform: &str, message: &str, cli: Option<
         _ => false,
     };
     let would_deploy = nonempty(cli.and_then(|document| document.get("plan")));
-    let mut members: Vec<(String, Json)> = vec![
+    let mut members = Object::from([
         ("action".to_owned(), Json::str("dry-run")),
         ("tenant".to_owned(), Json::Null),
         ("rule_id".to_owned(), Json::str(uuid)),
@@ -166,7 +166,7 @@ fn preview(uuid: &str, status: &str, platform: &str, message: &str, cli: Option<
                 message
             }),
         ),
-    ];
+    ]);
     match cli {
         Some(Json::Object(entries)) => {
             for (key, value) in entries {
@@ -175,19 +175,19 @@ fn preview(uuid: &str, status: &str, platform: &str, message: &str, cli: Option<
                 } else {
                     key
                 };
-                if !members.iter().any(|(name, _)| name == key) {
-                    members.push((key.to_owned(), value.clone()));
-                }
+                members
+                    .entry(key.to_owned())
+                    .or_insert_with(|| value.clone());
             }
         }
         // Nothing would run: the command's own skip path has these empty.
         _ => {
-            members.push(("plan".to_owned(), Json::Object(Object::new())));
-            members.push(("changes".to_owned(), Json::Array(Vec::new())));
-            members.push(("payloads".to_owned(), Json::Object(Object::new())));
+            members.insert("plan".to_owned(), Json::Object(Object::new()));
+            members.insert("changes".to_owned(), Json::Array(Vec::new()));
+            members.insert("payloads".to_owned(), Json::Object(Object::new()));
         }
     }
-    Json::Object(members.into_iter().collect())
+    Json::Object(members)
 }
 
 /// Whether the merged configuration enables `platform`

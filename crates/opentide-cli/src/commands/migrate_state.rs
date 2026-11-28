@@ -769,7 +769,7 @@ fn outcome(
     } else {
         "No vendor rule ids left on rules".clone_into(&mut report.outcome.message);
     }
-    report.outcome.data = data;
+    report.outcome.data = Object::from_iter(data);
     report.warnings = warnings;
     report
 }
