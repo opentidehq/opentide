@@ -24,9 +24,10 @@ use opentide_schema::platforms::PlatformKey;
 use tokio_util::sync::CancellationToken;
 
 use super::query_rule::RuleQuery;
+use super::result::{ExitCode, Status};
 use super::{Block, Report, Terminal, open, placement};
 use crate::env::Env;
-use crate::envelope::{Failure, Outcome, USAGE_EXIT_CODE, code};
+use crate::envelope::{Failure, Outcome, code};
 use crate::json::Json;
 use crate::render::progress::{Progress, TenantEvent};
 use crate::render::text::Text;
@@ -206,7 +207,7 @@ fn usage_with(
     let mut failure = Failure::new(code::USAGE_INVALID_VALUE, message);
     failure.argument = Some(argument.to_owned());
     failure.suggestion = suggestion;
-    let mut outcome = Outcome::failed(COMMAND, USAGE_EXIT_CODE, failure);
+    let mut outcome = Outcome::failed(COMMAND, ExitCode::Usage.code(), failure);
     let mut data = vec![("platform".to_owned(), Json::str(platform))];
     if !choices.is_empty() {
         data.push((
@@ -216,7 +217,7 @@ fn usage_with(
     }
     // The envelope writes `error` after the message.
     outcome.data = data;
-    let mut report = Report::failed(COMMAND, USAGE_EXIT_CODE, Failure::new("", ""));
+    let mut report = Report::failed(COMMAND, ExitCode::Usage.code(), Failure::new("", ""));
     report.outcome = outcome;
     report
 }
@@ -1104,10 +1105,10 @@ fn payload(
         }
         Outcome {
             command: COMMAND.into(),
-            status: "failed".into(),
+            status: Status::Failed.as_str().into(),
             message: message.clone(),
             data,
-            exit_code: 1,
+            exit_code: ExitCode::Failure.code(),
             summary,
             next_actions: Vec::new(),
             failure: Some(Failure::new(super::COMMAND_FAILED, message)),
@@ -1128,16 +1129,16 @@ fn payload(
         }
         Outcome {
             command: COMMAND.into(),
-            status: "completed".into(),
+            status: Status::Completed.as_str().into(),
             message,
             data,
-            exit_code: 0,
+            exit_code: ExitCode::Success.code(),
             summary,
             next_actions: Vec::new(),
             failure: None,
         }
     };
-    let mut report = Report::failed(COMMAND, 1, Failure::new("", ""));
+    let mut report = Report::failed(COMMAND, ExitCode::Failure.code(), Failure::new("", ""));
     report.outcome = outcome;
     report
 }
@@ -1221,7 +1222,7 @@ fn body(
                     }
                 }
             }
-            if report.outcome.exit_code == 0 {
+            if report.outcome.exit() == ExitCode::Success {
                 report.whole_stdout = Some(text);
                 return Vec::new();
             }
@@ -1272,7 +1273,7 @@ fn body(
                     }
                 }
             }
-            if report.outcome.exit_code == 0 {
+            if report.outcome.exit() == ExitCode::Success {
                 report.whole_stdout = Some(text);
                 return Vec::new();
             }
@@ -1711,8 +1712,8 @@ mod tests {
             &Source::Query("FROM x"),
         );
         let outcome = &report.outcome;
-        assert_eq!(outcome.exit_code, 1);
-        assert_eq!(outcome.status, "failed");
+        assert_eq!(outcome.exit(), ExitCode::Failure);
+        assert_eq!(outcome.status(), Status::Failed);
         assert_eq!(
             outcome.message,
             "2 of 3 queries failed on 3 elastic tenants: lab: Elastic refused the ES|QL query \
@@ -1777,8 +1778,8 @@ mod tests {
             &[ok("soc", one)],
             &Source::Query("q"),
         );
-        assert_eq!(report.outcome.exit_code, 0);
-        assert_eq!(report.outcome.status, "completed");
+        assert_eq!(report.outcome.exit(), ExitCode::Success);
+        assert_eq!(report.outcome.status(), Status::Completed);
         assert!(report.outcome.failure.is_none());
         assert_eq!(report.outcome.message, "1 row from 1 elastic tenant");
         let mut two = answered(
@@ -1838,8 +1839,8 @@ mod tests {
         };
         let outcomes = two_tenants_and_a_failure();
         let terminal = Terminal::plain(crate::mode::Mode::Plain);
-        let mut report = Report::failed(COMMAND, 0, Failure::new("", ""));
-        report.outcome.exit_code = 0;
+        let mut report = Report::failed(COMMAND, ExitCode::Success.code(), Failure::new("", ""));
+        report.outcome.set_exit(ExitCode::Success);
         let blocks = body(&args, &outcomes, &terminal, &mut report);
         assert!(blocks.is_empty());
         let expected = "{\"_tenant\":\"prod\",\"host\":\"pc-1\",\"note\":\"a, \\\"b\\\"\"}\n\
@@ -1847,7 +1848,7 @@ mod tests {
                         {\"_tenant\":\"shadowed\",\"host\":\"pc-3\",\"count\":4}\n";
         assert_eq!(report.whole_stdout.as_deref(), Some(expected));
         // A failed run prints the rows it has in the body, before the outcome.
-        let mut report = Report::failed(COMMAND, 1, Failure::new("", ""));
+        let mut report = Report::failed(COMMAND, ExitCode::Failure.code(), Failure::new("", ""));
         let blocks = body(&args, &outcomes, &terminal, &mut report);
         assert!(report.whole_stdout.is_none());
         assert_eq!(text_of(&blocks), (expected.to_owned(), String::new()));
@@ -1865,15 +1866,15 @@ mod tests {
                         prod,pc-1,\"a, \"\"b\"\"\",\n\
                         prod,pc-2,,\n\
                         shadowed,pc-3,,4\n";
-        let mut report = Report::failed(COMMAND, 0, Failure::new("", ""));
-        report.outcome.exit_code = 0;
+        let mut report = Report::failed(COMMAND, ExitCode::Success.code(), Failure::new("", ""));
+        report.outcome.set_exit(ExitCode::Success);
         assert!(body(&args, &outcomes, &terminal, &mut report).is_empty());
         assert_eq!(report.whole_stdout.as_deref(), Some(expected));
-        let mut report = Report::failed(COMMAND, 1, Failure::new("", ""));
+        let mut report = Report::failed(COMMAND, ExitCode::Failure.code(), Failure::new("", ""));
         let blocks = body(&args, &outcomes, &terminal, &mut report);
         assert_eq!(text_of(&blocks), (expected.to_owned(), String::new()));
         // No tenant answered: the header alone.
-        let mut report = Report::failed(COMMAND, 1, Failure::new("", ""));
+        let mut report = Report::failed(COMMAND, ExitCode::Failure.code(), Failure::new("", ""));
         let blocks = body(&args, &outcomes[2..], &terminal, &mut report);
         assert_eq!(text_of(&blocks).0, "_tenant\n");
     }
@@ -2013,7 +2014,7 @@ mod tests {
         };
         let report = query_text(&args(Some("-"), None), &broken_cx).unwrap_err();
         let failure = report.outcome.failure.clone().unwrap();
-        assert_eq!(report.outcome.exit_code, USAGE_EXIT_CODE);
+        assert_eq!(report.outcome.exit(), ExitCode::Usage);
         assert_eq!(failure.code, code::USAGE_INVALID_VALUE);
         assert_eq!(
             failure.message,
@@ -2024,7 +2025,7 @@ mod tests {
             let report = query_text(&args, &cx).unwrap_err();
             let failure = report.outcome.failure.clone().unwrap();
             (
-                report.outcome.exit_code,
+                report.outcome.exit(),
                 failure.code,
                 failure.message,
                 failure.argument,
@@ -2036,7 +2037,7 @@ mod tests {
         assert_eq!(
             refused(args(None, Some("nope.kql"))),
             (
-                USAGE_EXIT_CODE,
+                ExitCode::Usage,
                 code::USAGE_INVALID_VALUE.to_owned(),
                 format!("cannot read --query-file nope.kql: {not_found}"),
                 Some("--query-file".to_owned())
@@ -2065,14 +2066,14 @@ mod tests {
             compact_of(&Json::object(refused.outcome.data.clone())),
             r#"{"platform":"sysdig","choices":["sentinel","microsoft_defender","splunk","sentinel_one","crowdstrike","harfanglab","carbon_black_cloud","elastic","graylog","exabeam","google_secops","datadog"]}"#
         );
-        assert_eq!(refused.outcome.exit_code, 2);
+        assert_eq!(refused.outcome.exit(), ExitCode::Usage);
         let failure = refused.outcome.failure.unwrap();
         assert_eq!(failure.code, code::USAGE_INVALID_VALUE);
         assert_eq!(failure.argument.as_deref(), Some("--platform"));
         assert_eq!(failure.message, "sysdig has no query runner");
         assert_eq!(failure.suggestion, None);
         let refused = plugin_rule("acme", "--rule");
-        assert_eq!(refused.outcome.exit_code, 2);
+        assert_eq!(refused.outcome.exit(), ExitCode::Usage);
         let failure = refused.outcome.failure.unwrap();
         assert_eq!(failure.code, code::USAGE_INVALID_VALUE);
         assert_eq!(failure.argument.as_deref(), Some("--rule"));
