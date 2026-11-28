@@ -1,0 +1,96 @@
+name: npm dist-tags
+
+# After a final release, point npm's `next` at it on every package, so
+# `npm install @opentide/opentide@next` never installs an older version than
+# `latest`. npm's trusted publishing (OIDC) covers `npm publish` only, so this
+# one step needs a token: NPM_DIST_TAG_TOKEN, a granular access token limited
+# to the @opentide packages and `opentide`, stored in the `npm-dist-tags`
+# environment (docs/internal/publishing.md, "After the final release").
+#
+# publish.yml calls it after a release's npm job; Run workflow with a version
+# moves `next` for a release already out (nothing is built).
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: "The released version (X.Y.Z)."
+        required: true
+        type: string
+      from_release:
+        description: "Called by publish.yml after the packages are out: a missing token warns instead of failing."
+        required: false
+        default: false
+        type: boolean
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "The released version (X.Y.Z) that npm's next should point at."
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: npm-dist-tags
+  cancel-in-progress: false
+
+jobs:
+  next:
+    name: Move next to the release
+    runs-on: ubuntu-latest
+    environment: npm-dist-tags
+    env:
+      VERSION: ${{ inputs.version }}
+      FROM_RELEASE: ${{ inputs.from_release || false }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: |
+            scripts/engine
+            bindings/node
+            packages
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+      - name: Point next at ${{ inputs.version }}
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_DIST_TAG_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [[ ! "${VERSION}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::${VERSION} is not a release version (X.Y.Z); next follows candidates by itself." >&2
+            exit 1
+          fi
+          if [ -z "${NODE_AUTH_TOKEN}" ]; then
+            message="NPM_DIST_TAG_TOKEN is not set in the npm-dist-tags environment, so next was not moved (docs/internal/publishing.md, After the final release)."
+            # From a release run the packages are out: warn, never fail it.
+            # Run by hand, the token is the point: fail.
+            if [ "${FROM_RELEASE}" = "true" ]; then
+              echo "::warning::${message}"
+              exit 0
+            fi
+            echo "::error::${message}" >&2
+            exit 1
+          fi
+          mapfile -t packages < <(python3 scripts/engine/release.py npm-names)
+          # Check every package before moving any: a package whose `latest` is
+          # not the release must not leave the others' `next` already moved.
+          for name in "${packages[@]}"; do
+            latest="$(npm view "${name}" dist-tags.latest)"
+            if [ "${latest}" != "${VERSION}" ]; then
+              echo "::error::${name}: latest is ${latest:-unset}, not ${VERSION}; next follows a published release only." >&2
+              exit 1
+            fi
+          done
+          for name in "${packages[@]}"; do
+            next="$(npm view "${name}" dist-tags.next)"
+            if [ "${next}" = "${VERSION}" ]; then
+              echo "${name}: next is already ${VERSION}"
+              continue
+            fi
+            npm dist-tag add "${name}@${VERSION}" next
+            echo "${name}: next ${next:-unset} -> ${VERSION}"
+          done

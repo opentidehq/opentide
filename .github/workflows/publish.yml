@@ -1096,10 +1096,8 @@ jobs:
           done
       # What the registry now says about every package, not only the first:
       # a candidate is each package's `next` and never its `latest`; a release is
-      # each package's `latest`. After a release `next` must not trail `latest`:
-      # npm's trusted publishing covers `npm publish` only, so moving `next` is
-      # the maintainer's `npm dist-tag add` (docs/internal/publishing.md, "After
-      # the final release"), and this step names the packages that need it.
+      # each package's `latest`. After a release `next` trails `latest` until
+      # the npm-dist-tags job below moves it.
       - name: dist-tags of every package
         run: |
           set -euo pipefail
@@ -1136,8 +1134,21 @@ jobs:
             fi
           done
           if [ "${#lagging[@]}" -gt 0 ]; then
-            echo "::warning::next trails latest for ${#lagging[@]} packages. Trusted publishing cannot move a dist-tag: as a maintainer, signed in to npm, run: for p in ${lagging[*]}; do npm dist-tag add \"\$p\" next; done (docs/internal/publishing.md, After the final release)."
+            echo "next trails latest for ${#lagging[@]} packages: the npm-dist-tags job moves it."
           fi
+
+  # After a release, `next` follows it on every package (npm-dist-tags.yml):
+  # trusted publishing covers `npm publish` only, so this one step uses the
+  # npm-dist-tags environment's token. A candidate moves `next` by publishing.
+  npm-dist-tags:
+    name: npm next follows the release
+    needs: [guard, npm]
+    if: needs.guard.outputs.channel == 'release'
+    uses: ./.github/workflows/npm-dist-tags.yml
+    with:
+      version: ${{ needs.guard.outputs.version }}
+      from_release: true
+    secrets: inherit
 
   # What the registries now serve installs and runs: pip from PyPI (a
   # candidate's pre-release by its exact version, which pip installs without

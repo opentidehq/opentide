@@ -247,6 +247,9 @@ merging** → add `PR gate`, remove the others → **Save changes**.
 - [`publish.yml`](workflows/publish.yml): the release train (below).
 - [`release-pipeline.yml`](workflows/release-pipeline.yml): the one release pipeline (above), which
   ci.yml's release tier and publish.yml's `build` call.
+- [`npm-dist-tags.yml`](workflows/npm-dist-tags.yml): after a final release, points npm's `next` at
+  it on every package, with the `npm-dist-tags` environment's token (trusted publishing covers
+  `npm publish` only). publish.yml calls it; Run workflow with a version runs it alone.
 - [`nightly.yml`](workflows/nightly.yml): the nightly set (above), which ci.yml's `nightly` job
   calls; Run workflow runs it alone (its `features` input is changes.py's, which ci.yml passes).
 - [`engine-fuzz.yml`](workflows/engine-fuzz.yml) fuzzes every target (`seconds`, ten minutes by
