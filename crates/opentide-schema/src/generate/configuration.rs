@@ -35,7 +35,7 @@ pub const JSON_SCHEMA_DIALECT: &str = "https://json-schema.org/draft/2020-12/sch
 /// The router's file name.
 pub const ROUTER_NAME: &str = "configurations.router.json";
 
-/// The router's title.
+/// The configuration router schema's `title`.
 pub const ROUTER_TITLE: &str = "opentide Configuration Router";
 
 /// The schema identifier `visibility.toml` declares (`visibility::1.0`).

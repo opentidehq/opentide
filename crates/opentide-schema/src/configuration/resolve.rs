@@ -117,7 +117,8 @@ impl ResolveError {
         }
     }
 
-    /// The message.
+    /// What is wrong with a file that is not TOML, what replaces a retired
+    /// file, or what to do about a retired proxy setting.
     pub fn message(&self) -> &str {
         match self {
             Self::Parse { message, .. } | Self::Retired { message, .. } | Self::Proxy(message) => {

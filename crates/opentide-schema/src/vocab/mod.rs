@@ -410,14 +410,14 @@ impl Selector {
 pub struct Unknown {
     /// The vocabulary reference as the schema writes it (`tlp::1.0`).
     pub vocab: String,
-    /// The value.
+    /// The value as the object writes it.
     pub value: String,
     /// The value it most likely means.
     pub suggestion: Option<String>,
 }
 
 impl Unknown {
-    /// The code.
+    /// The finding's code, `vocab_unknown`.
     pub const CODE: &'static str = opentide_core::codes::VOCAB_UNKNOWN;
 
     /// The finding's message: `Value "clearr" is not a valid "tlp::1.0"
