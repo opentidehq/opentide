@@ -12,6 +12,7 @@
 //! ```` ``` ```` and `~~~` multi-line strings are one string token.
 
 use crate::syntax::{SyntaxKind as K, word_kind};
+use crate::syntax_util::slice;
 use logos::Logos;
 use opentide_parse::{Lexeme, lex};
 use rowan::{TextRange, TextSize};
@@ -367,7 +368,7 @@ fn fix_up(source: &str, lexemes: Vec<Lexeme>, index_at: &[TextSize]) -> Vec<Lexe
             K::FACET_KW => in_facet = true,
             _ => {}
         }
-        let text = &source[lexeme.range];
+        let text = slice(source, lexeme.range);
         let split_at: Vec<usize> = match kind {
             K::GRANNY_ASC_KW | K::GRANNY_DESC_KW => Vec::new(),
             kind if text.contains('-') && kind.is_word() => {
@@ -402,7 +403,7 @@ fn quoted_name(source: &str, lexemes: &[Lexeme]) -> Option<TextRange> {
     let [open, string, close, ..] = lexemes else {
         return None;
     };
-    let text = &source[string.range];
+    let text = slice(source, string.range);
     let plain = K::from_raw(string.kind) == K::STRING
         && text.starts_with(['"', '\''])
         && !text.contains(['\r', '\n']);
@@ -415,6 +416,10 @@ fn quoted_name(source: &str, lexemes: &[Lexeme]) -> Option<TextRange> {
 /// Cuts the word at `range` at the separators `at` (byte offsets of a `-` or
 /// a `.` in `text`): each piece is a word (a keyword or a name), each
 /// separator a `-` or a `.`. Returns the kind of the last lexeme.
+#[expect(
+    clippy::string_slice,
+    reason = "`at` holds the offsets of ASCII `-` and `.` in `text`: each piece starts after one, or at 0, and ends at one or at the end"
+)]
 fn split_words(range: TextRange, text: &str, at: &[usize], out: &mut Vec<Lexeme>) -> K {
     let base = range.start();
     let to = |n: usize| base + TextSize::try_from(n).unwrap_or_default();
@@ -453,7 +458,7 @@ pub(crate) mod tests {
         lex_kql(source)
             .into_iter()
             .filter(|l| !matches!(K::from_raw(l.kind), K::WHITESPACE))
-            .map(|l| (K::from_raw(l.kind), &source[l.range]))
+            .map(|l| (K::from_raw(l.kind), slice(source, l.range)))
             .collect()
     }
 

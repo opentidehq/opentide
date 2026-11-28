@@ -285,8 +285,7 @@ impl<'a> Pass<'a> {
 
     /// A token's text, borrowed from the source.
     fn token(&self, token: &SyntaxToken) -> &'a str {
-        let r = token.text_range();
-        &self.source[usize::from(r.start())..usize::from(r.end())]
+        crate::syntax_util::slice(self.source, token.text_range())
     }
 
     fn token_text(token: &SyntaxToken) -> String {

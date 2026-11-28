@@ -11,6 +11,11 @@
     clippy::too_many_lines,
     reason = "engine dispatchers match every node kind in one function"
 )]
+// Slicing a `str` by byte index panics off a char boundary, and this crate
+// reads user queries: every slice is checked or says why it is safe (#1946;
+// the lint moves to `[workspace.lints]` once every crate is clean).
+#![warn(clippy::string_slice)]
+
 use opentide_core::datasets::{Declaration, DeclaredSource};
 use opentide_core::{
     ByteSpan, CompletionItem, Diagnostic, ParameterInformation, Range, SignatureHelp,
@@ -232,10 +237,9 @@ pub fn rule_findings(source: &str, dialect: Dialect, profile: Profile) -> Vec<Di
     perf::rule_scope(source, &lines, &mut out);
     let length = source.trim().chars().count();
     if length > SENTINEL_RULE_MAX_CHARS {
-        let start = source.len() - source.trim_start().len();
-        let first_line_end = source[start..]
-            .find('\n')
-            .map_or(source.len(), |at| start + at);
+        let trimmed = source.trim_start();
+        let start = source.len() - trimmed.len();
+        let first_line_end = trimmed.find('\n').map_or(source.len(), |at| start + at);
         out.push(Diagnostic::error(
             codes::KQL_RULE_TOO_LONG,
             format!(
@@ -1471,7 +1475,11 @@ fn overlay_catalog_captures(
         if span.start >= end {
             continue;
         }
-        let text = &source[span.start..end];
+        // The spans are the tree's tokens: char boundaries.
+        let Some(text) = source.get(span.start..end) else {
+            debug_assert!(false, "{}..{end} in {} bytes", span.start, source.len());
+            continue;
+        };
         if matches!(text, "dynamic" | "datatable" | "timespan" | "datetime")
             && (*capture == "function" || *capture == "function.builtin" || *capture == "variable")
         {
@@ -1494,7 +1502,11 @@ fn overlay_catalog_captures(
     if maybe_columns.is_empty() {
         return;
     }
-    let text = |span: ByteSpan| &source[span.start..span.end.min(source.len())];
+    let text = |span: ByteSpan| {
+        let text = source.get(span.start..span.end.min(source.len()));
+        debug_assert!(text.is_some(), "{span:?} in {} bytes", source.len());
+        text.unwrap_or_default()
+    };
     let hand_written = catalog.hand_written_column_names();
     let wanted: HashSet<&str> = maybe_columns.iter().map(|&(_, span)| text(span)).collect();
     let mut columns: HashSet<&str> = wanted
@@ -1797,7 +1809,11 @@ fn text_after_operator<'a>(before: &'a str, op: &str) -> &'a str {
             Some(_) => true,
         };
         if boundary {
-            return &chunk[end..];
+            // `lower` is `chunk` with only ASCII letters changed: the same
+            // byte offsets and char boundaries.
+            let rest = chunk.get(end..);
+            debug_assert!(rest.is_some(), "{end} in {chunk:?}");
+            return rest.unwrap_or_default();
         }
     }
     ""
@@ -2252,11 +2268,15 @@ fn innermost_call(before: &str) -> Option<(String, u32)> {
     if i >= name_end {
         return None;
     }
-    let name = before[i..name_end].to_string();
+    #[expect(
+        clippy::string_slice,
+        reason = "`i` and `open` index ASCII bytes (name bytes or the `(`): char boundaries"
+    )]
+    let (name, inside) = (&before[i..name_end], &before[open + 1..]);
+    let name = name.to_string();
     if name.is_empty() {
         return None;
     }
-    let inside = &before[open + 1..];
     let mut commas = 0u32;
     let mut nested = 0i32;
     for b in inside.bytes() {
@@ -2271,12 +2291,14 @@ fn innermost_call(before: &str) -> Option<(String, u32)> {
 }
 
 fn parameters_from_signature(sig: &str) -> Vec<ParameterInformation> {
-    let start = sig.find('(').map(|i| i + 1).unwrap_or(0);
-    let end = sig.rfind(')').unwrap_or(sig.len());
-    if start >= end {
-        return Vec::new();
-    }
-    sig[start..end]
+    let (head, rest) = sig.split_once('(').unwrap_or(("", sig));
+    // Up to the last `)`, which must come after the `(`.
+    let inner = match rest.rsplit_once(')') {
+        Some((inner, _)) => inner,
+        None if head.contains(')') => return Vec::new(),
+        None => rest,
+    };
+    inner
         .split(',')
         .map(|p| p.trim())
         .filter(|p| !p.is_empty() && *p != "…")
@@ -2314,7 +2336,11 @@ fn word_at(source: &str, offset: usize) -> Option<String> {
     if start >= j {
         None
     } else {
-        Some(source[start..j].to_string())
+        // `start` is at a `!` or a name byte that follows a byte no name
+        // holds, and `j` ends a run of ASCII name bytes: char boundaries.
+        let word = source.get(start..j);
+        debug_assert!(word.is_some(), "{start}..{j} in {} bytes", source.len());
+        word.map(str::to_string)
     }
 }
 
@@ -2782,7 +2808,11 @@ mod tests {
                 .map(|d| {
                     let start = opentide_core::position_to_offset(source, d.range.start);
                     let end = opentide_core::position_to_offset(source, d.range.end);
-                    (d.code, d.severity, source[start..end].to_owned())
+                    (
+                        d.code,
+                        d.severity,
+                        source.get(start..end).unwrap().to_owned(),
+                    )
                 })
                 .collect::<Vec<_>>()
         };
@@ -2962,7 +2992,11 @@ mod tests {
                     .map(|d| {
                         let start = opentide_core::position_to_offset(source, d.range.start);
                         let end = opentide_core::position_to_offset(source, d.range.end);
-                        (d.code, d.severity, source[start..end].to_owned())
+                        (
+                            d.code,
+                            d.severity,
+                            source.get(start..end).unwrap().to_owned(),
+                        )
                     })
                     .collect()
             };
@@ -3726,8 +3760,9 @@ mod tests {
     fn highlight_scm_query_emits_visible_tokens() {
         let src = "SecurityEvent | where TimeGenerated > ago(1d) | take 1";
         let r = analyze(src, Dialect::Core);
-        let slice =
-            |t: &opentide_highlight::HighlightToken| src[t.span.start..t.span.end].to_string();
+        let slice = |t: &opentide_highlight::HighlightToken| {
+            src.get(t.span.start..t.span.end).unwrap().to_string()
+        };
         assert!(
             r.tokens
                 .iter()
@@ -3773,13 +3808,15 @@ mod tests {
         assert!(items.iter().any(|i| i.label == "TimeGenerated"));
         let r = analyze(src, Dialect::Sentinel);
         assert!(
-            r.tokens
-                .iter()
-                .any(|t| t.capture == "property" && &src[t.span.start..t.span.end] == "EventID"),
+            r.tokens.iter().any(|t| t.capture == "property"
+                && src.get(t.span.start..t.span.end).unwrap() == "EventID"),
             "{:?}",
             r.tokens
                 .iter()
-                .map(|t| (t.capture.as_str(), &src[t.span.start..t.span.end]))
+                .map(|t| (
+                    t.capture.as_str(),
+                    src.get(t.span.start..t.span.end).unwrap()
+                ))
                 .collect::<Vec<_>>()
         );
     }
@@ -3791,11 +3828,15 @@ mod tests {
         assert!(
             r.tokens
                 .iter()
-                .any(|t| t.capture == "keyword" && &src[t.span.start..t.span.end] == "inner"),
+                .any(|t| t.capture == "keyword"
+                    && src.get(t.span.start..t.span.end).unwrap() == "inner"),
             "{:?}",
             r.tokens
                 .iter()
-                .map(|t| (t.capture.as_str(), &src[t.span.start..t.span.end]))
+                .map(|t| (
+                    t.capture.as_str(),
+                    src.get(t.span.start..t.span.end).unwrap()
+                ))
                 .collect::<Vec<_>>()
         );
         let eq = src.find("kind=").unwrap() + 5;
@@ -4036,11 +4077,15 @@ mod tests {
         assert!(
             r.tokens
                 .iter()
-                .any(|t| t.capture == "type" && &src[t.span.start..t.span.end] == "dynamic"),
+                .any(|t| t.capture == "type"
+                    && src.get(t.span.start..t.span.end).unwrap() == "dynamic"),
             "{:?}",
             r.tokens
                 .iter()
-                .map(|t| (t.capture.as_str(), &src[t.span.start..t.span.end]))
+                .map(|t| (
+                    t.capture.as_str(),
+                    src.get(t.span.start..t.span.end).unwrap()
+                ))
                 .collect::<Vec<_>>()
         );
     }
@@ -4144,5 +4189,87 @@ mod tests {
         assert!(completions(src, inside, Dialect::Sentinel).is_empty());
         assert_eq!(hover(src, inside, Dialect::Sentinel), None);
         assert!(signature_help(src, inside, Dialect::Sentinel).is_none());
+    }
+
+    /// Queries with multi-byte text in every place the engine cuts: names
+    /// and quoted names, hyphenated words, strings, typed literals, calls,
+    /// operator options, comments and leading blanks. The tree's spans are
+    /// checked in debug builds (`syntax_util::slice`).
+    const MULTI_BYTE: &[&str] = &[
+        "SecurityEvent | where Account has \"é😀\" | project é😀 = Account, ['é 😀'] = 1",
+        "DeviceEvents | where é😀 !has 'x' and ActionType in~ ('é', \"😀\") | summarize count() by é",
+        "let é = 1; T | extend x = strcat(\"é\", '😀', é) | project-away é* | parse-kv Text as (é: string)",
+        "T | where x == datetime(2024-01-01) | extend d = dynamic({\"é\": \"😀\"}), t = timespan(1d) | join kind=inner (é😀) on é",
+        "search \"é😀\" | take 1 // é😀 commentaire",
+        "T | where ago(1d) > é😀(1, \"é\", ",
+        "  é\n😀 | take 1",
+        "T | sort by é😀 desc | top 3 by é asc | facet by é with (take 1)",
+        "T | extend a = pro-é😀, b = é-😀, c = é😀-x | union é😀, (T | where é😀 == 1)",
+        "é😀 | where é😀 > 1 | summarize arg_max(é, *) by bin(é😀, 1h) | order by é",
+    ];
+
+    #[test]
+    fn multi_byte_text_is_read_whole_everywhere() {
+        for query in MULTI_BYTE {
+            for dialect in [Dialect::Core, Dialect::Sentinel, Dialect::Defender] {
+                let result = analyze(query, dialect);
+                for token in &result.tokens {
+                    assert!(
+                        query.get(token.span.start..token.span.end).is_some(),
+                        "{query}"
+                    );
+                }
+                let _ = columns(query, dialect);
+                for (offset, _) in query.char_indices().chain([(query.len(), ' ')]) {
+                    let _ = hover(query, offset, dialect);
+                    let _ = completions(query, offset, dialect);
+                    let _ = signature_help(query, offset, dialect);
+                }
+            }
+            let _ = rule_findings(query, Dialect::Sentinel, Profile::Rule);
+        }
+    }
+
+    #[test]
+    fn helpers_read_multi_byte_text() {
+        let source = "é😀 abc-d é";
+        let at = source.find('b').unwrap();
+        assert_eq!(word_at(source, at).as_deref(), Some("abc-d"));
+        assert_eq!(word_at(source, 0), None);
+        assert_eq!(word_at(source, source.len()), None);
+        assert_eq!(word_at("aé", 1), None);
+        assert_eq!(word_at("éa", "é".len()).as_deref(), Some("a"));
+        assert_eq!(word_at("é!has", "é".len() + 1).as_deref(), Some("!has"));
+        assert_eq!(
+            innermost_call("T | extend x = strcat(\"é\", '😀', "),
+            Some(("strcat".to_owned(), 2))
+        );
+        assert_eq!(innermost_call("é😀(é"), None);
+        let labels = |sig: &str| -> Vec<String> {
+            parameters_from_signature(sig)
+                .into_iter()
+                .map(|p| p.label)
+                .collect()
+        };
+        assert_eq!(labels("f(é, 😀)"), ["é", "😀"]);
+        assert_eq!(labels("f(é"), ["é"]);
+        assert_eq!(labels("é, 😀"), ["é", "😀"]);
+        assert!(labels(")é(x").is_empty());
+        assert!(labels("é()").is_empty());
+        assert_eq!(text_after_operator("T | where é😀", "where"), " é😀");
+        assert_eq!(text_after_operator("T | wheré", "where"), "");
+        assert_eq!(text_after_operator("T | WHERE é", "where"), " é");
+        // The rule's length is counted in characters; the finding starts at
+        // the first non-blank character, however wide the blanks before it.
+        let long = format!(
+            "\u{3000} é{}\n| take 1",
+            "😀".repeat(SENTINEL_RULE_MAX_CHARS)
+        );
+        let found = rule_findings(&long, Dialect::Sentinel, Profile::Rule);
+        let too_long = found
+            .iter()
+            .find(|d| d.code == codes::KQL_RULE_TOO_LONG)
+            .unwrap();
+        assert_eq!(too_long.range.start, opentide_core::Position::new(0, 2));
     }
 }
