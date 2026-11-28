@@ -1,7 +1,8 @@
 //! Microsoft Sentinel: a rule as the `Microsoft.SecurityInsights/alertRules`
-//! PUT body for one tenant (`platforms/sentinel/deployer.py`
-//! `compile_deployment`): `kind` and camelCase `properties`, unset fields left
-//! out, in the oracle's key order.
+//! PUT body for one tenant: `kind` and camelCase `properties`, unset fields
+//! left out, keys in the order this module builds them, which the compile
+//! corpus holds byte for byte (`tests/golden/payloads/`, this crate's
+//! `tests/oracle.rs`).
 
 use opentide_schema::objects::platform::SentinelConfig;
 use opentide_schema::objects::platform::sentinel::{
@@ -104,7 +105,7 @@ fn missing(field: &str, requirement: &str) -> CompileError {
 }
 
 /// A duration as the API takes it; a duration it cannot read refuses the rule
-/// as the oracle's data model does.
+/// ([`CompileError::invalid_rule`]), quoting the duration and what is accepted.
 fn iso(value: &str) -> Result<String, CompileError> {
     duration::sentinel(value).map_err(CompileError::invalid_rule)
 }

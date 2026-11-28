@@ -5,9 +5,8 @@
 #
 # The crates' sources state their own contracts: never "the oracle's ..." or
 # "the oracle does ..." in any case (the retired Python CLI is not the spec,
-# and "oracle" is kept for the vendor parsers) and never a `.py` file that is not in this tree (#1958). A crate
-# the sweep has not reached yet is held to its count in RETIRED_BASELINE,
-# which only goes down.
+# and "oracle" is kept for the vendor parsers) and never a `.py` file that is
+# not in this tree (#1958). Any mention fails.
 set -euo pipefail
 root="$(cd "$(dirname "$0")/../.." && pwd)"
 hits="$(
@@ -32,12 +31,6 @@ external_py=" scripts/exabeam_language.py test_platform_exabeam.py "
 # Lines that name a vendor parser's oracle (Kusto's, in opentide-kql), not
 # the retired Python CLI.
 VENDOR_ORACLE="as the oracle probes|The oracle the lazy catalog is held to"
-# Mentions of the retired Python CLI each crate still has, until it is swept.
-declare -A RETIRED_BASELINE=(
-  [opentide-cli]=7
-  [opentide-compile]=7
-  [opentide-schema]=0
-)
 tracked_py="$(git -C "$root" ls-files '*.py')"
 py_in_tree() {
   local name="$1" path
@@ -66,18 +59,10 @@ failed=0
 for dir in "$root"/crates/*/src; do
   crate="$(basename "$(dirname "$dir")")"
   mentions="$(retired_mentions "$dir" | sed "s|^$root/||")"
-  count=0
   if [[ -n "$mentions" ]]; then
-    count="$(wc -l <<<"$mentions")"
-  fi
-  allowed="${RETIRED_BASELINE[$crate]:-0}"
-  if ((count > allowed)); then
     echo "$mentions"
-    echo "$crate: $count mentions of the retired Python CLI (\"the oracle\" in any form, or a .py file not in the tree), $allowed allowed."
+    echo "$crate: mentions of the retired Python CLI (\"the oracle\" in any form, or a .py file not in the tree)."
     echo "  Say what the code does and the contract it keeps instead (#1958)."
-    failed=1
-  elif ((count < allowed)); then
-    echo "$crate: $count mentions of the retired Python CLI; lower RETIRED_BASELINE[$crate] from $allowed to $count in scripts/engine/check-names.sh."
     failed=1
   fi
 done
