@@ -15,9 +15,9 @@
 //! gets no answer in time fails itself, and three in a row (or a tenant that
 //! answers nothing) report the tenant unreachable.
 //!
-//! Nothing here writes to the workspace. The run's result is the oracle's
-//! dictionary ([`Live::result`]), keys in its order, read into the envelope
-//! as `CommandResult.from_payload` reads it ([`report_of`]).
+//! Nothing here writes to the workspace. The run's result is a
+//! [`CommandResult`] ([`Live::result`]): its own keys in the oracle's order,
+//! and the status, exit code and failure the envelope takes from it.
 
 use std::path::Path;
 use std::time::{Duration, Instant};
@@ -38,7 +38,7 @@ use opentide_workspace::{FileSystem as _, OsFs, Workspace};
 use tokio_util::sync::CancellationToken;
 
 use super::query::{Configured, http_settings, log_unset, toml_value, unset_credentials};
-use super::result::CommandResult;
+use super::result::{CommandResult, ExitCode, Status};
 use super::validate_query::{Args, COMMAND};
 use super::{Report, placement};
 use crate::env::Env;
@@ -104,12 +104,11 @@ impl std::fmt::Debug for Context<'_> {
     }
 }
 
-/// A live run's outcome: the oracle's result dictionary and its checklist
-/// step.
+/// A live run's outcome: its result and its checklist step.
 #[derive(Clone, Debug)]
 pub struct Live {
-    /// The result, keys in the oracle's order, `_`-keys included.
-    pub result: Fields,
+    /// The result; its own keys in the oracle's order.
+    pub result: CommandResult,
     /// The checklist's step, when the run reached the tenants.
     pub step: Option<Step>,
     /// A `query_rejected` finding for each query a tenant refused, where
@@ -118,7 +117,7 @@ pub struct Live {
 }
 
 impl Live {
-    fn of(result: Fields) -> Self {
+    fn of(result: CommandResult) -> Self {
         Self {
             result,
             step: None,
@@ -126,16 +125,21 @@ impl Live {
         }
     }
 
+    /// A run whose result is still built as keys.
+    fn of_fields(result: &[(String, Json)]) -> Self {
+        Self::of(CommandResult::from_fields(result))
+    }
+
     /// The result as one JSON object (the CI job summary reads it).
     pub fn result_json(&self) -> Json {
-        Json::object(self.result.clone())
+        self.result.to_json()
     }
 
     /// The report the command prints in *env*: the step's progress event
     /// (`OPENTIDE_PROGRESS=json`) first, written when the step ends, before
     /// its checklist row.
     pub fn report(&self, env: &Env) -> Report {
-        let mut report = report_of(COMMAND, &self.result);
+        let mut report = self.result.clone().report(COMMAND);
         report.steps = self.step.iter().cloned().collect();
         if let Some(step) = &self.step
             && Progress::from_env(env).enabled()
@@ -154,21 +158,27 @@ pub fn report_of(command: &str, result: &[(String, Json)]) -> Report {
     CommandResult::from_fields(result).report(command)
 }
 
-/// The keys every live result starts with.
-fn head(platform: Option<&str>, status: &str) -> Fields {
+/// The keys every live result starts with (its `status` aside).
+fn head(platform: Option<&str>) -> Fields {
     vec![
         ("platform".into(), Json::opt_str(platform)),
         ("mode".into(), Json::str("live")),
-        ("status".into(), Json::str(status)),
         ("supported".into(), Json::Bool(true)),
     ]
 }
 
-/// A failed result (`{**failed, "message": ..., "_exit_code": ...}`).
-fn failed(platform: Option<&str>, message: &str, exit_code: i64) -> Fields {
-    let mut result = head(platform, "failed");
-    result.push(("message".into(), Json::str(message)));
-    result.push(("_exit_code".into(), Json::Int(exit_code)));
+/// The keys every live result starts with, `status` among them, for the
+/// results still built as keys ([`CommandResult::from_fields`]).
+fn head_with(platform: Option<&str>, status: &str) -> Fields {
+    let mut result = head(platform);
+    result.insert(2, ("status".into(), Json::str(status)));
+    result
+}
+
+/// A failed result with `message`, exiting `exit`.
+fn failed(platform: Option<&str>, message: &str, exit: ExitCode) -> CommandResult {
+    let mut result = CommandResult::failed(message, exit);
+    result.data = head(platform);
     result
 }
 
@@ -232,25 +242,10 @@ fn check_timeout(args: &Args, env: &Env) -> f64 {
 pub fn run(args: &Args, cx: &Context<'_>) -> Live {
     let platform = args.platform.as_deref();
     let Some(platform) = platform else {
-        let mut result = failed(
-            None,
-            "--live checks one platform's tenants: pass --platform",
-            2,
-        );
-        result.push((
-            "_failure_code".into(),
-            Json::str(code::USAGE_MISSING_OPTION),
-        ));
-        result.push(("_failure_argument".into(), Json::str("--platform")));
-        return Live::of(result);
+        return Live::of(super::validate_query::live_without_platform());
     };
     let mut live = live_platform(args, platform, cx);
-    if args.changed
-        && !live
-            .result
-            .iter()
-            .any(|(key, value)| key == "status" && *value == Json::str("failed"))
-    {
+    if args.changed && live.result.status != Status::Failed {
         let lookup = |name: &str| cx.env.get(name).map(str::to_owned);
         let (_, options) = placement(cx.repo, cx.env, cx.cwd);
         if let Ok(workspace) = super::open(options) {
@@ -268,13 +263,7 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Live {
                     .ok()
                     .and_then(|(_, warning)| warning)
             }) {
-                let mut warnings = vec![Json::str(note)];
-                if let Some((_, Json::Array(earlier))) =
-                    live.result.iter().find(|(key, _)| key == "warnings")
-                {
-                    warnings.extend(earlier.iter().cloned());
-                }
-                set(&mut live.result, "warnings", Json::Array(warnings));
+                live.result.warnings.insert(0, note);
             }
             crate::app::release(workspace);
         }
@@ -292,22 +281,23 @@ fn rule_scope(
     platform: &str,
     workspace: &Workspace,
     cx: &Context<'_>,
-) -> Result<RuleScope, Fields> {
+) -> Result<RuleScope, Box<CommandResult>> {
     if !(args.changed || !args.files.is_empty() || !args.uuids.is_empty()) {
         return Ok((None, None));
     }
-    let refused = |message: &str, exit_code: i64| {
-        let mut result = failed(Some(platform), message, exit_code);
-        if exit_code == 2 {
-            result.push(("_failure_code".into(), Json::str(code::USAGE_ERROR)));
+    let refused = |message: &str, exit: ExitCode| {
+        let result = failed(Some(platform), message, exit);
+        if exit == ExitCode::Usage {
+            result.with_code(code::USAGE_ERROR)
+        } else {
+            result
         }
-        result
     };
     if args.changed && (!args.files.is_empty() || !args.uuids.is_empty()) {
-        return Err(refused(
+        return Err(Box::new(refused(
             "--changed cannot be combined with --file or --uuid",
-            2,
-        ));
+            ExitCode::Usage,
+        )));
     }
     let fs = workspace.fs().as_ref();
     let (rules_dir, folder) = opentide_compile::dry_run::rules_folder(workspace);
@@ -317,7 +307,8 @@ fn rule_scope(
         let source = opentide_compile::git::diff_source(&lookup);
         let changed = opentide_compile::git::changed_paths(&root, cx.cwd, &lookup, source)
             .map_err(|error| {
-                let code = i64::from(error.exit_code());
+                let code =
+                    ExitCode::from_code(i64::from(error.exit_code())).unwrap_or(ExitCode::Failure);
                 match error {
                     opentide_compile::git::GitError::MissingCheckout(searched) => refused(
                         &format!(
@@ -353,13 +344,13 @@ fn rule_scope(
                 "No rule file directly in {folder} matched: {}",
                 unmatched.join(", ")
             ),
-            1,
+            ExitCode::Failure,
         );
-        result.push((
+        result.data.push((
             "unmatched".into(),
             Json::Array(unmatched.iter().map(Json::str).collect()),
         ));
-        return Err(result);
+        return Err(Box::new(result));
     }
     Ok((Some(scope.files), Some("selected")))
 }
@@ -367,7 +358,7 @@ fn rule_scope(
 /// `_scoped`: names the narrowed scope in *result*.
 fn scoped(mut live: Live, label: Option<&str>) -> Live {
     if let Some(label) = label {
-        set(&mut live.result, "scope", Json::str(label));
+        set(&mut live.result.data, "scope", Json::str(label));
     }
     live
 }
@@ -392,13 +383,14 @@ fn live_platform(args: &Args, platform: &str, cx: &Context<'_>) -> Live {
         .get(strategy::REMOVED_PLAN_ENV)
         .filter(|value| !value.trim().is_empty())
     {
-        let mut result = failed(
-            Some(platform),
-            &strategy::removed_plan_message(Some(value), false),
-            2,
+        return Live::of(
+            failed(
+                Some(platform),
+                &strategy::removed_plan_message(Some(value), false),
+                ExitCode::Usage,
+            )
+            .with_code(code::USAGE_INVALID_VALUE),
         );
-        result.push(("_failure_code".into(), Json::str(code::USAGE_INVALID_VALUE)));
-        return Live::of(result);
     }
     let (_, options) = placement(cx.repo, cx.env, cx.cwd);
     let workspace = match super::open_for("validate query", options.clone()) {
@@ -406,9 +398,7 @@ fn live_platform(args: &Args, platform: &str, cx: &Context<'_>) -> Live {
         Err(refused) => {
             // A TOML file that does not parse keeps `config_parse`.
             let (code, message, _) = super::refusal_parts(&refused);
-            let mut result = failed(Some(platform), &message, 1);
-            result.push(("_failure_code".into(), Json::Str(code)));
-            return Live::of(result);
+            return Live::of(failed(Some(platform), &message, ExitCode::Failure).with_code(code));
         }
     };
     // A push that the deploy will promote is checked as the deploy sends
@@ -420,7 +410,7 @@ fn live_platform(args: &Args, platform: &str, cx: &Context<'_>) -> Live {
             promoted
         }
         Ok(None) => workspace,
-        Err(message) => return Live::of(failed(Some(platform), &message, 1)),
+        Err(message) => return Live::of(failed(Some(platform), &message, ExitCode::Failure)),
     };
     let live = with_workspace(args, platform, &workspace, cx);
     crate::app::release(workspace);
@@ -506,20 +496,20 @@ fn with_workspace(args: &Args, platform: &str, workspace: &Workspace, cx: &Conte
     );
     let runs = match run_strategies(args, platform, &owned) {
         Ok(runs) => runs,
-        Err(result) => return Live::of(result),
+        Err(result) => return Live::of(*result),
     };
     let (files, label) = match rule_scope(args, platform, workspace, cx) {
         Ok(scope) => scope,
-        Err(result) => return Live::of(result),
+        Err(result) => return Live::of(*result),
     };
     let config = &owned.config;
     let enabled = opentide_compile::plan::enabled(config);
     let selection = match select_rules(args, platform, workspace, files, &owned, &runs, &enabled) {
         Ok(selection) => selection,
-        Err(result) => return Live::of(result),
+        Err(result) => return Live::of(*result),
     };
     let Some(uuids) = selection.platforms.get(platform) else {
-        return Live::of(nothing_selected(platform, &enabled, &runs, label));
+        return Live::of_fields(&nothing_selected(platform, &enabled, &runs, label));
     };
     let tables = opentide_compile::plan::tenants(config, &PlatformKey::new(platform));
     if tables.is_empty() {
@@ -537,7 +527,7 @@ fn with_workspace(args: &Args, platform: &str, workspace: &Workspace, cx: &Conte
         &compile_cx,
     ) {
         Ok(batches) => batches,
-        Err(message) => return Live::of(failed(Some(platform), &message, 1)),
+        Err(message) => return Live::of(failed(Some(platform), &message, ExitCode::Failure)),
     };
     let reach = Reach {
         runs: &runs,
@@ -550,7 +540,12 @@ fn with_workspace(args: &Args, platform: &str, workspace: &Workspace, cx: &Conte
         let reaches_any = runs != strategy::DEPLOYABLE.to_vec()
             && batches_reach_any(platform, uuids, &tables, args.wide, workspace, &compile_cx);
         return scoped(
-            Live::of(no_tenant_reached(platform, uuids.len(), &runs, reaches_any)),
+            Live::of_fields(&no_tenant_reached(
+                platform,
+                uuids.len(),
+                &runs,
+                reaches_any,
+            )),
             label,
         );
     }
@@ -583,7 +578,9 @@ fn with_workspace(args: &Args, platform: &str, workspace: &Workspace, cx: &Conte
             };
             match report.refused.first() {
                 Some(refused) => refused_result(platform, refused, &report, timeout),
-                None => checked_result(platform, &report, &reach, timeout),
+                None => {
+                    CommandResult::from_fields(&checked_result(platform, &report, &reach, timeout))
+                }
             }
         }
     };
@@ -603,17 +600,14 @@ fn run_strategies(
     args: &Args,
     platform: &str,
     owned: &opentide_compile::Owned,
-) -> Result<RunStrategies, Fields> {
+) -> Result<RunStrategies, Box<CommandResult>> {
     if args.strategies.is_empty() {
         return Ok(strategy::DEPLOYABLE.to_vec());
     }
     strategy::parse_strategies(&args.strategies, &owned.statuses, "--strategy").map_err(|message| {
-        let mut result = failed(Some(platform), &message, 2);
-        result.push((
-            "_failure_code".into(),
-            Json::str(code::USAGE_INVALID_CHOICE),
-        ));
-        result
+        Box::new(
+            failed(Some(platform), &message, ExitCode::Usage).with_code(code::USAGE_INVALID_CHOICE),
+        )
     })
 }
 
@@ -627,7 +621,7 @@ fn select_rules(
     owned: &opentide_compile::Owned,
     runs: &RunStrategies,
     enabled: &[String],
-) -> Result<opentide_compile::plan::Selection, Fields> {
+) -> Result<opentide_compile::plan::Selection, Box<CommandResult>> {
     let fs = workspace.fs().as_ref();
     let (rules_dir, folder) = opentide_compile::dry_run::rules_folder(workspace);
     let scope = match files {
@@ -659,11 +653,14 @@ fn select_rules(
             log: true,
         },
     )
-    .map_err(|error| match error {
-        opentide_compile::plan::PlanError::ObjectFile { path, problem } => {
-            failed(Some(platform), &format!("{}: {problem}", path.display()), 1)
-        }
-        opentide_compile::plan::PlanError::Failed(message) => failed(Some(platform), &message, 1),
+    .map_err(|error| {
+        let message = match error {
+            opentide_compile::plan::PlanError::ObjectFile { path, problem } => {
+                format!("{}: {problem}", path.display())
+            }
+            opentide_compile::plan::PlanError::Failed(message) => message,
+        };
+        Box::new(failed(Some(platform), &message, ExitCode::Failure))
     })
 }
 
@@ -711,30 +708,23 @@ fn nothing_selected(
 }
 
 /// The platform has no `[[tenants]]` entry.
-fn no_tenants(platform: &str) -> Fields {
+fn no_tenants(platform: &str) -> CommandResult {
     let path = config_path(platform);
     let mut result = failed(
         Some(platform),
         &format!(
             "Cannot run live query validation: {platform} has no tenants configured in {path}"
         ),
-        1,
+        ExitCode::Failure,
     );
-    let at = result.len() - 1;
-    result.insert(
-        at,
-        (
-            "advice".into(),
-            Json::str(format!("add (or uncomment) a [[tenants]] entry in {path}")),
-        ),
-    );
-    result.insert(
-        at + 1,
-        (
-            "missing_tenants".into(),
-            Json::object([(platform, Json::str(&path))]),
-        ),
-    );
+    result.data.push((
+        "advice".into(),
+        Json::str(format!("add (or uncomment) a [[tenants]] entry in {path}")),
+    ));
+    result.data.push((
+        "missing_tenants".into(),
+        Json::object([(platform, Json::str(&path))]),
+    ));
     result
 }
 
@@ -837,14 +827,14 @@ impl Reach<'_> {
 
 /// The result of a check that did not finish: a setup that cannot be used,
 /// an unreachable tenant, or a crash.
-fn stopped_early(platform: &str, early: Early, reach: &Reach<'_>) -> Fields {
+fn stopped_early(platform: &str, early: Early, reach: &Reach<'_>) -> CommandResult {
     match early {
         Early::Failed(message, code) => {
-            let mut result = failed(Some(platform), &message, 1);
-            if let Some(code) = code {
-                result.push(("_failure_code".into(), Json::str(code)));
+            let result = failed(Some(platform), &message, ExitCode::Failure);
+            match code {
+                Some(code) => result.with_code(code),
+                None => result,
             }
-            result
         }
         Early::Unreachable(unreachable) => unreachable.result(platform),
         Early::Refused(refused) => refused.result(platform),
@@ -854,13 +844,12 @@ fn stopped_early(platform: &str, early: Early, reach: &Reach<'_>) -> Fields {
                 detail = error.as_str(),
                 "query_validation_failed"
             );
-            let mut result = head(Some(platform), "failed");
-            reach.push_counts(&mut result);
-            result.push((
-                "message".into(),
-                Json::str(format!("Query validation for {platform} failed: {error}")),
-            ));
-            result.push(("_exit_code".into(), Json::Int(1)));
+            let mut result = failed(
+                Some(platform),
+                &format!("Query validation for {platform} failed: {error}"),
+                ExitCode::Failure,
+            );
+            reach.push_counts(&mut result.data);
             result
         }
     }
@@ -875,18 +864,15 @@ fn stopped_result(
     report: &CheckReport,
     reach: &Reach<'_>,
     refused: &[Refused],
-) -> Fields {
+) -> CommandResult {
     let mut result = stopped_early(platform, early, reach);
     if let Some(rejected) = rejected_json(platform, report) {
-        let at = result
-            .iter()
-            .position(|(key, _)| key.starts_with('_'))
-            .unwrap_or(result.len());
-        result.insert(at, ("rejected".into(), rejected));
+        result.data.push(("rejected".into(), rejected));
     }
     if !refused.is_empty() {
-        let at = result.len() - 1;
-        result.insert(at, ("refused_tenants".into(), refused_names(refused)));
+        result
+            .data
+            .push(("refused_tenants".into(), refused_names(refused)));
     }
     result
 }
@@ -907,10 +893,14 @@ fn refused_names(refused: &[Refused]) -> Json {
 /// refusal) counted, their rejections having been logged as they came; and
 /// the checks that timed out and the warnings, as a check every tenant
 /// answered reports them.
-fn refused_result(platform: &str, refused: &Refused, report: &CheckReport, timeout: f64) -> Fields {
+fn refused_result(
+    platform: &str,
+    refused: &Refused,
+    report: &CheckReport,
+    timeout: f64,
+) -> CommandResult {
     let mut result = refused.result(platform);
-    let at = result.len() - 1;
-    let mut extra: Fields = Vec::new();
+    let extra = &mut result.data;
     if report.refused.len() > 1 {
         extra.push(("refused_tenants".into(), refused_names(&report.refused)));
     }
@@ -938,16 +928,8 @@ fn refused_result(platform: &str, refused: &Refused, report: &CheckReport, timeo
             Json::Array(timed_out.iter().map(|check| check.to_json()).collect()),
         ));
     }
-    for (offset, field) in extra.into_iter().enumerate() {
-        result.insert(at + offset, field);
-    }
     if report.checks.iter().any(|check| !check.warnings.is_empty()) {
-        result.push((
-            "warnings".into(),
-            Json::Array(vec![Json::str(format!(
-                "Query validation reported warnings for {platform}"
-            ))]),
-        ));
+        result.warnings = vec![format!("Query validation reported warnings for {platform}")];
     }
     result
 }
@@ -976,7 +958,7 @@ fn checked_result(platform: &str, report: &CheckReport, reach: &Reach<'_>, timeo
             timeout
         ));
     }
-    let mut result = head(Some(platform), if failed_any { "failed" } else { "passed" });
+    let mut result = head_with(Some(platform), if failed_any { "failed" } else { "passed" });
     reach.push_counts(&mut result);
     result.push(("message".into(), Json::str(&message)));
     result.push((
@@ -1318,7 +1300,7 @@ struct Unreachable {
 
 impl Unreachable {
     /// `_unreachable_tenant_result`.
-    fn result(&self, platform: &str) -> Fields {
+    fn result(&self, platform: &str) -> CommandResult {
         let mut advice = format!(
             "check the '{}' tenant in {} and the network path to {}; behind a proxy, pass \
              opentide --proxy",
@@ -1332,13 +1314,11 @@ impl Unreachable {
                  or {CHECK_TIMEOUT_ENV}; otherwise {advice}"
             );
         }
-        let mut result = head(Some(platform), "failed");
-        result.push(("tenant".into(), Json::str(&self.tenant)));
-        result.push(("host".into(), Json::str(&self.host)));
-        result.push(("message".into(), Json::str(&self.message)));
-        result.push(("advice".into(), Json::str(advice)));
-        result.push(("_exit_code".into(), Json::Int(1)));
-        result.push(("_failure_code".into(), Json::str(TENANT_UNREACHABLE)));
+        let mut result =
+            failed(Some(platform), &self.message, ExitCode::Failure).with_code(TENANT_UNREACHABLE);
+        result.data.push(("tenant".into(), Json::str(&self.tenant)));
+        result.data.push(("host".into(), Json::str(&self.host)));
+        result.data.push(("advice".into(), Json::str(advice)));
         result
     }
 }
@@ -1370,12 +1350,12 @@ impl Refused {
     }
 
     /// The failed result: the tenant, its host, why, and what to check.
-    fn result(&self, platform: &str) -> Fields {
-        let mut result = head(Some(platform), "failed");
-        result.push(("tenant".into(), Json::str(&self.tenant)));
-        result.push(("host".into(), Json::str(&self.host)));
-        result.push(("message".into(), Json::str(&self.message)));
-        result.push((
+    fn result(&self, platform: &str) -> CommandResult {
+        let mut result = failed(Some(platform), &self.message, ExitCode::Failure)
+            .with_code(AUTHENTICATION_FAILED);
+        result.data.push(("tenant".into(), Json::str(&self.tenant)));
+        result.data.push(("host".into(), Json::str(&self.host)));
+        result.data.push((
             "advice".into(),
             Json::str(format!(
                 "check the credentials of the '{}' tenant in {} (the environment variables its \
@@ -1384,8 +1364,6 @@ impl Refused {
                 config_path(platform)
             )),
         ));
-        result.push(("_exit_code".into(), Json::Int(1)));
-        result.push(("_failure_code".into(), Json::str(AUTHENTICATION_FAILED)));
         result
     }
 }
@@ -2989,11 +2967,8 @@ mod tests {
         }
     }
 
-    fn failure_code(result: &Fields) -> Option<&str> {
-        result
-            .iter()
-            .find(|(key, _)| key == "_failure_code")
-            .and_then(|(_, code)| code.as_str())
+    fn failure_code(result: &CommandResult) -> Option<&str> {
+        result.failure.code.as_deref()
     }
 
     #[test]
@@ -3033,6 +3008,7 @@ mod tests {
         let result = stopped_result("splunk", unreachable, &report, &reach, &[]);
         assert_eq!(failure_code(&result), Some(TENANT_UNREACHABLE));
         let rejected = result
+            .data
             .iter()
             .find(|(key, _)| key == "rejected")
             .map(|(_, value)| value.clone())
@@ -3149,9 +3125,12 @@ mod tests {
         let third = stalled.timed_out("read", true).unwrap_err();
         assert_eq!(third.timeouts, 3);
         assert!(
-            third.result("sentinel")[7]
-                .1
-                .as_str()
+            third
+                .result("sentinel")
+                .data
+                .iter()
+                .find(|(key, _)| key == "advice")
+                .and_then(|(_, advice)| advice.as_str())
                 .unwrap()
                 .starts_with("if the tenant")
         );
@@ -3160,11 +3139,42 @@ mod tests {
     }
 
     #[test]
+    fn a_typed_failure_prints_the_document_its_keys_printed() {
+        // The tenant's failure, typed (#1949), against the keys it was built
+        // as: the same document, key for key, and the same exit code.
+        let refused = Refused::new("splunk", "lé😀", "h", "401");
+        let advice = "check the credentials of the 'lé😀' tenant in \
+             .opentide/configurations/platforms/splunk.toml (the environment variables its \
+             setup names) and the account's rights on the tenant";
+        let keys: Fields = vec![
+            ("platform".into(), Json::str("splunk")),
+            ("mode".into(), Json::str("live")),
+            ("status".into(), Json::str("failed")),
+            ("supported".into(), Json::Bool(true)),
+            ("tenant".into(), Json::str("lé😀")),
+            ("host".into(), Json::str("h")),
+            ("message".into(), Json::str(&refused.message)),
+            ("advice".into(), Json::str(advice)),
+            ("_exit_code".into(), Json::Int(1)),
+            ("_failure_code".into(), Json::str(AUTHENTICATION_FAILED)),
+        ];
+        let document = |report: Report| {
+            (
+                crate::json::document_text(&report.outcome.document(0), false),
+                report.outcome.exit_code,
+            )
+        };
+        assert_eq!(
+            document(refused.result("splunk").report(COMMAND)),
+            document(report_of(COMMAND, &keys))
+        );
+    }
+
+    #[test]
     fn results_read_into_the_envelope_as_the_oracle_reads_them() {
-        let mut result = failed(Some("splunk"), "nope", 2);
-        result.push(("_failure_code".into(), Json::str("usage_error")));
-        result.push(("warnings".into(), Json::Array(vec![Json::str("w")])));
-        let report = report_of(COMMAND, &result);
+        let mut result = failed(Some("splunk"), "nope", ExitCode::Usage).with_code("usage_error");
+        result.warnings.push("w".to_owned());
+        let report = result.report(COMMAND);
         assert_eq!(report.outcome.exit_code, 2);
         assert_eq!(report.outcome.status, "failed");
         assert_eq!(report.warnings, ["w"]);

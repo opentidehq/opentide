@@ -15,6 +15,7 @@ use std::path::Path;
 use std::sync::{Arc, Mutex};
 
 use opentide_cli::commands::deploy_send::{self, Lines, Sent};
+use opentide_cli::commands::result::Status;
 use opentide_cli::commands::validate_live::{self, Live};
 use opentide_cli::commands::validate_query::Args as QueryArgs;
 use opentide_cli::env::Env;
@@ -454,17 +455,17 @@ fn the_live_check_reports_googles_errors_and_warnings() {
     });
     let (ws, env) = workspace(&server.uri(), "STAGING");
     let found = live(ws.path(), &env);
-    assert_eq!(value(&found.result, "status"), &Json::str("failed"));
+    assert_eq!(found.result.status, Status::Failed);
     // Each diagnostic is logged on its rule; the result counts them.
     assert_eq!(
-        value(&found.result, "error"),
-        &Json::str("Queries rejected on google_secops · 1 checked on 1 tenant")
+        found.result_json().get("error"),
+        Some(&Json::str(
+            "Queries rejected on google_secops · 1 checked on 1 tenant"
+        ))
     );
     assert_eq!(
-        value(&found.result, "warnings"),
-        &Json::Array(vec![Json::str(
-            "Query validation reported warnings for google_secops"
-        )])
+        found.result.warnings,
+        ["Query validation reported warnings for google_secops"]
     );
 
     // An instance that compiles the rule passes it.
@@ -481,12 +482,7 @@ fn the_live_check_reports_googles_errors_and_warnings() {
     });
     let (ws, env) = workspace(&server.uri(), "STAGING");
     let found = live(ws.path(), &env);
-    assert_eq!(
-        value(&found.result, "status"),
-        &Json::str("passed"),
-        "{:?}",
-        found.result
-    );
+    assert_eq!(found.result.status, Status::Passed, "{:?}", found.result);
 }
 
 #[test]
@@ -497,12 +493,7 @@ fn the_live_check_fails_every_rule_when_credentials_cannot_be_read() {
         ws.path().join("missing.json").to_str().unwrap().to_owned(),
     )]);
     let found = live(ws.path(), &env);
-    assert_eq!(
-        value(&found.result, "status"),
-        &Json::str("failed"),
-        "{:?}",
-        found.result
-    );
+    assert_eq!(found.result.status, Status::Failed, "{:?}", found.result);
 }
 
 /// A tenant that signs in, then refuses the token on the first rule's
