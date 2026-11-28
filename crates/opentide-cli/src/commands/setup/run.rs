@@ -451,13 +451,13 @@ pub fn subcommand(step: &Step, paths: &Paths, yes: bool, plan: bool, cx: &Contex
                 return usage(
                     &command,
                     code::USAGE_MISSING_OPTION,
-                    "Choose at least one MCP host (--vscode, --cursor, --claude-code, --generic)",
+                    "Choose at least one MCP host (--vscode, --cursor, --claude-code, --claude-desktop, --generic)",
                 );
             }
             return wizard(
                 &command,
                 cx,
-                "--vscode, --cursor, --claude-code",
+                "--vscode, --cursor, --claude-code, --claude-desktop",
                 Wizard::Mcp,
                 &shown,
             );
@@ -672,6 +672,8 @@ fn run_step(command: &str, step: &Step, root: &Path, cx: &Context<'_>) -> Report
     if let Err(message) = stage.commit() {
         return Report::error(command, message);
     }
+    let mut result = result;
+    unwritten(&mut stage, &mut result);
     finish(command, result, None, root, cx)
 }
 
@@ -720,6 +722,47 @@ fn failed(report: &mut Report, message: &str) {
 
 // ---------------------------------------------------------------- the plan
 
+/// Moves each file of the user's the last commit could not write
+/// ([`Stage::write_outside`]) from `result`'s `files` to its `skipped`, with
+/// a warning: the run goes on, and says what it left undone.
+fn unwritten(stage: &mut Stage, result: &mut StepResult) {
+    let failed = stage.unwritten();
+    if failed.is_empty() {
+        return;
+    }
+    let (mut files, mut skipped, mut warnings) = (
+        result.strings("files"),
+        result.strings("skipped"),
+        result.strings("warnings"),
+    );
+    for (path, error) in failed {
+        let shown = files::shown(&path);
+        files.retain(|file| *file != shown);
+        // Nothing to reopen Claude Desktop for.
+        if result.text("claude_desktop_config") == Some(shown.as_str()) {
+            result.take("claude_desktop_config");
+            let advice = result
+                .text("advice")
+                .unwrap_or_default()
+                .replace(super::desktop::ADVICE, "")
+                .trim()
+                .to_owned();
+            if advice.is_empty() {
+                result.take("advice");
+            } else {
+                result.set("advice", Json::str(advice));
+            }
+        }
+        skipped.push(shown.clone());
+        warnings.push(format!(
+            "Could not write {shown} ({error}); add the opentide server to it by hand."
+        ));
+    }
+    result.set("files", strings(&files));
+    result.set("skipped", strings(&skipped));
+    result.set("warnings", strings(&warnings));
+}
+
 /// One step of a plan: its files and warnings.
 #[derive(Clone, Debug)]
 pub struct Planned {
@@ -738,13 +781,23 @@ fn planned(stage: &mut Stage, root: &Path, name: &str, result: &StepResult) -> P
             change.path.to_string_lossy().into_owned(),
         )
     });
+    // A file of the user's outside the repository is listed by its path.
     let mut files: Vec<(String, &'static str)> = changes
         .into_iter()
-        .map(|change| (super::shown_relative(&change.path, root), change.action))
+        .map(|change| {
+            let shown = if stage.is_outside(&change.path) {
+                files::shown(&change.path)
+            } else {
+                super::shown_relative(&change.path, root)
+            };
+            (shown, change.action)
+        })
         .collect();
     for skipped in result.strings("skipped") {
         let path = Path::new(&skipped);
-        let shown = if path.is_absolute() {
+        let shown = if stage.is_outside(path) {
+            skipped.clone()
+        } else if path.is_absolute() {
             super::shown_relative(path, root)
         } else {
             skipped.replace('\\', "/")
@@ -906,6 +959,9 @@ const PURPOSES: [(&str, &str); 14] = [
 ];
 
 fn purpose(path: &str) -> &'static str {
+    if path.ends_with(super::desktop::CONFIG_FILE) {
+        return "MCP server for Claude Desktop";
+    }
     PURPOSES
         .iter()
         .find(|(prefix, _)| path.starts_with(prefix) || path == prefix.trim_end_matches('/'))
@@ -1242,12 +1298,13 @@ struct Recorder<'a> {
 }
 
 impl Recorder<'_> {
-    fn record(&mut self, name: &str, result: StepResult) -> Result<(), String> {
+    fn record(&mut self, name: &str, mut result: StepResult) -> Result<(), String> {
         if self.plan {
             let planned = planned(&mut self.stage, &self.root, name, &result);
             self.planned.push(planned);
         } else {
             self.stage.commit()?;
+            unwritten(&mut self.stage, &mut result);
         }
         for warning in result.strings("warnings") {
             if !self.warnings.contains(&warning) {
@@ -1618,6 +1675,10 @@ mod tests {
         assert_eq!(purpose(".vscode/extensions.json"), "editor settings");
         assert_eq!(purpose(".gitlab-ci.yml"), "GitLab CI pipeline");
         assert_eq!(purpose(".opentide/hooks/pre-commit"), "");
+        assert_eq!(
+            purpose("/home/é😀/.config/Claude/claude_desktop_config.json"),
+            "MCP server for Claude Desktop"
+        );
     }
 
     #[test]

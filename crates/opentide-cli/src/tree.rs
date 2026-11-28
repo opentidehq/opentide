@@ -373,6 +373,8 @@ pub enum Mcp {
     Cursor,
     #[value(name = "claude-code")]
     ClaudeCode,
+    #[value(name = "claude-desktop")]
+    ClaudeDesktop,
     #[value(name = "generic")]
     Generic,
 }
@@ -661,7 +663,7 @@ pub struct SetupArgs {
         help = "Run setup vscode: the extension recommendation and snippets (the opentide VS Code extension is the recommended path)"
     )]
     pub vscode_setup: bool,
-    #[arg(long = "mcp", help = "Write MCP configuration for vscode, cursor, claude-code or generic (repeatable)", action = clap::ArgAction::Append, value_name = "HOST")]
+    #[arg(long = "mcp", help = "Write MCP configuration for vscode, cursor, claude-code, claude-desktop or generic (repeatable)", action = clap::ArgAction::Append, value_name = "HOST")]
     pub mcp: Vec<Mcp>,
     #[arg(long = "skills", help = "Install agent skills for claude-code, cursor, github-copilot or generic (repeatable)", action = clap::ArgAction::Append, value_name = "TARGET")]
     pub skills: Vec<Skills>,
@@ -939,6 +941,11 @@ pub struct SetupMcpArgs {
     pub cursor: bool,
     #[arg(long = "claude-code", help = "Configure Claude Code (.mcp.json)")]
     pub claude_code: bool,
+    #[arg(
+        long = "claude-desktop",
+        help = "Configure Claude Desktop (its claude_desktop_config.json, outside the repository)"
+    )]
+    pub claude_desktop: bool,
     #[arg(long = "generic", help = "Configure any MCP host (opentide.mcp.json)")]
     pub generic: bool,
     #[command(flatten)]

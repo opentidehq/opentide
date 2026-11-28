@@ -55,6 +55,7 @@ The server uses **stdio transport**. It must know where your content lives, so s
 | VS Code | `--vscode` | `.vscode/mcp.json` (`servers`, not `mcpServers`) | `${workspaceFolder}` |
 | Cursor | `--cursor` | `.cursor/mcp.json` | `${workspaceFolder}` |
 | Claude Code | `--claude-code` | `.mcp.json` | `${CLAUDE_PROJECT_DIR}` |
+| Claude Desktop | `--claude-desktop` | Claude Desktop's `claude_desktop_config.json`, outside the repository ([details](../../mcp/configuration.md#claude-desktop)) | the workspace's absolute path |
 | Generic | `--generic` | `opentide.mcp.json` | omitted (cwd discovery) |
 
 ## Install agent skills
