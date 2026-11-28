@@ -337,14 +337,15 @@ fn requests_preview(
     for (name, table) in reached {
         let inputs = Inputs::dry_run(known(name));
         let (shown, variables) = with_placeholders(table);
-        let compiled = tenant_writes(cx, platform, rule, name, &shown, &inputs).or_else(|error| {
+        let sent = sent_to(cx, platform, rule, name);
+        let compiled = tenant_writes(cx, platform, &sent, name, &shown, &inputs).or_else(|error| {
             // A setting the deploy reads as it is in the table (Splunk's
             // `enterprise_security`) refuses a variable: the deploy's own
             // error says so.
             if variables.is_empty() {
                 Err(error)
             } else {
-                tenant_writes(cx, platform, rule, name, table, &inputs).and(Err(error))
+                tenant_writes(cx, platform, &sent, name, table, &inputs).and(Err(error))
             }
         });
         match compiled {
@@ -529,10 +530,11 @@ pub fn failure(rule: &Rule, error: &CompileError) -> Json {
 }
 
 /// The preview of `rule` on `platform` for a run that sends it to the
-/// tenants named `tenants` (`preview_rule_deployment`): a platform whose
-/// request depends on the tenant (Sentinel, Bitdefender, Graylog, Exabeam)
-/// compiles it for each, and shows the first; Elastic and Sysdig compile it
-/// for the first; every other platform is [`preview`]'s.
+/// tenants named `tenants` (`preview_rule_deployment`): most platforms
+/// compile it for each tenant and show the first; Elastic, Exabeam and
+/// Sysdig compile it for the first. Each tenant's compile takes the rule as
+/// the deploy sends it there, the tenant's `[[modifiers]]` applied
+/// (`sent_to`). With no tenant, every platform is [`preview`]'s.
 pub fn preview_on(
     cx: &Context<'_>,
     platform: &PlatformKey,
@@ -564,9 +566,60 @@ pub fn preview_planned(
         deployer!() => requests_preview(cx, platform_id, rule, tenants, known),
         PlatformId::Sentinel => sentinel_preview(cx, rule, tenants),
         PlatformId::Sysdig => sysdig_preview(cx, rule, tenants),
-        // The same request on every tenant.
-        PlatformId::GoogleSecops => preview(cx, platform, rule),
+        PlatformId::GoogleSecops => google_secops_preview(cx, rule, tenants),
     }
+}
+
+/// `rule` as a deploy sends it to the `platform` tenant named `tenant`: the
+/// platform's `[[modifiers]]` for that tenant applied
+/// ([`crate::modifiers::rule_for_tenant`]), as the deploy's batches hold it.
+/// Every entry a dry run compiles for a tenant compiles this rule.
+fn sent_to(cx: &Context<'_>, platform: PlatformId, rule: &Rule, tenant: &str) -> Rule {
+    let key = PlatformKey::from(platform);
+    crate::modifiers::rule_for_tenant(
+        &crate::modifiers::of_platform(cx.config, &key),
+        &key,
+        rule,
+        tenant,
+    )
+}
+
+/// The `rules.create` body a Google SecOps deploy would send, with what the
+/// deploy reads beside it, compiled as the deploy compiles it
+/// ([`GoogleSecops`]) for each tenant the run sends the rule to, with that
+/// tenant's modifiers, so a tenant whose modifiers break the rule fails the
+/// dry run, naming that tenant. The body shown is the first tenant's, and
+/// the entry names that `tenant`. With no tenant, it is [`preview`]'s.
+fn google_secops_preview(cx: &Context<'_>, rule: &Rule, tenants: &[String]) -> Json {
+    let reached: Vec<&str> = tenants
+        .iter()
+        .map(String::as_str)
+        .filter(|name| deploy::tenant(cx, &PlatformId::GoogleSecops.into(), name).is_some())
+        .collect();
+    let Some((first, rest)) = reached.split_first() else {
+        return preview(cx, &PlatformId::GoogleSecops.into(), rule);
+    };
+    let compile = |name: &str| {
+        let sent = sent_to(cx, PlatformId::GoogleSecops, rule, name);
+        GoogleSecops::compile(cx, &sent, ()).map_err(|mut error| {
+            error.reason = format!("{} (tenant '{name}')", error.reason);
+            error
+        })
+    };
+    let shown = match compile(first) {
+        Ok(payload) => payload,
+        Err(error) => return failure(rule, &error),
+    };
+    for name in rest {
+        if let Err(error) = compile(name) {
+            return failure(rule, &error);
+        }
+    }
+    let mut entry = compiled(rule, GoogleSecops::body(&shown));
+    if let Json::Object(fields) = &mut entry {
+        fields.insert("tenant".into(), (*first).into());
+    }
+    entry
 }
 
 /// The `alertRules` body a Sentinel deploy would send (#2081): compiled, as
@@ -584,12 +637,14 @@ fn sentinel_preview(cx: &Context<'_>, rule: &Rule, tenants: &[String]) -> Json {
     let Some((first, rest)) = reached.split_first() else {
         return sentinel_entry(cx, rule, PREVIEW_TENANT, None);
     };
-    let entry = sentinel_entry(cx, rule, first, Some(first));
+    let sent = sent_to(cx, PlatformId::Sentinel, rule, first);
+    let entry = sentinel_entry(cx, &sent, first, Some(first));
     if entry.get("status").is_some() {
         return entry;
     }
     for name in rest {
-        if let Err(error) = Sentinel::compile(cx, rule, name) {
+        let sent = sent_to(cx, PlatformId::Sentinel, rule, name);
+        if let Err(error) = Sentinel::compile(cx, &sent, name) {
             return failure(rule, &error);
         }
     }
@@ -644,7 +699,15 @@ fn bitdefender_preview(cx: &Context<'_>, rule: &Rule, tenants: &[String]) -> Jso
         configured.iter().copied().map(Some).collect()
     };
     for tenant in attempts {
-        match bitdefender_request(cx, rule, tenant) {
+        let sent = tenant.map(|table| {
+            sent_to(
+                cx,
+                PlatformId::Bitdefender,
+                rule,
+                deploy::tenant_name(table),
+            )
+        });
+        match bitdefender_request(cx, sent.as_ref().unwrap_or(rule), tenant) {
             Ok(body) => {
                 first.get_or_insert(body);
             }
@@ -686,7 +749,12 @@ fn exabeam_preview(cx: &Context<'_>, rule: &Rule, tenants: &[String]) -> Json {
     let first = tenants.iter().find_map(|name| {
         deploy::tenant(cx, &PlatformId::Exabeam.into(), name).map(|table| (name.as_str(), table))
     });
-    match Exabeam::compile(cx, rule, first.map(|(_, table)| table)) {
+    let sent = first.map(|(name, _)| sent_to(cx, PlatformId::Exabeam, rule, name));
+    match Exabeam::compile(
+        cx,
+        sent.as_ref().unwrap_or(rule),
+        first.map(|(_, table)| table),
+    ) {
         Ok(compiled) => {
             let mut entry = Object::new();
             entry.insert("uuid".into(), rule.uuid.clone().into());
@@ -711,7 +779,12 @@ fn sysdig_preview(cx: &Context<'_>, rule: &Rule, tenants: &[String]) -> Json {
     let first = tenants.iter().find_map(|name| {
         deploy::tenant(cx, &PlatformId::Sysdig.into(), name).map(|table| (name.as_str(), table))
     });
-    match Sysdig::compile(cx, rule, first.map(|(_, table)| table)) {
+    let sent = first.map(|(name, _)| sent_to(cx, PlatformId::Sysdig, rule, name));
+    match Sysdig::compile(
+        cx,
+        sent.as_ref().unwrap_or(rule),
+        first.map(|(_, table)| table),
+    ) {
         Ok(sent) => {
             let mut entry = compiled(rule, Sysdig::body(&sent));
             if let Json::Object(fields) = &mut entry {
@@ -749,13 +822,15 @@ fn datadog_preview(cx: &Context<'_>, rule: &Rule, tenants: &[String]) -> Json {
         })
         .collect();
     let mut first = None;
-    let attempts: Vec<Option<&Json>> = if reached.is_empty() {
+    let attempts: Vec<Option<(&str, &Json)>> = if reached.is_empty() {
         vec![None]
     } else {
-        reached.iter().map(|(_, table)| Some(*table)).collect()
+        reached.iter().copied().map(Some).collect()
     };
     for tenant in attempts {
-        match Datadog::compile(cx, rule, tenant) {
+        let sent = tenant.map(|(name, _)| sent_to(cx, PlatformId::Datadog, rule, name));
+        let table = tenant.map(|(_, table)| table);
+        match Datadog::compile(cx, sent.as_ref().unwrap_or(rule), table) {
             Ok(compiled) => {
                 first.get_or_insert(compiled);
             }
@@ -822,14 +897,7 @@ fn elastic_preview(cx: &Context<'_>, rule: &Rule, tenants: &[String]) -> Json {
         deploy::tenant(cx, &PlatformId::Elastic.into(), name).map(|table| (name.as_str(), table))
     });
     // The rule as the deploy sends it to that tenant: its modifiers applied.
-    let sent = first.map(|(name, _)| {
-        crate::modifiers::rule_for_tenant(
-            &crate::modifiers::of_platform(cx.config, &PlatformId::Elastic.into()),
-            &PlatformId::Elastic.into(),
-            rule,
-            name,
-        )
-    });
+    let sent = first.map(|(name, _)| sent_to(cx, PlatformId::Elastic, rule, name));
     let rule = sent.as_ref().unwrap_or(rule);
     match Elastic::compile(cx, rule, first.map(|(_, table)| table)) {
         Ok(sent) => {
@@ -860,7 +928,9 @@ fn graylog_preview(cx: &Context<'_>, rule: &Rule, tenants: &[String]) -> Json {
         found.iter().copied().map(Some).collect()
     };
     for tenant in reached {
-        match Graylog::compile(cx, rule, preview_target(tenant)) {
+        let sent =
+            tenant.map(|table| sent_to(cx, PlatformId::Graylog, rule, deploy::tenant_name(table)));
+        match Graylog::compile(cx, sent.as_ref().unwrap_or(rule), preview_target(tenant)) {
             Ok(definition) => compiled.push(definition),
             Err(error) => return failure(rule, &error),
         }
