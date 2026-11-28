@@ -2840,18 +2840,23 @@ fn dry_run_requests(ws: &Path, platform: &str) -> Vec<(String, Option<String>)> 
         .collect()
 }
 
-/// The body a Sentinel deploy sends is, byte for byte, the `api_request` the
-/// dry run shows (#1952: both compile through `compiler::Sentinel`): the
-/// exclusions that apply, their `let` statements, the non-ASCII text of the
+/// The body a Sentinel deploy sends to each tenant is, byte for byte, the
+/// `api_request` the dry run shows for that tenant (#1952: both compile
+/// through `compiler::Sentinel`; #2081: the dry run compiles for the run's
+/// tenants, not a placeholder): the exclusions that apply everywhere, the one
+/// scoped to that tenant, their `let` statements, the non-ASCII text of the
 /// query, and an exclusion scoped to a tenant the run does not reach, left
-/// out of both.
+/// out of both. The dry run shows the first tenant's body and names it, so
+/// each tenant of the run is put first in turn.
 #[test]
 fn a_sentinel_deploy_sends_the_body_its_dry_run_shows() {
     let block = format!(
         "{SENTINEL_STAGING}    exclusions:\n      - query: '| where Account != \"é😀\"'\n        \
          reason: Everywhere\n        let:\n          allowed: \"svc é\"\n      - query: '| \
          where Computer != \"elsewhere\"'\n        reason: Another tenant\n        tenant: \
-         elsewhere\n"
+         elsewhere\n      - query: '| where Computer != \"soc-only é\"'\n        reason: The \
+         SOC\n        tenant: soc\n      - query: '| where Computer != \"lab-only 😀\"'\n        \
+         reason: The lab\n        tenant: lab\n"
     )
     .replace(
         "query: SecurityEvent\n",
@@ -2863,25 +2868,55 @@ fn a_sentinel_deploy_sends_the_body_its_dry_run_shows() {
         "d.",
         &block,
     );
-    let ws = workspace("sentinel", "soc", SENTINEL_SETUP, &[("a.yaml", text)]);
-    let shown = dry_run_requests(ws.path(), "sentinel");
-    let recording: &'static Recording = Box::leak(Box::new(Recording(Mutex::new(Vec::new()))));
-    let mut registry = Registry::new();
-    registry
-        .register(Box::new(Recorded("sentinel", recording)))
-        .unwrap();
-    let env = Env::from_pairs([("AZURE_CLIENT_SECRET", SECRET)]);
-    let (sent, err) = deploy(ws.path(), "sentinel", &env, &registry, 0);
-    assert_eq!(rows(&sent), vec![("deployed".to_owned(), None)], "{err}");
-    let bodies = recording.0.lock().unwrap().clone();
-    assert_eq!(bodies.len(), 1, "{err}");
-    let body = String::from_utf8(bodies[0].clone()).unwrap();
-    assert!(
-        body.contains("é😀") && body.contains("let allowed"),
-        "{body}"
-    );
-    assert!(!body.contains("elsewhere"), "{body}");
-    assert_eq!(shown, vec![(body, None)]);
+    for (first, second) in [("soc", "lab"), ("lab", "soc")] {
+        let ws = workspace(
+            "sentinel",
+            first,
+            SENTINEL_SETUP,
+            &[("a.yaml", text.clone())],
+        );
+        let config = ws
+            .path()
+            .join(".opentide/configurations/platforms/sentinel.toml");
+        let mut toml = std::fs::read_to_string(&config).unwrap();
+        toml.push_str(&format!(
+            "\n[[tenants]]\nname = \"{second}\"\nstrategies = [\"PREVIEW\", \
+             \"RELEASE\"]\n[tenants.setup]\n{SENTINEL_SETUP}"
+        ));
+        std::fs::write(&config, toml).unwrap();
+        let shown = dry_run_requests(ws.path(), "sentinel");
+        let recording: &'static TenantRecording =
+            Box::leak(Box::new(TenantRecording(Mutex::new(Vec::new()))));
+        let mut registry = Registry::new();
+        registry
+            .register(Box::new(TenantRecorded("sentinel", recording)))
+            .unwrap();
+        let env = Env::from_pairs([("AZURE_CLIENT_SECRET", SECRET)]);
+        let (sent, err) = deploy(ws.path(), "sentinel", &env, &registry, 0);
+        assert_eq!(rows(&sent), vec![("deployed".to_owned(), None); 2], "{err}");
+        let bodies = recording.0.lock().unwrap().clone();
+        assert_eq!(bodies.len(), 2, "{err}");
+        let body_of = |tenant: &str| -> String {
+            let (_, body) = bodies.iter().find(|(name, _)| name == tenant).unwrap();
+            String::from_utf8(body.clone()).unwrap()
+        };
+        let (body, other) = (body_of(first), body_of(second));
+        let (own, foreign) = if first == "soc" {
+            ("soc-only é", "lab-only 😀")
+        } else {
+            ("lab-only 😀", "soc-only é")
+        };
+        assert!(
+            body.contains("é😀") && body.contains("let allowed") && body.contains(own),
+            "{body}"
+        );
+        assert!(
+            !body.contains("elsewhere") && !body.contains(foreign),
+            "{body}"
+        );
+        assert!(other.contains(foreign) && !other.contains(own), "{other}");
+        assert_eq!(shown, vec![(body, Some(first.to_owned()))]);
+    }
 }
 
 /// The create body a Graylog deploy sends is, byte for byte, the body of the
@@ -4821,6 +4856,37 @@ impl Deployer for Recording {
 struct Recorded(&'static str, &'static Recording);
 
 impl Platform for Recorded {
+    fn id(&self) -> &'static str {
+        self.0
+    }
+
+    fn deployer(&self) -> Option<&dyn Deployer> {
+        Some(self.1)
+    }
+}
+
+/// A deployer that keeps the tenant and the body of each request it
+/// receives.
+struct TenantRecording(Mutex<Vec<(String, Vec<u8>)>>);
+
+impl Deployer for TenantRecording {
+    fn deploy<'a>(
+        &'a self,
+        cx: TenantContext<'a>,
+        request: &'a DeployRequest,
+    ) -> BoxFuture<'a, Result<DeployOutcome, DeployError>> {
+        self.0
+            .lock()
+            .unwrap()
+            .push((cx.tenant.label.tenant.clone(), request.body.clone()));
+        deploying(async move { Ok(DeployOutcome::new(None, request.operation)) })
+    }
+}
+
+/// [`TenantRecording`] registered as the platform it names.
+struct TenantRecorded(&'static str, &'static TenantRecording);
+
+impl Platform for TenantRecorded {
     fn id(&self) -> &'static str {
         self.0
     }
