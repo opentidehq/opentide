@@ -6,6 +6,7 @@
 //! `next_actions` and `failure`. A non-zero exit always carries `error`: where the command put it,
 //! else after `message`.
 
+use crate::commands::result::{ExitCode, Status};
 use crate::json::{Json, Object};
 
 /// Puts a run's `warnings` in a document's members, after `message`. A
@@ -171,6 +172,30 @@ impl Outcome {
         }
     }
 
+    /// The status, typed; a status no [`Status`] names reads as
+    /// [`Status::Failed`], so it never passes for a success. Transitional
+    /// (#1949 slice 7): the field becomes a [`Status`].
+    pub fn status(&self) -> Status {
+        Status::parse(&self.status).unwrap_or(Status::Failed)
+    }
+
+    /// Sets the status. Transitional, as [`Outcome::status`].
+    pub fn set_status(&mut self, status: Status) {
+        status.as_str().clone_into(&mut self.status);
+    }
+
+    /// The exit code, typed; a non-zero code no [`ExitCode`] names reads as
+    /// [`ExitCode::Failure`], so it stays non-zero. Transitional (#1949
+    /// slice 7): the field becomes an [`ExitCode`].
+    pub fn exit(&self) -> ExitCode {
+        ExitCode::from_code(i64::from(self.exit_code)).unwrap_or(ExitCode::Failure)
+    }
+
+    /// Sets the exit code. Transitional, as [`Outcome::exit`].
+    pub fn set_exit(&mut self, exit: ExitCode) {
+        self.exit_code = exit.code();
+    }
+
     /// Whether the run succeeded.
     pub fn ok(&self) -> bool {
         self.status != "failed"
@@ -226,6 +251,43 @@ impl Outcome {
 mod tests {
     use super::*;
     use crate::json::document_text;
+
+    #[test]
+    fn the_typed_status_and_exit_read_and_write_the_fields() {
+        let mut outcome = Outcome::failed("migrate", 1, Failure::new("command_failed", "é 😀"));
+        assert_eq!(outcome.status(), Status::Failed);
+        assert_eq!(outcome.exit(), ExitCode::Failure);
+        for status in [
+            Status::Completed,
+            Status::Passed,
+            Status::Issues,
+            Status::Skipped,
+            Status::Failed,
+        ] {
+            outcome.set_status(status);
+            assert_eq!(outcome.status, status.as_str());
+            assert_eq!(outcome.status(), status);
+        }
+        for (exit, code) in [
+            (ExitCode::Success, 0),
+            (ExitCode::Failure, 1),
+            (ExitCode::Usage, 2),
+            (ExitCode::Interrupted, 130),
+        ] {
+            outcome.set_exit(exit);
+            assert_eq!(outcome.exit_code, code);
+            assert_eq!(outcome.exit(), exit);
+        }
+    }
+
+    #[test]
+    fn an_unknown_status_reads_failed_and_an_unknown_code_stays_non_zero() {
+        let mut outcome = Outcome::failed("migrate", 1, Failure::new("command_failed", "x"));
+        "réussi".clone_into(&mut outcome.status);
+        outcome.exit_code = 3;
+        assert_eq!(outcome.status(), Status::Failed);
+        assert_eq!(outcome.exit(), ExitCode::Failure);
+    }
 
     #[test]
     fn framework_envelope_a_usage_error_document_keeps_its_key_order() {
