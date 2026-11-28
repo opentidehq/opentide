@@ -24,23 +24,23 @@ const fn language(name: &'static str, fence: &'static str) -> CodeLanguage {
     CodeLanguage { name, fence }
 }
 
-/// KQL.
+/// The Kusto Query Language (Sentinel, Defender).
 pub const KQL: CodeLanguage = language("KQL", "kql");
-/// SPL.
+/// Splunk's Search Processing Language.
 pub const SPL: CodeLanguage = language("SPL", "spl");
 /// `SentinelOne`'s S1QL.
 pub const S1QL: CodeLanguage = language("S1QL", "sql");
 /// `CrowdStrike`'s CQL.
 pub const CQL: CodeLanguage = language("CQL", "cql");
-/// Lucene.
+/// The Lucene query syntax.
 pub const LUCENE: CodeLanguage = language("Lucene", "lucene");
 /// Kibana's KQL.
 pub const KUERY: CodeLanguage = language("Kibana KQL", "kql");
-/// EQL.
+/// Elastic's Event Query Language.
 pub const EQL: CodeLanguage = language("EQL", "eql");
 /// ES|QL.
 pub const ESQL: CodeLanguage = language("ES|QL", "esql");
-/// YARA.
+/// A YARA rule.
 pub const YARA: CodeLanguage = language("YARA", "yara");
 /// A Falco condition.
 pub const FALCO: CodeLanguage = language("Falco condition", "text");
@@ -52,7 +52,7 @@ pub const EXABEAM: CodeLanguage = language("Exabeam Query Language", "text");
 pub const DATADOG: CodeLanguage = language("Datadog search syntax", "text");
 /// YARA-L.
 pub const YARAL: CodeLanguage = language("YARA-L", "yaral");
-/// Markdown.
+/// Markdown text: a `guide.` field, Datadog's `message`.
 pub const MARKDOWN: CodeLanguage = language("Markdown", "markdown");
 /// Anything else.
 pub const TEXT: CodeLanguage = language("Text", "text");

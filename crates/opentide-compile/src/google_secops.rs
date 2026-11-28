@@ -222,9 +222,9 @@ const RUN_STATE_FIELDS: [&str; 3] = ["enabled", "alerting", "runFrequency"];
 /// A `RuleDeployment` update: its `updateMask` and body.
 #[derive(Debug, Clone, PartialEq)]
 pub struct RunState {
-    /// The `updateMask`.
+    /// The `updateMask`: the fields `body` sets, comma-separated.
     pub mask: String,
-    /// The body.
+    /// The `RuleDeployment` fields the update sets.
     pub body: Object,
 }
 

@@ -24,15 +24,17 @@ use crate::{Context, Owned};
 pub struct Request {
     /// `--strategy` values, as typed.
     pub strategies: Vec<String>,
-    /// `--all`.
+    /// `--all`: every rule file under the rules folder, not only the changed
+    /// ones. Unless `keep_deprecated` says otherwise, it also leaves out the
+    /// blocks whose status maps to `DISABLEMENT` or `DELETION`.
     pub all: bool,
     /// `--uuid` values.
     pub uuids: Vec<String>,
     /// `--file` values.
     pub files: Vec<String>,
-    /// `--platform`.
+    /// `--platform`: only this platform's blocks are planned.
     pub platform: Option<String>,
-    /// `--wide`.
+    /// `--wide`: every block, whatever its status.
     pub wide: bool,
     /// `--keep-deprecated` / `--drop-deprecated`; `None` when neither.
     pub keep_deprecated: Option<bool>,

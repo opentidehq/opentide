@@ -219,7 +219,7 @@ pub enum EpssDetail {
     /// No score: the record has no CVE identifier, or the instance has none.
     #[default]
     None,
-    /// Its score.
+    /// The instance's EPSS score for the record's CVE.
     Score(Epss),
     /// The instance could not be asked.
     Unavailable,
@@ -231,23 +231,23 @@ pub enum EpssDetail {
 pub struct CveRecord {
     /// Its canonical identifier.
     pub identifier: String,
-    /// Its title.
+    /// The CNA's title, or an OSV summary.
     pub title: Option<String>,
-    /// Its description.
+    /// The English description, whitespace collapsed.
     pub description: Option<String>,
     /// Its publication date.
     pub published: Option<String>,
     /// The CVE record's state.
     pub state: Option<String>,
-    /// Its severity.
+    /// `HIGH (8.1)`, a score, or another severity.
     pub severity: Option<String>,
-    /// Its aliases.
+    /// Aliases the linked GitHub advisories give.
     pub aliases: Vec<String>,
-    /// Its page.
+    /// Its page on the vulnerability-lookup instance.
     pub page_url: String,
     /// Its newest CVSS score.
     pub cvss: Option<Cvss>,
-    /// Its weaknesses.
+    /// The CWEs of the CNA's and the ADPs' problem types, each once.
     pub weaknesses: Vec<Weakness>,
     /// The products it affects (`vendor product`), each once.
     pub affected: Vec<String>,

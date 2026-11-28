@@ -817,7 +817,7 @@ pub fn api_request(method: &str, path: &str, body: Option<Json>) -> Json {
     Json::Object(request)
 }
 
-/// The create request (`create_request`).
+/// The `POST` that creates the definition, scheduled (`create_request`).
 pub fn create_request(compiled: &CompiledDefinition) -> Json {
     api_request("POST", &create_path(), Some(create_body(compiled)))
 }
