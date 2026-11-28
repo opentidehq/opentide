@@ -405,22 +405,46 @@ fn ident_like_end(text: &str, at: usize, hyphen: bool) -> Option<usize> {
 fn hyphen_word_end(text: &str, at: usize) -> Option<usize> {
     let rest = text.get(at..)?;
     for word in ["group-by", "order-by"] {
-        if rest.len() >= word.len()
-            && rest.as_bytes()[..word.len()].eq_ignore_ascii_case(word.as_bytes())
+        if let Some(after) = strip_prefix_ignore_case(rest, word)
+            && after.chars().next().is_none_or(|c| !is_word_char(c))
         {
-            let after = rest[word.len()..].chars().next();
-            if after.is_none_or(|c| !is_word_char(c)) {
-                return Some(at + word.len());
-            }
+            return Some(at + word.len());
         }
     }
     None
 }
 
+/// `text[start..end]`, a span this checker cut: its cursor and scans move
+/// past whole characters, so their positions are char boundaries. A span
+/// that is not fails a debug assertion and reads as empty.
+fn span(text: &str, start: usize, end: usize) -> &str {
+    let span = text.get(start..end);
+    debug_assert!(span.is_some(), "{start}..{end} in {} bytes", text.len());
+    span.unwrap_or_default()
+}
+
+/// `text` from `at`, a position as [`span`] takes.
+fn tail(text: &str, at: usize) -> &str {
+    span(text, at, text.len())
+}
+
+/// `text` after `prefix`, an ASCII word, when `text` starts with it in any
+/// case.
+fn strip_prefix_ignore_case<'t>(text: &'t str, prefix: &str) -> Option<&'t str> {
+    let (head, rest) = text.split_at_checked(prefix.len())?;
+    head.eq_ignore_ascii_case(prefix).then_some(rest)
+}
+
+/// The first character of `text`, as text (empty for an empty `text`).
+fn first_char(text: &str) -> &str {
+    let len = text.chars().next().map_or(0, char::len_utf8);
+    text.split_at_checked(len).map_or("", |(first, _)| first)
+}
+
 /// `BARE`: a run of anything but whitespace, `()[]{},"'|=<>!`.
 fn bare_end(text: &str, at: usize) -> Option<usize> {
     let mut end = at;
-    for (i, c) in text[at..].char_indices() {
+    for (i, c) in tail(text, at).char_indices() {
         if c.is_whitespace() || "()[]{},\"'|=<>!".contains(c) {
             break;
         }
@@ -476,7 +500,11 @@ fn datetime_ms(text: &str) -> Option<i128> {
     if !is_datetime(text) {
         return None;
     }
-    let num = |r: std::ops::Range<usize>| text[r].parse::<i128>().unwrap_or(0);
+    let num = |r: std::ops::Range<usize>| {
+        text.get(r)
+            .and_then(|digits| digits.parse::<i128>().ok())
+            .unwrap_or(0)
+    };
     let (y, mo, d, hh, mi, ss) = (
         num(0..4),
         num(5..7),
@@ -488,9 +516,11 @@ fn datetime_ms(text: &str) -> Option<i128> {
     let mut i = 19;
     let mut millis = 0;
     if text.as_bytes().get(i) == Some(&b'.') {
-        let digits: String = text[i + 1..]
-            .chars()
-            .take_while(char::is_ascii_digit)
+        let digits: String = text
+            .bytes()
+            .skip(i + 1)
+            .take_while(u8::is_ascii_digit)
+            .map(char::from)
             .collect();
         i += 1 + digits.len();
         millis = format!("{digits:0<3}").parse::<i128>().unwrap_or(0);
@@ -956,7 +986,7 @@ impl<'a> Parser<'a> {
         if end > start {
             return end;
         }
-        let next = self.text[start.min(self.text.len())..]
+        let next = tail(self.text, start.min(self.text.len()))
             .chars()
             .next()
             .map_or(1, char::len_utf8);
@@ -982,7 +1012,7 @@ impl<'a> Parser<'a> {
     }
 
     fn rest(&self) -> &'a str {
-        &self.text[self.pos.min(self.text.len())..]
+        tail(self.text, self.pos.min(self.text.len()))
     }
 
     fn ws(&mut self) {
@@ -1011,7 +1041,7 @@ impl<'a> Parser<'a> {
         self.ws();
         let end =
             hyphen_word_end(self.text, self.pos).or_else(|| ident_end(self.text, self.pos))?;
-        Some((&self.text[self.pos..end], self.pos, end))
+        Some((span(self.text, self.pos, end), self.pos, end))
     }
 
     /// A field name at the cursor, `-` included (`c-uri`); GROUP-BY and
@@ -1022,7 +1052,7 @@ impl<'a> Parser<'a> {
             return None;
         }
         let end = field_end(self.text, self.pos)?;
-        Some((&self.text[self.pos..end], self.pos, end))
+        Some((span(self.text, self.pos, end), self.pos, end))
     }
 
     fn keyword_at(&mut self, words: &[&str]) -> Option<Word<'a>> {
@@ -1066,18 +1096,19 @@ impl<'a> Parser<'a> {
     fn string(&mut self) -> Parsed<(&'a str, usize, usize)> {
         self.ws();
         let start = self.pos;
-        let quote = self.rest().chars().next().unwrap_or('"');
-        let mut chars = self.text[start + 1..].char_indices();
+        let mut chars = self.rest().char_indices();
+        let quote = chars.next().map_or('"', |(_, quote)| quote);
         while let Some((i, c)) = chars.next() {
             if c == '\\' {
                 chars.next();
                 continue;
             }
             if c == quote {
-                let end = start + 1 + i + 1;
+                let end = start + i + 1;
                 self.pos = end;
                 self.tok(start, end, "string");
-                return Ok((&self.text[start + 1..end - 1], start, end));
+                // Inside the one-byte quotes.
+                return Ok((span(self.text, start + 1, end - 1), start, end));
             }
         }
         fail("unterminated string", start)
@@ -1237,8 +1268,8 @@ impl<'a> Parser<'a> {
                         !(p.is_alphanumeric() || p == '_' || p == '.' || p == '-')
                     })
                     && (hyphen_word_end(text, i).is_some()
-                        || trailing_limit(&text[i..])
-                        || (i > 0 && statement_alias(&text[i..]))) =>
+                        || trailing_limit(tail(text, i))
+                        || (i > 0 && statement_alias(tail(text, i)))) =>
                 {
                     return true;
                 }
@@ -1422,20 +1453,21 @@ impl<'a> Parser<'a> {
             return Ok(Node::leaf(Kind::Term, start, self.pos));
         }
         if let Some(end) = field_end(self.text, self.pos) {
-            let name = &self.text[self.pos..end];
-            let after = self.text[end..].trim_start();
+            let name = span(self.text, self.pos, end);
+            let after = tail(self.text, end).trim_start();
             if name.contains('-') && starts_with_operator(after) {
                 return self.field_term(name, self.pos, end);
             }
             if name.contains('-')
                 && starts_with_in(after)
-                && after[2..].trim_start().starts_with(['"', '\''])
+                && strip_prefix_ignore_case(after, "in")
+                    .is_some_and(|rest| rest.trim_start().starts_with(['"', '\'']))
             {
                 return self.context_term(name, self.pos, end);
             }
         }
         if let Some((name, s, e)) = self.word_at() {
-            let after = self.text[e..].trim_start();
+            let after = tail(self.text, e).trim_start();
             if after.starts_with('(') {
                 return self.call(name, s, e);
             }
@@ -1450,7 +1482,7 @@ impl<'a> Parser<'a> {
         let Some(end) = bare_end(self.text, self.pos) else {
             return fail(format!("unexpected `{ch}`"), self.pos);
         };
-        let word = &self.text[self.pos..end];
+        let word = span(self.text, self.pos, end);
         if OPERATOR_WORDS
             .iter()
             .any(|op| word.eq_ignore_ascii_case(op))
@@ -1495,23 +1527,21 @@ impl<'a> Parser<'a> {
             self.value(name)?;
             return Ok(Node::leaf(Kind::Term, s, self.pos));
         }
-        let mut op: &str =
-            if rest.starts_with("==") || rest.starts_with("<=") || rest.starts_with(">=") {
-                &rest[..2]
-            } else {
-                &rest[..rest.chars().next().map_or(0, char::len_utf8)]
-            };
+        let mut op: &str = ["==", "<=", ">="]
+            .into_iter()
+            .find(|op| rest.starts_with(op))
+            .unwrap_or_else(|| first_char(rest));
         self.tok(self.pos, self.pos + op.len(), "operator");
         self.pos += op.len();
         if op == ":" || op == "=" {
             self.ws();
             let rest = self.rest();
-            if rest.starts_with("<=") || rest.starts_with(">=") {
-                op = &rest[..2];
+            if let Some(two) = ["<=", ">="].into_iter().find(|op| rest.starts_with(op)) {
+                op = two;
                 self.tok(self.pos, self.pos + 2, "operator");
                 self.pos += 2;
-            } else if rest.starts_with('<') || rest.starts_with('>') {
-                op = &rest[..1];
+            } else if let Some(one) = ["<", ">"].into_iter().find(|op| rest.starts_with(op)) {
+                op = one;
                 self.tok(self.pos, self.pos + 1, "operator");
                 self.pos += 1;
             }
@@ -1579,17 +1609,17 @@ impl<'a> Parser<'a> {
             _ => {}
         }
         if let Some((name, s, e)) = self.word_at()
-            && self.text[e..].trim_start().starts_with('(')
+            && tail(self.text, e).trim_start().starts_with('(')
         {
             self.call(name, s, e)?;
             return Ok(());
         }
         if is_time_field(field)
             && let Some(end) = bare_end(self.text, self.pos)
-            && !self.text[self.pos..end].eq_ignore_ascii_case("null")
+            && !span(self.text, self.pos, end).eq_ignore_ascii_case("null")
         {
             let start = self.pos;
-            let word = &self.text[start..end];
+            let word = span(self.text, start, end);
             self.diag(
                 codes::EXABEAM_TIME_EXACT,
                 format!("{field} takes a range, not an exact value: write {field}:[low TO high]"),
@@ -1629,7 +1659,7 @@ impl<'a> Parser<'a> {
             return fail("expected a value", self.pos);
         };
         let start = self.pos;
-        let word = &self.text[start..end];
+        let word = span(self.text, start, end);
         self.pos = end;
         let capture = self.bare_capture(word, field, start, end, comparison)?;
         self.tok(start, end, capture);
@@ -1723,7 +1753,7 @@ impl<'a> Parser<'a> {
             && let Some((net_start, net_end)) = cidr_at(self.text, self.pos)
         {
             self.tok(net_start, net_end, "constant");
-            let net = &self.text[net_start..net_end];
+            let net = span(self.text, net_start, net_end);
             match cidr_version(net) {
                 None => self.diag(
                     codes::EXABEAM_RANGE,
@@ -1782,7 +1812,7 @@ impl<'a> Parser<'a> {
         if end == start {
             return fail("expected a range bound", self.pos);
         }
-        let word = &self.text[start..end];
+        let word = span(self.text, start, end);
         self.pos = end;
         let capture = if word != "*" && is_number(word) {
             "number"
@@ -1896,7 +1926,7 @@ impl<'a> Parser<'a> {
                 let start = self.pos;
                 self.tok(start, end, "error");
                 self.pos = end;
-                args.push((&self.text[start..end], start, end));
+                args.push((span(self.text, start, end), start, end));
                 if function.is_some() {
                     self.diag(
                         codes::EXABEAM_FUNCTION_ARITY,
@@ -2180,7 +2210,7 @@ impl<'a> Parser<'a> {
         }
         if self.in_foreach > 0 && seen.iter().any(|w| matches!(*w, "GROUP-BY" | "ORDER-BY")) {
             // The character before the cursor, whole (a `]` or a multi-byte one).
-            let at = self.text[..self.pos]
+            let at = span(self.text, 0, self.pos)
                 .char_indices()
                 .last()
                 .map_or(0, |(i, _)| i);
@@ -2221,7 +2251,7 @@ impl<'a> Parser<'a> {
         info.fields = new
             .iter()
             .filter(|t| matches!(t.capture, "property" | "type"))
-            .map(|t| text[t.start..t.end].to_lowercase())
+            .map(|t| span(text, t.start, t.end).to_lowercase())
             .collect();
         if seen.contains(&"SELECT") {
             info.has_select = true;
@@ -2231,7 +2261,7 @@ impl<'a> Parser<'a> {
                 .chain(
                     new.iter()
                         .filter(|t| t.capture == "variable")
-                        .map(|t| text[t.start..t.end].to_lowercase()),
+                        .map(|t| span(text, t.start, t.end).to_lowercase()),
                 )
                 .collect();
             if select_star.is_some() {
@@ -2245,7 +2275,7 @@ impl<'a> Parser<'a> {
         self.ws();
         let start = self.pos;
         let digits = self.rest().bytes().take_while(u8::is_ascii_digit).count();
-        let value = &self.text[start..start + digits];
+        let value = span(self.text, start, start + digits);
         if digits == 0 || value.bytes().all(|b| b == b'0') {
             return fail("LIMIT takes a positive integer", self.pos);
         }
@@ -2289,7 +2319,7 @@ impl<'a> Parser<'a> {
                 let Some((name, s, e)) = self.column_at() else {
                     return fail("expected a column", self.pos);
                 };
-                if self.text[e..].trim_start().starts_with('(') {
+                if tail(self.text, e).trim_start().starts_with('(') {
                     self.select_call(name, s, e)?;
                     items.push((name, true, s, e));
                 } else {
@@ -2490,18 +2520,16 @@ fn starts_with_operator(text: &str) -> bool {
 
 /// `(?i)in\b` at the start of `text`.
 fn starts_with_in(text: &str) -> bool {
-    text.len() >= 2
-        && text.as_bytes()[..2].eq_ignore_ascii_case(b"in")
-        && text[2..].chars().next().is_none_or(|c| !is_word_char(c))
+    strip_prefix_ignore_case(text, "in")
+        .is_some_and(|rest| rest.chars().next().is_none_or(|c| !is_word_char(c)))
 }
 
 /// `(?i)as\s+name\s*` before the end, a pipe, GROUP-BY, ORDER-BY, or LIMIT:
 /// a statement alias (`WHERE vendor:"x" AS t`).
 fn statement_alias(text: &str) -> bool {
-    if text.len() < 2 || !text.as_bytes()[..2].eq_ignore_ascii_case(b"as") {
+    let Some(rest) = strip_prefix_ignore_case(text, "as") else {
         return false;
-    }
-    let rest = &text[2..];
+    };
     let after_ws = rest.trim_start_matches(char::is_whitespace);
     if after_ws.len() == rest.len() {
         return false;
@@ -2509,41 +2537,40 @@ fn statement_alias(text: &str) -> bool {
     let Some(end) = ident_like_end(after_ws, 0, false) else {
         return false;
     };
-    if after_ws[..end].contains('.') {
+    let (name, after_name) = (span(after_ws, 0, end), tail(after_ws, end));
+    if name.contains('.') {
         return false;
     }
-    let tail = after_ws[end..].trim_start_matches(char::is_whitespace);
-    if tail.len() == after_ws[end..].len() && !tail.is_empty() && !tail.starts_with('|') {
+    let tail = after_name.trim_start_matches(char::is_whitespace);
+    if tail.len() == after_name.len() && !tail.is_empty() && !tail.starts_with('|') {
         return false; // the name runs on: not a whole word
     }
     tail.is_empty()
         || tail.starts_with('|')
         || hyphen_word_end(tail, 0).is_some()
-        || (tail.len() >= 5
-            && tail.as_bytes()[..5].eq_ignore_ascii_case(b"limit")
-            && tail[5..].chars().next().is_none_or(|c| !is_word_char(c)))
+        || strip_prefix_ignore_case(tail, "limit")
+            .is_some_and(|rest| rest.chars().next().is_none_or(|c| !is_word_char(c)))
 }
 
 /// `(?i)limit\s+\d+\s*\Z`: a trailing `LIMIT <n>`.
 fn trailing_limit(text: &str) -> bool {
-    if text.len() < 5 || !text.as_bytes()[..5].eq_ignore_ascii_case(b"limit") {
+    let Some(rest) = strip_prefix_ignore_case(text, "limit") else {
         return false;
-    }
-    let rest = &text[5..];
+    };
     let after_ws = rest.trim_start_matches(char::is_whitespace);
     if after_ws.len() == rest.len() {
         return false;
     }
-    let digits = after_ws.bytes().take_while(u8::is_ascii_digit).count();
-    digits > 0
-        && after_ws[digits..]
+    let after_digits = after_ws.trim_start_matches(|c: char| c.is_ascii_digit());
+    after_digits.len() < after_ws.len()
+        && after_digits
             .trim_start_matches(char::is_whitespace)
             .is_empty()
 }
 
 /// `\s*([0-9A-Fa-f:.]+)/(\d{1,3})\s*\]` at `at`: the network's span.
 fn cidr_at(text: &str, at: usize) -> Option<(usize, usize)> {
-    let rest = &text[at..];
+    let rest = tail(text, at);
     let lead = rest.len() - rest.trim_start_matches(char::is_whitespace).len();
     let start = at + lead;
     let b = text.as_bytes();
@@ -2562,7 +2589,7 @@ fn cidr_at(text: &str, at: usize) -> Option<(usize, usize)> {
     if j == digits_start {
         return None;
     }
-    let after = &text[j..];
+    let after = tail(text, j);
     let close = j + (after.len() - after.trim_start_matches(char::is_whitespace).len());
     (b.get(close) == Some(&b']')).then_some((start, j))
 }
@@ -2752,5 +2779,35 @@ mod unit {
         assert_eq!(cidr_version("10.0.0.0/8"), Some(4));
         assert_eq!(cidr_version("10.0.0.0/33"), None);
         assert_eq!(cidr_version("fd00::/8"), Some(6));
+    }
+    /// #1946: the checker's text helpers among multi-byte text.
+    #[test]
+    fn helpers_read_multi_byte_text() {
+        assert_eq!(strip_prefix_ignore_case("LiMité", "limit"), Some("é"));
+        assert_eq!(strip_prefix_ignore_case("é", "in"), None);
+        assert_eq!(strip_prefix_ignore_case("😀", "limit"), None);
+        assert_eq!(first_char("😀é"), "😀");
+        assert_eq!(first_char(""), "");
+        assert!(starts_with_in("IN (é)"));
+        assert!(!starts_with_in("iné"));
+        assert!(trailing_limit("limit 10 "));
+        assert!(!trailing_limit("limit é"));
+        assert!(!trailing_limit("limité 1"));
+        assert!(statement_alias("AS t"));
+        assert!(!statement_alias("as té"));
+        assert!(statement_alias("as t LIMIT 5"));
+        assert!(!statement_alias("as t limité"));
+        assert!(!statement_alias("asé t"));
+        assert_eq!(
+            hyphen_word_end("é group-by x", "é ".len()),
+            Some("é group-by".len())
+        );
+        assert_eq!(hyphen_word_end("order-byé", 0), None);
+        assert_eq!(bare_end("é😀 x", 0), Some("é😀".len()));
+        assert_eq!(
+            cidr_at("é[ 10.0.0.0/8 ]", "é[".len()),
+            Some(("é[ ".len(), "é[ 10.0.0.0/8".len()))
+        );
+        assert_eq!(datetime_ms("1970-01-01T00:00:01.5Z"), Some(1500));
     }
 }
