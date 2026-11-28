@@ -2269,7 +2269,6 @@ impl Sender<'_, '_> {
             Some(PlatformId::SentinelOne) => {
                 let table =
                     resolved_table(table, context.tenant).map_err(|e| unset_variable(&e))?;
-                // The body the dry run shows in its create or update write.
                 SentinelOne::compile(self.compile, rule, &table)
                     .map(|compiled| SentinelOne::body(&compiled))
             }

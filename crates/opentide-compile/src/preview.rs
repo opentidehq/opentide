@@ -12,13 +12,13 @@ use serde::de::DeserializeOwned;
 
 use crate::compiler::{
     Bitdefender, Compiler, Datadog, Elastic, Exabeam, GoogleSecops, Graylog, GraylogTarget,
-    Sentinel, Splunk, SplunkTarget, Sysdig,
+    Harfanglab, Sentinel, Splunk, SplunkTarget, Sysdig,
 };
 use crate::json::{Json, Object};
 use crate::rule::{CompileError, Rule};
 use crate::{
     Context, bitdefender, carbon_black, crowdstrike, datadog, deploy, exabeam, google_secops,
-    graylog, harfanglab, microsoft_defender, plan, sentinel_one, splunk,
+    graylog, microsoft_defender, plan, sentinel_one, splunk,
 };
 
 /// The tenant a preview compiles for: exclusions scoped to a tenant name are
@@ -211,7 +211,9 @@ fn tenant_writes(
         PlatformId::MicrosoftDefender => microsoft_defender::compile(cx, rule, tenant),
         PlatformId::SentinelOne => sentinel_one::compile(cx, rule, config, id),
         PlatformId::Crowdstrike => crowdstrike::compile(cx, rule, config, id),
-        PlatformId::Harfanglab => harfanglab::compile(cx, rule, config),
+        PlatformId::Harfanglab => {
+            Harfanglab::compile(cx, rule, config).map(|compiled| compiled.writes)
+        }
         PlatformId::Splunk => Splunk::compile(
             cx,
             rule,

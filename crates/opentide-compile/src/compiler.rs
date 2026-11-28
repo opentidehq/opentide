@@ -20,7 +20,7 @@ use crate::rule::{CompileError, Rule};
 use crate::strategy::StatusStrategy;
 use crate::{
     Context, bitdefender, crowdstrike, datadog, deploy, elastic, exabeam, google_secops, graylog,
-    microsoft_defender, preview, sentinel, sentinel_one, splunk, sysdig,
+    harfanglab, microsoft_defender, preview, sentinel, sentinel_one, splunk, sysdig,
 };
 
 /// The compile of one platform's rules, shared by the dry run and the deploy.
@@ -414,5 +414,37 @@ impl Compiler for Crowdstrike {
 
     fn body(compiled: &Json) -> Json {
         compiled.clone()
+    }
+}
+
+/// HarfangLab: the Sigma rule's or YARA file's write for one tenant, whose
+/// `setup` gives its `url`, by the block's own kind, or a delete for a
+/// DELETION status ([`harfanglab::compile`]), which the dry run shows. Its
+/// body is the deploy request's: the kind and the compiled rule
+/// ([`harfanglab::deploy_body`]).
+#[derive(Debug, Clone, Copy)]
+pub struct Harfanglab;
+
+impl Compiler for Harfanglab {
+    const PLATFORM: PlatformId = PlatformId::Harfanglab;
+
+    /// The tenant's table, its variables resolved in a deploy.
+    type Target<'t> = &'t Json;
+
+    type Compiled = harfanglab::Compiled;
+
+    fn compile(
+        cx: &Context<'_>,
+        rule: &Rule,
+        tenant: &Json,
+    ) -> Result<harfanglab::Compiled, CompileError> {
+        Ok(harfanglab::Compiled {
+            kind: harfanglab::Kind::of(rule),
+            writes: harfanglab::compile(cx, rule, tenant)?,
+        })
+    }
+
+    fn body(compiled: &harfanglab::Compiled) -> Json {
+        harfanglab::deploy_body(compiled)
     }
 }
