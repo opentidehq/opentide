@@ -123,7 +123,7 @@ impl Transport for Wire {
 }
 
 impl TransportFactory for Wire {
-    fn make(&self, _spec: &TransportSpec<'_>) -> Result<Arc<dyn Transport>, String> {
+    fn make(&self, _spec: &TransportSpec<'_>) -> Result<Arc<dyn Transport>, transport::SetupError> {
         Ok(Arc::new(self.clone()))
     }
 }
