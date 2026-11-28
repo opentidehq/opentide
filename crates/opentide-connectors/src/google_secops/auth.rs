@@ -66,7 +66,7 @@ pub const TENANT_UNAUTHORIZED: &str = crate::tenant_codes::GOOGLE_SECOPS.unautho
 /// system's clock, or a fixed one in a test.
 pub type Clock = Arc<dyn Fn() -> Timestamp + Send + Sync>;
 
-/// The system clock.
+/// A [`Clock`] that reads the system's time.
 pub fn system_clock() -> Clock {
     Arc::new(Timestamp::now)
 }
@@ -82,7 +82,8 @@ pub enum Credentials {
         private_key: Secret,
         /// `private_key_id`, the assertion's `kid`.
         private_key_id: Option<String>,
-        /// `token_uri`.
+        /// `token_uri`, where the token is obtained; Google's default when the JSON
+        /// names none.
         token_uri: String,
         /// `quota_project_id`.
         quota_project: Option<String>,
@@ -96,7 +97,8 @@ pub enum Credentials {
         client_secret: Secret,
         /// `refresh_token`.
         refresh_token: Secret,
-        /// `token_uri`.
+        /// `token_uri`, where the token is obtained; Google's default when the JSON
+        /// names none.
         token_uri: String,
         /// `quota_project_id`.
         quota_project: Option<String>,
@@ -435,7 +437,7 @@ impl Authorizer {
         }
     }
 
-    /// The credentials.
+    /// The credentials it obtains tokens with.
     pub fn credentials(&self) -> &Credentials {
         &self.credentials
     }

@@ -76,7 +76,8 @@ impl Credential {
 /// What resolving one value gave, with what a person should be told.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Resolved {
-    /// The credential.
+    /// The value to send, or the placeholder of an unset `$NAME` in a command
+    /// that sends nothing.
     pub credential: Credential,
     /// Set when the value was read the 0.21.0 way: `$text` from the variable
     /// `text`, though `text` is not a variable name (`$AZ-SECRET`). The run

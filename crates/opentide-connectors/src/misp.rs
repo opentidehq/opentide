@@ -18,7 +18,8 @@ use crate::{Environment, HttpClient, HttpSettings, TenantLabel};
 
 /// `REQUEST_TIMEOUT_SECONDS`.
 pub const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
-/// `SEARCH_PAGE_SIZE`.
+/// The events one search page asks for (`limit`); a shorter page is the last
+/// (`SEARCH_PAGE_SIZE`).
 pub const SEARCH_PAGE_SIZE: i64 = 100;
 /// The pages a search reads at most (`_PAGE_CAP`).
 const PAGE_CAP: i64 = 1000;
@@ -126,9 +127,9 @@ impl RemoteEvent {
 pub struct TemplateView {
     /// Whether the instance has it.
     pub found: bool,
-    /// Its version.
+    /// The template's `version`.
     pub version: Option<i64>,
-    /// Its relations.
+    /// The `object_relation` of each of its elements, each once, in order.
     pub relations: Vec<String>,
     /// The values `opentide-type` takes, when the template lists them.
     pub type_values: Option<Vec<String>>,
