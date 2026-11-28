@@ -6,34 +6,34 @@ tenant or to the network goes through it, but a platform plugin's own requests. 
 implement the platforms on it; UC-4.5 adds the Python plugin hook to its registry (`plugin.rs`; the
 host is `bindings/python/src/plugins.rs`, the plugin API `src/opentide/plugins.py`).
 
-| Module | What | Python it replaces |
-|--------|------|--------------------|
-| `http.rs` | `HttpClient`: one client per tenant, from that tenant's `HttpSettings` (TLS, CA bundle, timeout, retries, requests in flight), the run's environment and its proxies, on the build's `Transport` or the one the run installed; `request` builds a `RequestBuilder`, `send` retries, holds the in-flight limit and cancels, `bytes` reads an answer; failures map to `ConnectorError` | `platforms/transport.py` `TenantSession` |
-| `transport.rs` | The wire under `HttpClient`: the `Transport` trait (a whole `Request` in, a whole `Response` or a `TransportFailure` out), opentide's own `Request`, `RequestBuilder`, `Response` and `http`'s `Method`, `StatusCode` and headers, never reqwest's; `ReqwestTransport` (reqwest on rustls, every target but WASI, the default) and `install` (a run's own transport: `opentide serve` asks its client to fetch, for the WASI build) | the `requests` session under `TenantSession` |
-| `tls.rs` | rustls on ring: the system's roots plus the CA bundles `SSL_CERT_FILE`, `REQUESTS_CA_BUNDLE`, `CURL_CA_BUNDLE` and the tenant's own; `verify = false` accepts any certificate and is never turned back on by an exported bundle | `tenant_tls_verify`, `merge_environment_settings` |
-| `proxy.rs` | `--proxy`/`OPENTIDE_PROXY`, then `https_proxy`/`HTTPS_PROXY`, `http_proxy`/`HTTP_PROXY`, `all_proxy`, with `no_proxy`; lower case wins, as urllib reads them | `CliContext.apply_environment`, `urllib.request.getproxies_environment` |
-| `retry.rs` | `RetryPolicy`: the one policy every retrying connector mounts (`standard`: 3 retries, 0.5 s doubling); a connection never made (DNS, refused, the proxy, the connect timeout) is retried for any method; a 408/429/502/503/504 answer for idempotent requests only (`GET`, `HEAD`, `OPTIONS`, `PUT`, `DELETE`, unless the request is marked otherwise with `Request::set_idempotent`); a read timeout, a refused certificate and any other failure never; `Retry-After` on 429/503 at most 120 s | — (not a port: urllib3's `Retry` re-sent a `POST`) |
-| `credentials.rs` | `$NAME`/`${NAME}` (opentide-workspace's `env_reference`), the 0.21.0 `$text` reading, placeholders for runs that send nothing; `Secret` prints `***`; `keys(PlatformId)`: the client and setup keys a runner checks for unset placeholders |  `core/environment.py` `fetch_config_envvar`, `defer_missing_envvars` |
-| `tenant.rs` | `Tenant` from a `setup` table: `ssl` words and `$VAR`, every other value a credential; `TenantLabel`; `configured`: a resolved configuration's tenants of a platform as `(name, setup)`; `default_host(PlatformId)`: where a tenant without a URL is reported unreachable | `platforms/config.py` `_tenant_ssl`, `transport.tenant_tls_verify` |
-| `tenant_codes.rs` | The tenant codes Bitdefender, Exabeam, Google SecOps and Graylog report in place of the generic ones (`<platform>_tenant_unreachable`, `_tenant_unauthorized`, `_request_failed`), built once from each platform's prefix (`tenant_codes!`); each code keeps its own page in `src/opentide/data/diagnostics/` | |
-| `error.rs` | `ConnectorError` and its `failure.code`; messages name `scheme://host[:port]` only, never a path, query or credential | `transport.py` `TenantUnreachableError`, `reaching_tenant` |
-| `plugin.rs` | Platform plugins (UC-4.5, #835): `PluginHost` (the Python binding is the one host), `with_plugins` (the built-in platforms, then the plugins; a plugin never replaces a built-in), `unavailable` (what a host-less command line says) | `platforms/registry.py`'s entry points |
-| `connector.rs` | `Deployer`, `LiveValidator`, `QueryRunner`, `Sharer` and `StateMigrator` (deprecated: nothing implements or calls them, removed in 2.0, #1961), `ConfigurationCheck` (a plugin's own check of its rule block), `Platform` and the `Registry`; the query types every runner shares: `QueryRequest`, `QueryOutcome`, `QueryColumn`, `TimeWindow`, `LiveCheck`, `flatten`, `columns_of`, `kql_with_limit`; `lib.rs`'s `builtin()` registers the fourteen built-in platforms and `http_settings(platform, timeout)` picks each one's client settings | `platforms/base.py`, `registry.py`, `query/models.py`, `query/runner.py` |
-| `runtime.rs` | `block_on` (a runtime per call, for the synchronous CLI), `fan_out` over tenants (bounded, ordered, cancellable), `cancel_when` (Ctrl-C) | the query and deploy loops |
-| `progress.rs` | `tenant` progress events (`OPENTIDE_PROGRESS=json`) | `core/progress_events.py` `tenant` |
-| `answer.rs` | `Answer`: a tenant's answer read whole (status, type, bytes, time to headers), `exchange`; `describe_answer` for one that is not the API's JSON (a gateway's page), quoting its title or body with Rust's `{:?}` | `transport.py` `describe_answer`, `not_json_detail` |
-| `text.rs` | `json_text`: a JSON value from an answer as text, where a client puts it into a message or a text field (a string as it is, anything else as its compact JSON) | `str()` of a parsed value |
-| `encode.rs` | Query strings and form bodies as `requests` encodes them (`quote_plus`), through `percent-encoding`; `quote(text, safe)` for a path | `urllib.parse.urlencode`, `quote` |
-| `token.rs` | `TokenCache`: a platform's bearer tokens per tenant and scope until 5 min before `expires_in` (none kept without one), and the 401 rule (one new sign-in, one resend, then `Authentication`) | |
-| `entra.rs` | Entra ID's client-credentials sign-in (v2.0 token endpoint, four form fields, the tenant's client) for Sentinel and Defender | |
-| `crowdstrike.rs` | CrowdStrike (UC-4.2): its own OAuth2 token endpoint on the shared `TokenCache`, correlation rules, Next-Gen SIEM query jobs stopped when the runner stops waiting | `platforms/crowdstrike/` |
-| `harfanglab.rs` | HarfangLab (UC-4.2): Sigma rules (`PUT`, `POST` on a 404), YARA files, telemetry searches (`shlex` words) | `platforms/harfanglab/` |
-| `sysdig.rs` | Sysdig (UC-4.2): Falco rules and runtime policies, `deploy_rule` with the deployment-state change it makes | `platforms/sysdig/client.py`, `deployer.py` |
-| `splunk.rs` | Splunk (UC-4.3, #833): the Python Splunk client's requests on opentide's urllib handler: saved searches (`_apply_saved_search`: looked up, created, set in two updates, deleted), one-shot searches, `search/parser`, the `server/info` reads that choose the v1 or v2 search endpoints; an HTML page in place of the API is a gateway's (`ConnectorError::Gateway`) or a proxy's | `platforms/splunk/`, the Python Splunk client |
-| `carbon_black.rs` | Carbon Black Cloud (UC-4.3): cbc_sdk's requests: watchlist reports (`_deploy_to_org`), process searches (validated, started, polled, read in pages), `search_validation`; the SDK's error texts | `platforms/carbon_black/`, `cbc_sdk` |
-| `sentinel.rs` | Sentinel (UC-4.3): ARM `alertRules` (create or replace, delete, list with `nextLink`: the listing `generate extract sentinel` reads, UC-4.4e), the Entra sign-in (`entra.rs`, one token per tenant and scope: ARM's, Log Analytics'), Log Analytics queries as one REST call | `platforms/sentinel/`, `azure-identity`, `azure-monitor-query` |
-| `defender.rs`, `elastic.rs`, `sentinel_one.rs` | The platforms of UC-4.2b (#832): client, deploy calls, live check (`LiveValidator`) and query runner (`QueryRunner`) of each, request for request, on the shared query types (UC-4.2c); Elastic's Elasticsearch checks, rule preview, query text and advisories. Elastic has no `Deployer`: its deploy takes the rule's block (`deploy_rule`). The listings `generate extract` reads (UC-4.4b): Defender's `list_rules`, Elastic's `find_rules` | `platforms/<platform>/` |
-| `misp.rs` | MISP's REST API, the subset `opentide share` speaks (UC-4.4b, #834): `MispClient` on `HttpClient` (the key in `Authorization`, JSON both ways, 30 s, TLS per block), the `Misp` trait the CLI's engine calls, answers classified into `MispCallError` with a fixed reason, never a body | `sharing/client.py` (PyMISP's `_prepare_request`) |
+| Module | What |
+|--------|------|
+| `http.rs` | `HttpClient`: one client per tenant, from that tenant's `HttpSettings` (TLS, CA bundle, timeout, retries, requests in flight), the run's environment and its proxies, on the build's `Transport` or the one the run installed; `request` builds a `RequestBuilder`, `send` retries, holds the in-flight limit and cancels, `bytes` reads an answer; failures map to `ConnectorError` |
+| `transport.rs` | The wire under `HttpClient`: the `Transport` trait (a whole `Request` in, a whole `Response` or a `TransportFailure` out), opentide's own `Request`, `RequestBuilder`, `Response` and `http`'s `Method`, `StatusCode` and headers, never reqwest's; `ReqwestTransport` (reqwest on rustls, every target but WASI, the default) and `install` (a run's own transport: `opentide serve` asks its client to fetch, for the WASI build) |
+| `tls.rs` | rustls on ring: the system's roots plus the CA bundles `SSL_CERT_FILE`, `REQUESTS_CA_BUNDLE`, `CURL_CA_BUNDLE` and the tenant's own; `verify = false` accepts any certificate and is never turned back on by an exported bundle |
+| `proxy.rs` | `--proxy`/`OPENTIDE_PROXY`, then `https_proxy`/`HTTPS_PROXY`, `http_proxy`/`HTTP_PROXY`, `all_proxy`, with `no_proxy`; lower case wins, as urllib reads them |
+| `retry.rs` | `RetryPolicy`: the one policy every retrying connector mounts (`standard`: 3 retries, 0.5 s doubling); a connection never made (DNS, refused, the proxy, the connect timeout) is retried for any method; a 408/429/502/503/504 answer for idempotent requests only (`GET`, `HEAD`, `OPTIONS`, `PUT`, `DELETE`, unless the request is marked otherwise with `Request::set_idempotent`); a read timeout, a refused certificate and any other failure never; `Retry-After` on 429/503 at most 120 s |
+| `credentials.rs` | `$NAME`/`${NAME}` (opentide-workspace's `env_reference`), the 0.21.0 `$text` reading, placeholders for runs that send nothing; `Secret` prints `***`; `keys(PlatformId)`: the client and setup keys a runner checks for unset placeholders |
+| `tenant.rs` | `Tenant` from a `setup` table: `ssl` words and `$VAR`, every other value a credential; `TenantLabel`; `configured`: a resolved configuration's tenants of a platform as `(name, setup)`; `default_host(PlatformId)`: where a tenant without a URL is reported unreachable |
+| `tenant_codes.rs` |
+| `error.rs` | `ConnectorError` and its `failure.code`; messages name `scheme://host[:port]` only, never a path, query or credential |
+| `plugin.rs` | Platform plugins (UC-4.5, #835): `PluginHost` (the Python binding is the one host), `with_plugins` (the built-in platforms, then the plugins; a plugin never replaces a built-in), `unavailable` (what a host-less command line says) |
+| `connector.rs` | `Deployer`, `LiveValidator`, `QueryRunner`, `Sharer` and `StateMigrator` (deprecated: nothing implements or calls them, removed in 2.0, #1961), `ConfigurationCheck` (a plugin's own check of its rule block), `Platform` and the `Registry`; the query types every runner shares: `QueryRequest`, `QueryOutcome`, `QueryColumn`, `TimeWindow`, `LiveCheck`, `flatten`, `columns_of`, `kql_with_limit`; `lib.rs`'s `builtin()` registers the fourteen built-in platforms and `http_settings(platform, timeout)` picks each one's client settings |
+| `runtime.rs` | `block_on` (a runtime per call, for the synchronous CLI), `fan_out` over tenants (bounded, ordered, cancellable), `cancel_when` (Ctrl-C) |
+| `progress.rs` | `tenant` progress events (`OPENTIDE_PROGRESS=json`) |
+| `answer.rs` | `Answer`: a tenant's answer read whole (status, type, bytes, time to headers), `exchange`; `describe_answer` for one that is not the API's JSON (a gateway's page), quoting its title or body with Rust's `{:?}` |
+| `text.rs` | `json_text`: a JSON value from an answer as text, where a client puts it into a message or a text field (a string as it is, anything else as its compact JSON) |
+| `encode.rs` | Query strings and form bodies as `requests` encodes them (`quote_plus`), through `percent-encoding`; `quote(text, safe)` for a path |
+| `token.rs` |
+| `entra.rs` |
+| `crowdstrike.rs` | CrowdStrike (UC-4.2): its own OAuth2 token endpoint on the shared `TokenCache`, correlation rules, Next-Gen SIEM query jobs stopped when the runner stops waiting |
+| `harfanglab.rs` | HarfangLab (UC-4.2): Sigma rules (`PUT`, `POST` on a 404), YARA files, telemetry searches (`shlex` words) |
+| `sysdig.rs` | Sysdig (UC-4.2): Falco rules and runtime policies, `deploy_rule` with the deployment-state change it makes |
+| `splunk.rs` | Splunk (UC-4.3, #833): the Python Splunk client's requests on opentide's urllib handler: saved searches (`_apply_saved_search`: looked up, created, set in two updates, deleted), one-shot searches, `search/parser`, the `server/info` reads that choose the v1 or v2 search endpoints; an HTML page in place of the API is a gateway's (`ConnectorError::Gateway`) or a proxy's |
+| `carbon_black.rs` | Carbon Black Cloud (UC-4.3): cbc_sdk's requests: watchlist reports (`_deploy_to_org`), process searches (validated, started, polled, read in pages), `search_validation`; the SDK's error texts |
+| `sentinel.rs` | Sentinel (UC-4.3): ARM `alertRules` (create or replace, delete, list with `nextLink`: the listing `generate extract sentinel` reads, UC-4.4e), the Entra sign-in (`entra.rs`, one token per tenant and scope: ARM's, Log Analytics'), Log Analytics queries as one REST call |
+| `defender.rs`, `elastic.rs`, `sentinel_one.rs` | The platforms of UC-4.2b (#832): client, deploy calls, live check (`LiveValidator`) and query runner (`QueryRunner`) of each, request for request, on the shared query types (UC-4.2c); Elastic's Elasticsearch checks, rule preview, query text and advisories. Elastic has no `Deployer`: its deploy takes the rule's block (`deploy_rule`). The listings `generate extract` reads (UC-4.4b): Defender's `list_rules`, Elastic's `find_rules` |
+| `misp.rs` | MISP's REST API, the subset `opentide share` speaks (UC-4.4b, #834): `MispClient` on `HttpClient` (the key in `Authorization`, JSON both ways, 30 s, TLS per block), the `Misp` trait the CLI's engine calls, answers classified into `MispCallError` with a fixed reason, never a body |
 
 ## Place
 
@@ -71,7 +71,7 @@ Each platform is a module with its client (the requests), its `Platform` (the tr
 implements: no `LiveValidator` where the API cannot check a query) and `http_defaults()` (the
 timeout and retries its Python client mounts). A cassette scenario per platform and operation
 (`tests/cassettes/<platform>/`, a `tenant.py` stand-in built from what the Python tests mock and a
-`client.py` that drives the oracle's own client or deployer) is replayed by
+`client.py` that drives opentide 0.23.0's own client or deployer) is replayed by
 `tests/<platform>.rs`, which also asserts the outcomes `client.py` printed when it recorded.
 
 A query runner (`QueryRunner`) saves no search or rule, and stops an asynchronous search it stops
@@ -92,7 +92,7 @@ sample connector against `tests/cassettes/mock-platform/deploy.json`; a changed 
 credential in any cassette).
 
 `cargo nextest run -p opentide-connectors defender elastic sentinel_one splunk carbon_black sentinel`: each platform against its
-cassettes (`tests/cassettes/<platform>/<scenario>.json`, recorded from the oracle against the stand-in tenant
+cassettes (`tests/cassettes/<platform>/<scenario>.json`, recorded from opentide 0.23.0 against the stand-in tenant
 `tenant.py` beside them), the inputs the Python client was given in `tests/fixtures/<platform>.json` (written by
 `client.py fixture`; Splunk's deploy steps by `cargo run -p opentide-connectors --example splunk_client -- fixture`, and its `splunk/deploy` cassette is recorded from that example, #1657); a changed value fails.
 

@@ -1,5 +1,5 @@
 //! `opentide serve`'s protocol (UC-3.8, #830): the scenarios the Python host
-//! was held to (`tests/test_cli/test_serve.py`, vscode-extension's
+//! was held to (the Python suite's serve tests, vscode-extension's
 //! `fake-opentide.mjs`), on the Rust host, and the `serve` session of
 //! `tests/golden/cases.toml` held to its snapshots.
 //!

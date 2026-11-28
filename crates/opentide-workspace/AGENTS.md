@@ -1,16 +1,13 @@
 # opentide-workspace — agent guide
 
 Loading a Tide workspace once, in parallel, into the index the CLI, the SDK, `serve`, MCP and the
-language server share (plan §4, the `opentide-workspace` domain crate; UC-2.1, #816). It ports the
-oracle's `core/root.py`, `registry/discovery.py`, `registry/paths.py`, `registry/catalogue.py`,
-`registry/builder.py` (object loading), `registry/signals.py`, `core/chaining.py` and the
-references `validation/checks/cross_object.py` follows. It runs `validate` (UC-2.2, #817:
-`validation/`, `cli/services/validation.py`, `cli/ui/diagnostics.py`) and reports every finding
+language server share (plan §4, the `opentide-workspace` domain crate; UC-2.1, #816). It does the
+workspace root and path discovery, the catalogue, object loading, signals, chaining and the
+cross-object references. It runs `validate` (UC-2.2, #817) and reports every finding
 as the one `Diagnostic` ([ADR 0010](../../docs/internal/adr/0010-one-diagnostic-model.md)). It
 runs `lint`, `validate --fix` (safe edits as text splices) and `--watch`'s pass selection (UC-2.3,
-#818: `cli/services/lint.py`, `cli/ui/fixes.py`, `cli/ui/watch.py`), and builds the catalogue,
-coverage, `info`'s data and `rules unreviewed` (UC-2.4, #819: `cli/services/catalog.py`,
-`info.py`, `rules.py`). The queries check and the language server come next (UC-2.5, UC-2.6).
+#818), and builds the catalogue, coverage, `info`'s data and `rules unreviewed` (UC-2.4, #819).
+The queries check and the language server come next (UC-2.5, UC-2.6).
 
 ## Place
 
@@ -27,27 +24,27 @@ source (`release-pipeline.yml` `sources`, `scripts/ci-local.sh`).
 | `src/root.rs` | `RootOptions` (`--repo`, `OPENTIDE_REPO_ROOT`, `OPENTIDE_TIDE_WORKSPACE`, the working directory: the host passes them, `from_env` reads the process's), `resolve` |
 | `src/config.rs` | The configuration folders read through the `FileSystem` and resolved once (`opentide_schema::configuration::resolve`), `paths.toml` checked, the object folders (`load`); `resolve_only`, the merged files unchecked, for what reads a configuration whose `paths.toml` its model refuses (`setup ci`'s statuses, #957) |
 | `src/discover.rs` | Object files: direct children of a family folder, `.yaml`/`.yml` case-sensitively, `.debug.*` left out; deeper files are nested; linked folders are not entered |
-| `src/load.rs` | One file: bytes to a YAML 1.2 `Document`, or its `Failure` (`not_utf8_problem` and `root_mapping_problem` word for word as the oracle's) |
+| `src/load.rs` | One file: bytes to a YAML 1.2 `Document`, or its `Failure` (`not_utf8_problem` and `root_mapping_problem` word for word as opentide 0.23.0's) |
 | `src/index.rs` | `assemble`: the index from the scans and parses, in discovery order: objects, `file_paths`, duplicates, load errors (`yaml_parse`, `missing_uuid`), nested files, signals, references, chaining |
 | `src/workspace.rs` | `Workspace::open` (parallel read and parse with rayon), `Stats`, `invalidate` |
 | `src/registry.rs` | `Registry`: the SDK lifecycle (`initialise` once, `reload`, accessors, `lookup`) |
 | `src/session.rs` | `Session`: workspaces kept warm between runs by their `Options` (UC-2.7, `serve`); each open lists the folders again, compares stamps taken before the last read and invalidates only what changed, plus the paths `invalidate` named; a moved root opens afresh; each open hands out a clone. The process-wide session `activate` turns on makes `Workspace::open` on a `FileSystem::shared` one (the disk) go through it |
-| `src/fields.rs` | Reading fields by their model role (`core/object_fields.py`): role paths from `opentide_schema::objects::fields`; a scalar's text as YAML 1.2 writes it (`true`, `null`) |
-| `src/coverage.rs` | Own and inherited techniques of each rule, `info coverage`'s match (`core/technique_coverage.py`) |
+| `src/fields.rs` | Reading fields by their model role: role paths from `opentide_schema::objects::fields`; a scalar's text as YAML 1.2 writes it (`true`, `null`) |
+| `src/coverage.rs` | Own and inherited techniques of each rule, `info coverage`'s match |
 | `src/catalogue.rs` | `info catalog`'s document (UC-2.4): object rows, load-error rows read from the text, edges (`covers`, `implements`, `parent`, `chains`, `technique`, `logsource`), signals, the ATT&CK matrix, the summary |
 | `src/state.rs` | The deployment state shards, read only, for the catalogue's `deployment` |
 | `src/info.rs` | `info`: the platforms with their tenants (names of variables, never values), the vocabularies and their pins |
 | `src/review.rs` | `rules unreviewed`: the window, review instants (jiff), the RFC 0008 predicate |
 | `src/diagnostic.rs` | `Diagnostic`, `Severity`, `Fix`, `TextEdit`: the one finding type, serialised exactly as an issue of `validate --json` (keys in order); the frame's label and notes ride along unserialised |
-| `src/validate/mod.rs` | `validate` / `Workspace::validate`: the checks in the oracle's order, `--check`, `--queries`, `--strict`, the report (errors sorted as `sort_issues`), `checks` statuses, `summary`; `QueryCheck`, the host's query analysis (UC-2.5) |
-| `src/validate/scope.rs` | `--file`, `--uuid`, `--type` (`validation/scope.py`) |
+| `src/validate/mod.rs` | `validate` / `Workspace::validate`: the checks in opentide 0.23.0's order, `--check`, `--queries`, `--strict`, the report (errors sorted as `sort_issues`), `checks` statuses, `summary`; `QueryCheck`, the host's query analysis (UC-2.5) |
+| `src/validate/scope.rs` | `--file`, `--uuid`, `--type` |
 | `src/validate/objects.rs` | One object's checks: UUID format, schema (`revisions::dispatch`), the vocabulary walk over the revision's JSON Schema with its pins, configured values, deprecated fields, `platform_not_enabled`, vendor ids, references, chaining, `merge_reference_findings` |
-| `src/validate/states.rs` | `.opentide/states/deployment/` shards (`states/deployment.py`) |
+| `src/validate/states.rs` | `.opentide/states/deployment/` shards |
 | `src/validate/annotate.rs` | `path`, `line`, `column`, `end_*`, `help`, `fix`, label and notes of each finding (`diagnostic_from_issue`) |
 | `src/fix.rs` | `validate --fix`: `plan` (safe edits re-checked at their span, the file still parsing and differing in that one value), `FixPlan::write`, `FixPlan::diff` (the `similar` crate's unified diff, never a port of difflib), `Workspace::validate_fix` |
-| `src/lint/` | `lint` / `Workspace::lint`: every `LINT_CODES` rule, `lint.toml`, `--check`, `--file`, `--changed` (the host's diff), `--strict`, `--fix` renames; `LintFinding` (the JSON entry, keys in the oracle's order, and its `Diagnostic`; `info` is `Severity::Info`, framed `note`); `lint_file` (the editor's file name and metadata findings, KG-03/KG-05); `stems.rs` (`slugify`, `expected_stem`, `.debug` suffixes) |
+| `src/lint/` | `lint` / `Workspace::lint`: every `LINT_CODES` rule, `lint.toml`, `--check`, `--file`, `--changed` (the host's diff), `--strict`, `--fix` renames; `LintFinding` (the JSON entry, keys in opentide 0.23.0's order, and its `Diagnostic`; `info` is `Severity::Info`, framed `note`); `lint_file` (the editor's file name and metadata findings, KG-03/KG-05); `stems.rs` (`slugify`, `expected_stem`, `.debug` suffixes) |
 | `src/watch/` | `--watch`: `Watcher` (snapshot, references, findings by file), `select_pass` and `scoped_pass_holds` (the full-versus-scoped rules of `docs/internal/cli-experience.md`), `WorkspaceValidate`; `events.rs`, `notify`'s events that wake the loop (not on WebAssembly). Drawing a pass is UC-3.5's |
-| `src/views/` | What `opentide tui` shows beside the catalogue (UC-3.6d, #951): `chains.rs` threat chaining read once whichever end wrote it, the flow layers and the neighbourhood of a threat (`cli/services/chains_view.py`); `object.rs` an object as a page under its revision's fields from the field catalog, the fields it could add, what each UUID names (`cli/services/object_view.py`) |
+| `src/views/` | What `opentide tui` shows beside the catalogue (UC-3.6d, #951): `chains.rs` threat chaining read once whichever end wrote it, the flow layers and the neighbourhood of a threat; `object.rs` an object as a page under its revision's fields from the field catalog, the fields it could add, what each UUID names |
 | `src/export.rs` | `Index::to_json`: the index as one JSON document |
 | `examples/load.rs` | `cargo xtask bench`'s `load` command for the Rust engine |
 | `examples/validate.rs` | `cargo xtask bench`'s `validate_*` commands for the Rust engine |
@@ -62,14 +59,14 @@ source (`release-pipeline.yml` `sources`, `scripts/ci-local.sh`).
 
 ## Invariants
 
-- The Python registry at the frozen tag was the oracle (`cargo xtask registry diff`, retired in
-  #1142): what the index holds changes only on purpose, with its CHANGELOG lead.
+- What the index holds is the recorded registry's (opentide 0.23.0, retired in #1142): it changes only
+  on purpose, with its CHANGELOG lead.
 - Each object file is read once and parsed once per load; an invalidation re-reads only the files
   its changes name. The configuration is resolved once per load and again only when a path in a
   configuration folder changes. `Stats` counts all three; the tests hold them.
 - The index is a pure function of the scans and the parses (`index::assemble`), taken in discovery
   order: a full load and an incremental one build the same index from the same parses.
-- `validate` reports what the oracle's `validate --json` reported (the recordings and `cargo xtask
+- `validate` reports what opentide 0.23.0's `validate --json` reported (the recordings and `cargo xtask
   validate diff` were retired in #1142): the CLI's `validate` snapshots hold it, and a change is
   deliberate, with its CHANGELOG lead. `cargo xtask corpus faults --check --engine rust --only
   queries` compares the queries check on every query fault kind.
@@ -79,7 +76,7 @@ source (`release-pipeline.yml` `sources`, `scripts/ci-local.sh`).
 - No panics on what a file holds. `std::fs` only in `fs.rs` (`OsFs`); the rest reads and writes
   through the `FileSystem` and `WriteFs`, and `watch/events.rs` holds the one other OS handle,
   `notify`'s watcher. No environment read but `RootOptions::from_env`.
-- `lint` reports what the oracle's `lint --json` reported, key for key; the CLI's `lint` and
+- `lint` reports what opentide 0.23.0's `lint --json` reported, key for key; the CLI's `lint` and
   `validate --fix` snapshots hold it now (#1142).
 - A fix is a text splice: every byte outside its span is kept (`tests/fix.rs`), and a file is
   written only while it holds the text the plan read. Never write YAML back from a parsed tree.

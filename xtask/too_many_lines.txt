@@ -74,7 +74,7 @@ crates/opentide-compile/src/plan.rs select
 crates/opentide-compile/src/promotion.rs promote_block_statuses
 crates/opentide-compile/src/sentinel_one.rs body
 crates/opentide-compile/tests/generate_docs.rs the_flavour_comes_from_ci_then_origin_then_the_configuration
-crates/opentide-compile/tests/oracle.rs the_compile_corpus_compiles_as_the_oracle_compiles_it
+crates/opentide-compile/tests/payload_corpus.rs the_compile_corpus_compiles_as_recorded
 crates/opentide-connectors/src/carbon_black.rs deploy_report
 crates/opentide-connectors/src/carbon_black.rs run
 crates/opentide-connectors/src/elastic.rs kuery_preview
@@ -99,7 +99,7 @@ crates/opentide-schema/src/objects/platform/bitdefender/tests.rs the_specificati
 crates/opentide-schema/src/objects/platform/exabeam_tests.rs block_codes_table
 crates/opentide-schema/src/objects/platform/google_secops/yaral.rs match_findings
 crates/opentide-schema/src/objects/platform/tests.rs sysdig_each_constraint_reports_its_code
-crates/opentide-schema/tests/yaml_table.rs every_case_is_compared_with_the_oracle_and_every_difference_is_explained
+crates/opentide-schema/tests/yaml_table.rs every_case_is_compared_with_the_models_and_every_difference_is_explained
 crates/opentide-tide/tests/query_extraction.rs expected
 crates/opentide-workspace/src/catalogue.rs build_from
 crates/opentide-workspace/src/lint/mod.rs filename_findings

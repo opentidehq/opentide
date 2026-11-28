@@ -62,12 +62,10 @@ the nextest profiles, insta snapshots, trycmd cases, `cargo xtask` and how to ad
 
 ## Porting to Rust
 
-The Python CLI at a frozen tag is the oracle. A Rust implementation of a command must match it
-byte for byte, and every intended difference goes in the approved-diffs ledger with a reason, an
-issue and a changelog entry. Goldens are generated, never edited by hand. The
-[`golden`](.agents/skills/golden/SKILL.md) skill has the rules and the tools, which UC-0.5
-([#803](https://github.com/opentidehq/opentide/issues/803)) and UC-0.7
-([#805](https://github.com/opentidehq/opentide/issues/805)) are building. Architecture decisions
+A command's contract is its snapshots (`tests/golden/`): the `--json` document, the files it
+writes and its exit codes. A change to one is deliberate, reviewed with `cargo insta review` and
+named in the changelog; never edit a snapshot by hand. The
+[`golden`](.agents/skills/golden/SKILL.md) skill has the rules and the tools. Architecture decisions
 are recorded in [`docs/internal/adr/`](docs/internal/adr/index.md).
 
 ## Parallel work: worktrees and target directories

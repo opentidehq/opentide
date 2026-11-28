@@ -1,6 +1,6 @@
 //! The Bitdefender GravityZone compiler (bitdefender-1.0, Deploy): the
 //! JSON-RPC bodies of `tests/fixtures/bitdefender/*.api.json`, equal as data,
-//! and the cases of 0.28.0's `tests/test_platforms/test_bitdefender_compile.py`.
+//! and the cases of 0.28.0's Bitdefender compile tests.
 #![expect(
     clippy::unwrap_used,
     reason = "test helpers: every workspace and fixture here opens"
@@ -178,7 +178,7 @@ fn bodies_match_the_specification_goldens() {
             serde_json::from_str(&std::fs::read_to_string(fixtures().join(golden)).unwrap())
                 .unwrap();
         assert_eq!(data(&body), expected, "{golden}");
-        // The key order is the oracle's too, as the request is built key by key.
+        // The key order is opentide 0.23.0's too, as the request is built key by key.
         assert_eq!(
             serde_json::to_string(&data(&body)).unwrap(),
             serde_json::to_string(&expected).unwrap(),

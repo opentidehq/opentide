@@ -1,15 +1,15 @@
 """Write from_node_table.json: what Pydantic and the CLI report for each case of from_node_cases.toml.
 
-Run it with the oracle's interpreter (tests/corpora/oracle.in, tests/corpora/README.md):
+Run it with the Pydantic models' interpreter (tests/corpora/oracle.in, tests/corpora/README.md):
 
     <oracle python> crates/opentide-schema/tests/oracle/from_node_table.py
 
 Each case is a YAML document and the model it is checked against. The models
-below are Pydantic models built the way the oracle builds its own (TideModel:
+below are Pydantic models built the way the Pydantic models builds its own (TideModel:
 extra="forbid", populate_by_name), with one field of each type and convention
 the Rust conversion supports; `tests/from_node_table.rs` declares the same
 models in Rust with `#[derive(FromNode)]`. For each case the script records
-what the oracle's pipeline would print for an object file:
+what the Pydantic models' pipeline would print for an object file:
 
 - every Pydantic error: `type`, `loc` (as the CLI's `field_path`), `msg`, the
   input when it is a string, and `ctx`;
@@ -136,12 +136,12 @@ def plain(value: Any) -> Any:
 
 def find_line(located: Any, field_path: list[str]) -> Any:
     """`_find_line`, or the exception it raises (it reads ruamel's markers
-    without a guard, and a merged key has none: the oracle crashes there)."""
+    without a guard, and a merged key has none: the Pydantic models crashes there)."""
     if located is None:
         return None
     try:
         return _find_line(located, tuple(field_path))
-    except Exception as exc:  # noqa: BLE001 -- recorded as data: the oracle's own crash
+    except Exception as exc:  # noqa: BLE001 -- recorded as data: the Pydantic models' own crash
         return {"crash": type(exc).__name__}
 
 

@@ -41,7 +41,7 @@ pub struct Manifest {
     pub operations: Vec<Operation>,
 }
 
-/// A stand-in tenant of the manifest: `tests/cassettes/<name>/tenant.py`, on
+/// A stand-in tenant of the manifest: a platform's `tenant.py` under `tests/cassettes/`, on
 /// loopback, which prints its port on its first line.
 #[derive(Debug, Clone, Deserialize)]
 pub struct StandIn {

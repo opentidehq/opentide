@@ -1,6 +1,6 @@
-"""Write objects_table.json: what the oracle reports for each case of objects_cases.toml.
+"""Write objects_table.json: what the Pydantic models reports for each case of objects_cases.toml.
 
-Run it with the oracle's interpreter (tests/corpora/oracle.in, tests/corpora/README.md):
+Run it with the Pydantic models' interpreter (tests/corpora/oracle.in, tests/corpora/README.md):
 
     <oracle python> crates/opentide-schema/tests/oracle/objects_table.py
 
@@ -8,7 +8,7 @@ Each case is a Tide object file and its family (`rule`, `threat`, `objective`),
 written in objects_cases.toml or read from the repository: every object file
 of tests/fixtures/tide_corpus and of the VS Code fixture workspace
 (tests/golden/fixtures/vscode-workspace). For each one the script runs the
-oracle's validate path, `parse_yaml` then `load_object_for_validation`, and
+Pydantic models' validate path, `parse_yaml` then `load_object_for_validation`, and
 records:
 
 - `yaml_error`: the loader refused the YAML (`yaml_parse`);
@@ -67,7 +67,7 @@ def find_line(located: Any, field_path: list[str]) -> Any:
         return None
     try:
         return _find_line(located, tuple(field_path))
-    except Exception as exc:  # noqa: BLE001 -- recorded as data: the oracle's own crash
+    except Exception as exc:  # noqa: BLE001 -- recorded as data: the Pydantic models' own crash
         return {"crash": type(exc).__name__}
 
 
@@ -114,7 +114,7 @@ def run(family: str, text: str) -> dict[str, Any]:
                     }
                 )
             return {"errors": errors}
-        except Exception as exc:  # noqa: BLE001 -- recorded as data: the oracle's own crash
+        except Exception as exc:  # noqa: BLE001 -- recorded as data: the Pydantic models' own crash
             return {"crash": type(exc).__name__}
     return {"value": value_of(model)}
 

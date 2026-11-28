@@ -33,7 +33,7 @@ serde_json.workspace = true
 # opentide-schema checks `metadata.reviewed` with).
 jiff.workspace = true
 thiserror.workspace = true
-# The catalogue's text fallbacks and `$VAR` references, as the oracle's
+# The catalogue's text fallbacks and `$VAR` references, as opentide 0.23.0's
 # patterns; lint's placeholder markers and top-level keys; watch's UUID scan.
 regex.workspace = true
 # `validate --fix --dry-run`'s unified diff (the user's rule: a crate, never a

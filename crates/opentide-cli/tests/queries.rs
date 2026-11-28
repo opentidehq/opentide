@@ -82,7 +82,7 @@ fn a_rejected_query_is_an_error_at_its_place_with_the_engine_s_context() {
     // The span ends on the line of its last character, not at column 1 of
     // the next one.
     assert_eq!(json["end_line"], json!(line));
-    // The context's keys in the oracle's order (the serialised text keeps it).
+    // The context's keys in opentide 0.23.0's order (the serialised text keeps it).
     let text = serde_json::to_string(&errors[0].context).unwrap();
     assert!(
         text.starts_with(

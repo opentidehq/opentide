@@ -1,7 +1,7 @@
-//! The generated templates against what the oracle writes (UC-1.8, #814):
+//! The generated templates against what the Pydantic models writes (UC-1.8, #814):
 //! the committed platform templates
 //! (`src/opentide/schemas/data/platform_templates`, which the Python suite
-//! keeps equal to its render) and the object templates the oracle's
+//! keeps equal to its render) and the object templates the Pydantic models'
 //! `opentide generate` wrote on the tide-corpus fixture, kept in
 //! `tests/templates/tide-corpus/` since the recordings were retired (#1142).
 //! They read files, so they live here:
@@ -33,7 +33,7 @@ fn every_platform_template_is_the_committed_one() {
 }
 
 #[test]
-fn every_object_template_is_the_oracles_on_the_tide_corpus() {
+fn every_object_template_is_the_models_on_the_tide_corpus() {
     // tide-corpus requires lint's default metadata keys.
     let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/templates/tide-corpus");
     for identifier in ["objective::1.0", "rule::1.0", "rule::1.1", "threat::1.0"] {

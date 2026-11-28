@@ -1,7 +1,7 @@
 //! What a Google SecOps deploy, live check and search do when the instance
 //! refuses, loses or half-answers a request: each failure is the rule's
 //! (with its code and a message that says what was and was not written), or
-//! the tenant's, as `deployer.py` reports it. The Chronicle API and the token
+//! the tenant's, as the 0.28.0 deployer reports it. The Chronicle API and the token
 //! endpoint are a wiremock server; no real credential is used.
 #![expect(clippy::unwrap_used, reason = "a test: a failed set-up is a failure")]
 

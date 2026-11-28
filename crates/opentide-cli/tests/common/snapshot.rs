@@ -297,7 +297,7 @@ const REFUSING_PROXY: &str = "http://127.0.0.1:9";
 const CASE_PATH: &str = "/usr/local/bin:/usr/bin:/bin";
 
 /// The environment every case starts from (nothing inherited): the goldens'
-/// (the retired `xtask/src/golden/case.rs` `base_env`), less the Python oracle's own.
+/// (the retired `xtask/src/golden/case.rs` `base_env`), less the Python CLI's own.
 fn base_env(mode: &str) -> BTreeMap<String, String> {
     let mut env: BTreeMap<String, String> = [
         ("PATH", CASE_PATH),

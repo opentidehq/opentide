@@ -40,7 +40,7 @@ authenticates, negotiates content or selects an API version is a review failure,
 
 - **A cassette is recorded, never written.** A scenario's client is recorded through `Proxy` in
   record mode (the cassettes here were recorded from the frozen Python CLI by `cargo xtask
-  cassettes record`, retired with the oracle in #1142);
+  cassettes record`, retired with opentide 0.23.0 in #1142);
   `cargo xtask cassettes check` fails on a digest that does not match, on anything redaction would
   still change, and on a scenario without its cassette. Scenarios are `tests/cassettes/scenarios.toml`.
 - **The client is never patched.** Recording and replay are a proxy: whatever HTTP library the

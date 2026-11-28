@@ -1,4 +1,4 @@
-//! The configuration checks against the oracle (UC-1.5, #811): every case of
+//! The configuration checks against the Pydantic models (UC-1.5, #811): every case of
 //! `tests/oracle/config_cases.toml` run through `opentide_schema::configuration`
 //! and compared with `tests/oracle/config_table.json`, what opentide 0.23.0
 //! reports for it (`config_table.py`): each finding's code, severity, field
@@ -9,7 +9,7 @@
 //! A case whose result differs names the `[[difference]]` that explains it.
 //! A difference lists the `fields` it may change (`message`, `resolved`, ...):
 //! every other field of such a case (code, severity, field path, file, line,
-//! column, context) is still compared with the oracle's. A case that names a
+//! column, context) is still compared with the Pydantic models'. A case that names a
 //! difference and does not differ fails, as does a difference no case names.
 
 #![expect(
@@ -117,7 +117,7 @@ fn workspace_case(case: &toml::Value) -> Json {
     match resolve(&Instance {
         workspace: Some(&workspace),
         parent: parent.as_ref(),
-        // The oracle runs without OPENTIDE_TIDE_WORKSPACE.
+        // The Pydantic models runs without OPENTIDE_TIDE_WORKSPACE.
         skip_parent: false,
     }) {
         Ok(resolved) => json!({
@@ -186,7 +186,7 @@ fn sharing_case(case: &toml::Value) -> Json {
     let resolved = resolve(&Instance {
         workspace: Some(&workspace),
         parent: parent.as_ref(),
-        // The oracle runs without OPENTIDE_TIDE_WORKSPACE.
+        // The Pydantic models runs without OPENTIDE_TIDE_WORKSPACE.
         skip_parent: false,
     })
     .unwrap();
@@ -277,7 +277,7 @@ fn differences_outside(
     }
 }
 
-/// Checks one case against the oracle; a failure's description, if any.
+/// Checks one case against the Pydantic models; a failure's description, if any.
 fn compare(
     id: &str,
     oracle: &Json,
@@ -295,7 +295,9 @@ fn compare(
         return (rust != oracle).then(|| format!("{id}:{}", shown()));
     };
     if rust == oracle {
-        return Some(format!("{id}: names `{name}` but matches the oracle"));
+        return Some(format!(
+            "{id}: names `{name}` but matches the Pydantic models"
+        ));
     }
     let mut outside = Vec::new();
     differences_outside(oracle, rust, allowed, "", &mut outside);
@@ -309,7 +311,7 @@ fn compare(
 }
 
 #[test]
-fn configuration_cases_match_the_oracle_or_name_their_difference() {
+fn configuration_cases_match_the_models_or_name_their_difference() {
     let table: Json = serde_json::from_str(TABLE).unwrap();
     let cases: toml::Value = toml::from_str(CASES).unwrap();
     // Each difference: the finding members it may change, and the field
@@ -361,7 +363,7 @@ fn configuration_cases_match_the_oracle_or_name_their_difference() {
             used.insert((*name).to_owned());
         }
         // The snapshot records every finding Rust reports, the added ones
-        // included; only the comparison with the oracle sets them aside.
+        // included; only the comparison with the Pydantic models sets them aside.
         results.insert(id.to_owned(), rust.clone());
         let mut rust = rust;
         for path in &added {
@@ -384,7 +386,7 @@ fn configuration_cases_match_the_oracle_or_name_their_difference() {
             failures.push(format!("difference `{name}` is named by no case"));
         }
     }
-    // The Python oracle's verdicts are no longer asserted (they had drifted by
+    // The Python models' verdicts are no longer asserted (they had drifted by
     // design, #1139): the reviewed snapshot below is the contract.
     drop(failures);
     insta::assert_snapshot!(
@@ -418,7 +420,7 @@ fn a_difference_still_compares_the_fields_it_does_not_name() {
 }
 
 #[test]
-fn configuration_bundled_files_are_the_folder_and_the_oracles() {
+fn configuration_bundled_files_are_the_folder_and_the_models() {
     let table: Json = serde_json::from_str(TABLE).unwrap();
     let every: Vec<&str> = bundled::FILES.iter().map(|(path, _)| *path).collect();
     let oracle: Vec<&str> = table["bundled"]
@@ -582,7 +584,7 @@ fn configuration_buffer_takes_its_parent_layer_and_open_deployment() {
 }
 
 #[test]
-fn configuration_file_keys_route_as_the_oracle_routes_them() {
+fn configuration_file_keys_route_as_the_models_routes_them() {
     for (path, key) in [
         ("deployment.toml", Some("deployment.toml")),
         (

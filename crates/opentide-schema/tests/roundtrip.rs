@@ -119,7 +119,7 @@ fn the_alias_is_read_and_the_serialised_name_written() {
 #[test]
 fn identifiers_are_kept_as_written() {
     // Not a UUID: the schema keeps it, the workspace's invalid_uuid check
-    // reports it, as Pydantic and validate do at the oracle.
+    // reports it, as Pydantic and validate do at the Pydantic models.
     let sample: Sample = read(&minimal().replace("uuid: u", "uuid: 'not-a-uuid'")).unwrap();
     assert_eq!(sample.uuid, "not-a-uuid");
 }

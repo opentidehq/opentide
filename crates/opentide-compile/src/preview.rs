@@ -1020,8 +1020,8 @@ mod tests {
         );
     }
 
-    /// A Splunk block's unset fields are left out of its dump, where the
-    /// oracle printed them `null`; a `null` the block writes in `advanced`
+    /// A Splunk block's unset fields are left out of its dump, where opentide
+    /// 0.23.0 printed them `null`; a `null` the block writes in `advanced`
     /// is kept, since a deploy sends it to Splunk as the empty value.
     #[test]
     fn a_splunk_dump_leaves_unset_fields_out_and_keeps_an_advanced_null() {

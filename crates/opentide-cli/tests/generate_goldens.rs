@@ -27,7 +27,7 @@ use replay::{Buffer, fixture};
 
 /// A phase that fails writes nothing: a threat without `metadata.version`
 /// fails the objects table after the Navigator layer rendered, and neither
-/// export is written (the oracle wrote them one after another, leaving the
+/// export is written (opentide 0.23.0 wrote them one after another, leaving the
 /// layer of a run that failed for CI to publish).
 #[test]
 fn exports_are_not_written_when_one_fails() {
@@ -560,7 +560,7 @@ fn setup_ci_refuses_then_writes() {
 }
 
 /// `--promotion-target` reads the statuses from the merged configuration,
-/// unchecked, as the oracle does: a `paths.toml` its model refuses (a legacy
+/// unchecked, as opentide 0.23.0 does: a `paths.toml` its model refuses (a legacy
 /// `[paths.core]` table) does not stop it (#957).
 #[test]
 fn setup_ci_reads_the_statuses_of_a_refused_paths_toml() {
@@ -724,7 +724,7 @@ fn the_explorer_reports_declared_visibility() {
     assert_eq!(code, 0, "{stdout}");
     let report: serde_json::Value =
         serde_json::from_slice(&std::fs::read(&visibility).unwrap()).unwrap();
-    // As the oracle's report: nothing could be read, so nothing is present.
+    // As opentide 0.23.0's report: nothing could be read, so nothing is present.
     assert_eq!(report["present"], false);
     assert_eq!(report["logsources"], serde_json::json!([]));
     let problem = report["problem"].as_str().unwrap();
@@ -1717,11 +1717,11 @@ fn docs_with_cve_details_fetch_each_record() {
 }
 
 /// `[paths.core] docs_folder` (CoreTIDE's docs folder) is not a key of
-/// paths.toml: the oracle's `load_settings` falls back to it, but its paths
+/// paths.toml: opentide 0.23.0's `load_settings` falls back to it, but its paths
 /// model refuses the table first, so the docs step fails and writes nothing,
 /// neither under that folder nor under `docs/` (#936). Pinned here so a
-/// later fallback cannot start writing pages the oracle never wrote, and the
-/// failure stays the docs step's (`phase`), as the oracle reports it.
+/// later fallback cannot start writing pages opentide 0.23.0 never wrote, and the
+/// failure stays the docs step's (`phase`), as opentide 0.23.0 reports it.
 #[test]
 fn docs_refuse_the_legacy_core_docs_folder() {
     let scratch = tempfile::tempdir().unwrap();
@@ -1742,7 +1742,7 @@ fn docs_refuse_the_legacy_core_docs_folder() {
 }
 
 /// A configuration that does not load fails the step of every `generate`
-/// command, as the oracle reports it: the oracle reads the configuration
+/// command, as opentide 0.23.0 reports it: opentide 0.23.0 reads the configuration
 /// inside the phase, so the envelope leads with `phase`, the message with
 /// the phase's name, and plain mode prints the failed checklist row before
 /// the error. Opened before the step, the workspace's error was a bare
@@ -1834,7 +1834,7 @@ fn run_plain(ws: &Path, words: &[&str]) -> (i32, String) {
 }
 
 /// The full pipeline (UC-6.0, #841) names the object files in subfolders it
-/// skipped once, after the phases, in the oracle's `nested_object_file`
+/// skipped once, after the phases, in opentide 0.23.0's `nested_object_file`
 /// warning (`report_nested_object_files`), its list as Python prints one;
 /// with `OPENTIDE_PROGRESS=json`, each phase's event comes before its row.
 #[test]

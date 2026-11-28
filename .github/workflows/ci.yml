@@ -36,7 +36,7 @@ run-name: >-
 #
 # Byte-for-byte comparison with the frozen Python CLI is no requirement
 # anywhere: the command line's behaviour is held by Rust-owned snapshots
-# (tests/golden/README.md), and the oracle's recordings and their comparison
+# (tests/golden/README.md), and the Python CLI's recordings and their comparison
 # tooling were retired (#1142); `cargo xtask corpus` still runs by hand.
 
 on:

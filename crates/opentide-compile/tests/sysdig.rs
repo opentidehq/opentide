@@ -1,7 +1,7 @@
 //! The Sysdig compiler on blocks the compile corpus does not hold: the
 //! failures a block's definitions give, the expansion's corners and the
-//! tuning's body. The corpus's bodies are compared with the oracle by
-//! `tests/oracle.rs`.
+//! tuning's body. The corpus's bodies are compared with opentide 0.23.0 by
+//! `tests/payload_corpus.rs`.
 #![expect(
     clippy::unwrap_used,
     reason = "test helpers: every workspace here opens"

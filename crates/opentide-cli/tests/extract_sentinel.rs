@@ -1,14 +1,14 @@
-//! `generate extract sentinel` against the oracle (UC-4.4e, #834). A golden
-//! case cannot replay it: MSAL and azure-core stamp the oracle's requests
+//! `generate extract sentinel` against opentide 0.23.0 (UC-4.4e, #834). A golden
+//! case cannot replay it: MSAL and azure-core stamp opentide 0.23.0's requests
 //! with random ids. `tests/cassettes/sentinel/extract.json` was recorded from
-//! the oracle's command line with those ids fixed (`client.py extract`), and
-//! the oracle's files and document in `tests/extract_sentinel/oracle/`. Here the
+//! opentide 0.23.0's command line with those ids fixed (`client.py extract`), and
+//! opentide 0.23.0's files and document in `tests/extract_sentinel/oracle/`. Here the
 //! Rust command runs in a copy of the same workspace, its ids fixed the same
-//! way, against that cassette: it must send exactly the oracle's requests,
-//! write each rule file under the oracle's name and load to the oracle's
+//! way, against that cassette: it must send exactly opentide 0.23.0's requests,
+//! write each rule file under opentide 0.23.0's name and load to opentide 0.23.0's
 //! data; the files' bytes are held to a snapshot of the Rust command's own
 //! output (`tests/extract_sentinel/snapshots/`, #1139). Two things
-//! the oracle did are left out on purpose: it dumped the listing to
+//! opentide 0.23.0 did are left out on purpose: it dumped the listing to
 //! `output-<tenant>.json` in the working directory, and it padded each file
 //! name with a space at both ends ([`unpadded`]).
 
@@ -118,12 +118,12 @@ fn extract_edited(
     let unmatched = proxy.verify();
     assert!(
         unmatched.is_empty(),
-        "requests not the oracle's: {unmatched:#?}"
+        "requests not opentide 0.23.0's: {unmatched:#?}"
     );
     (scratch, ws, report)
 }
 
-/// The oracle's file name as the command writes it: the oracle named a file
+/// Opentide 0.23.0's file name as the command writes it: opentide 0.23.0 named a file
 /// `sanitize_filename(f'"{name}"')`, so each name had a space at both ends
 /// (` Rule - soc .yaml`, ` Rule - soc  00000000.yaml` for a second rule of
 /// that name); the command writes `Rule - soc.yaml`, `Rule - soc 00000000.yaml`.
@@ -153,7 +153,7 @@ fn sentinel_rules_are_extracted_as_the_recorded_run_extracted_them() {
     // The import ran on the process's one runtime (#1558).
     assert_eq!(opentide_connectors::runtime::started(), 1);
 
-    // The document: the oracle's keys, message and counts.
+    // The document: opentide 0.23.0's keys, message and counts.
     let oracle: serde_json::Value =
         serde_json::from_str(&std::fs::read_to_string(here().join("oracle/result.json")).unwrap())
             .unwrap();
@@ -187,7 +187,7 @@ fn sentinel_rules_are_extracted_as_the_recorded_run_extracted_them() {
         ]
     );
 
-    // No debug dump of the listing in the working directory (the oracle
+    // No debug dump of the listing in the working directory (opentide 0.23.0
     // wrote `output-<tenant>.json` there on every run).
     let dumped: Vec<_> = std::fs::read_dir(&ws)
         .unwrap()
@@ -196,8 +196,8 @@ fn sentinel_rules_are_extracted_as_the_recorded_run_extracted_them() {
         .collect();
     assert!(dumped.is_empty(), "{dumped:?}");
 
-    // The rule files: named as the oracle named them without its padding,
-    // and loading to the oracle's data.
+    // The rule files: named as opentide 0.23.0 named them without its padding,
+    // and loading to opentide 0.23.0's data.
     let oracle_files = files(&here().join("oracle"), "Imported");
     let written = files(&ws, "Imported");
     assert_eq!(
@@ -223,13 +223,13 @@ fn sentinel_rules_are_extracted_as_the_recorded_run_extracted_them() {
         assert_eq!(
             as_data(path, &candidate_files[path]),
             as_data(path, bytes),
-            "{path} loads to other data than the oracle's"
+            "{path} loads to other data than opentide 0.23.0's"
         );
     }
     // Byte for byte, the files are held to a reviewed snapshot of the Rust
-    // command's own output (#1139): the oracle's bytes, and the ledger that
+    // command's own output (#1139): opentide 0.23.0's bytes, and the ledger that
     // listed how Rust's differ from them (YAML quoting, `true` for `True`),
-    // are retired. The data check above still ties them to the oracle's.
+    // are retired. The data check above still ties them to opentide 0.23.0's.
     // insta compares text with `\r\n` as `\n` and trailing whitespace
     // trimmed, so a carriage return is shown and the end of a file marked.
     let mut written_text = String::new();

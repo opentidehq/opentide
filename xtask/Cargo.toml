@@ -19,7 +19,7 @@ clap.workspace = true
 # `parallel::in_order`: a run's cases on every core, in order.
 rayon.workspace = true
 # Workspace paths without Windows' verbatim prefix (`\\?\`): a path joined
-# with `/` does not resolve under it, and the oracle names no such path.
+# with `/` does not resolve under it, and no recorded path names one.
 dunce.workspace = true
 # `vocab ingest`'s UTC time stamps (no time zone database).
 jiff.workspace = true

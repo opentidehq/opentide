@@ -2,7 +2,7 @@
 //! PUT body for one tenant: `kind` and camelCase `properties`, unset fields
 //! left out, keys in the order this module builds them, which the compile
 //! corpus holds byte for byte (`tests/golden/payloads/`, this crate's
-//! `tests/oracle.rs`).
+//! `tests/payload_corpus.rs`).
 
 use opentide_schema::objects::platform::SentinelConfig;
 use opentide_schema::objects::platform::sentinel::{

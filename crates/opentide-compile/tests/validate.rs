@@ -1,6 +1,6 @@
 //! `validate`'s compile check (#660; UC-2.2, #817): what a deploy would
 //! compile must compile. The tide corpus, in today's layout, with one change
-//! each; the codes, paths and lines are the oracle's (0.23.0, its recordings
+//! each; the codes, paths and lines are opentide 0.23.0's (0.23.0, its recordings
 //! of `validate/*/tide-corpus-compile-*`, retired in #1142).
 #![expect(
     clippy::unwrap_used,
@@ -132,7 +132,7 @@ fn a_rule_sentinel_cannot_compile_fails_validate() {
     // The deepest key the file has: `grouping`, line 37 (36 from 0).
     assert_eq!(issue.yaml_line, Some(36));
     assert_eq!((issue.line, issue.column), (Some(37), Some(5)));
-    // The oracle's checks: the compile codes are no check's own.
+    // Opentide 0.23.0's checks: the compile codes are no check's own.
     assert!(
         validation
             .checks

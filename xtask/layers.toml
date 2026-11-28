@@ -27,7 +27,7 @@
 # - bindings/node is the package `opentide-node` (UC-5.3, #838), compiled into
 #   the npm package @opentide/opentide: it depends on the facade alone.
 # - opentide-compare (UC-0.7, #805), the differential comparator, was deleted
-#   with the oracle's recordings (#1142).
+#   with the Python CLI's recordings (#1142).
 # - opentide-schema (UC-1.1, #807) is the top foundation tier: the plan's
 #   table puts it in the row above core, parse, highlight and the query
 #   crates, so it may build on any of them (spans, UC-1.2) and none of them

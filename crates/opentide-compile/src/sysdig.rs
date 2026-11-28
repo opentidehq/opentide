@@ -180,8 +180,8 @@ fn null_value(place: &str) -> CompileError {
     ))
 }
 
-/// Why a block's definitions cannot be expanded (`ExpansionError`): the
-/// oracle reports it as any other failure, `str(exc)` being the message.
+/// Why a block's definitions cannot be expanded (`ExpansionError`): opentide
+/// 0.23.0 reported it as any other failure, `str(exc)` being the message.
 fn expansion_error(message: String) -> CompileError {
     CompileError::failed(DISPLAY, &message)
 }
