@@ -470,111 +470,154 @@ fn index_signals(index: &mut Index, objective: &str, root: &Node) {
     }
 }
 
-#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
+/// The threats' chaining links: `{threat: {relation: [vector, ...]}}`.
+type Chaining = IndexMap<String, IndexMap<String, Vec<String>>>;
+
 fn references(index: &mut Index) {
     let mut found = Vec::new();
-    let mut chaining: IndexMap<String, IndexMap<String, Vec<String>>> = IndexMap::new();
+    let mut chaining = Chaining::new();
     for (family, objects) in &index.objects {
         for object in objects.values() {
-            let Some(root) = object.root() else {
-                continue;
-            };
-            let from = || object.uuid.clone();
-            match family.as_str() {
-                "rule" => {
-                    if let Some(parent) = root.get("detection_model")
-                        && holds_name(parent)
-                    {
-                        found.push(Reference {
-                            from: from(),
-                            kind: ReferenceKind::DetectionModel,
-                            target: text(parent),
-                            field_path: vec!["detection_model".to_owned()],
-                        });
-                    }
-                }
-                "objective" => {
-                    let objective = block(root, "objective");
-                    for (position, threat) in items(objective.and_then(|o| o.get("threats")))
-                        .iter()
-                        .enumerate()
-                    {
-                        found.push(Reference {
-                            from: from(),
-                            kind: ReferenceKind::Threat,
-                            target: text(threat),
-                            field_path: vec![
-                                "objective".to_owned(),
-                                "threats".to_owned(),
-                                position.to_string(),
-                            ],
-                        });
-                    }
-                    let signals = objective.and_then(|o| o.get("signals"));
-                    for (position, signal) in items(signals).iter().enumerate() {
-                        if let Some(id) = signal.get("uuid").filter(|id| holds_name(id)) {
-                            found.push(Reference {
-                                from: from(),
-                                kind: ReferenceKind::Signal,
-                                target: text(id),
-                                field_path: vec![
-                                    "objective".to_owned(),
-                                    "signals".to_owned(),
-                                    position.to_string(),
-                                    "uuid".to_owned(),
-                                ],
-                            });
-                        }
-                    }
-                }
-                "threat" => {
-                    let links = items(block(root, "threat").and_then(|t| t.get("chaining")));
-                    if !links.is_empty() {
-                        chaining.entry(object.uuid.clone()).or_default();
-                    }
-                    for (position, link) in links.iter().enumerate() {
-                        if !matches!(link.value, Value::Map(_)) {
-                            continue;
-                        }
-                        let relation = link
-                            .get("relation")
-                            .filter(|r| holds_name(r))
-                            .map(|r| text(r));
-                        let Some(vector) = link.get("vector").filter(|v| holds_name(v)) else {
-                            continue;
-                        };
-                        let vector = text(vector);
-                        found.push(Reference {
-                            from: from(),
-                            kind: ReferenceKind::Chaining {
-                                relation: relation.clone(),
-                            },
-                            target: vector.clone(),
-                            field_path: vec![
-                                "threat".to_owned(),
-                                "chaining".to_owned(),
-                                position.to_string(),
-                                "vector".to_owned(),
-                            ],
-                        });
-                        if let Some(relation) = relation {
-                            let targets = chaining
-                                .entry(object.uuid.clone())
-                                .or_default()
-                                .entry(relation)
-                                .or_default();
-                            if !targets.contains(&vector) {
-                                targets.push(vector);
-                            }
-                        }
-                    }
-                }
-                _ => {}
-            }
+            object_references(family, object, &mut found, &mut chaining);
         }
     }
     index.references = found;
     index.chaining = chaining;
+}
+
+/// Where the object that wrote `reference` is in index order: its family's
+/// place, then its own in the family. The family is the one whose objects
+/// write that kind of reference ([`object_references`]).
+fn reference_position(
+    objects: &IndexMap<String, IndexMap<String, Object>>,
+    reference: &Reference,
+) -> Option<(usize, usize)> {
+    let family = match reference.kind {
+        ReferenceKind::DetectionModel => "rule",
+        ReferenceKind::Threat | ReferenceKind::Signal => "objective",
+        ReferenceKind::Chaining { .. } => "threat",
+    };
+    let (family_at, _, members) = objects.get_full(family)?;
+    Some((family_at, members.get_index_of(&reference.from)?))
+}
+
+/// A document read again that [`Index::replace`] puts in place of the one
+/// indexed ([`Index::replacements`]).
+#[derive(Debug)]
+pub(crate) struct Replacement {
+    /// Its file's place in [`Index::sources`].
+    source: usize,
+    /// The object's family.
+    family: String,
+    /// The object's UUID, the same before and after.
+    uuid: String,
+    /// The new document.
+    document: Arc<Document>,
+}
+
+/// The references `object`, of `family`, writes, pushed to `found`, and its
+/// chaining links, added to `chaining`.
+fn object_references(
+    family: &str,
+    object: &Object,
+    found: &mut Vec<Reference>,
+    chaining: &mut Chaining,
+) {
+    let Some(root) = object.root() else {
+        return;
+    };
+    let from = || object.uuid.clone();
+    match family {
+        "rule" => {
+            if let Some(parent) = root.get("detection_model")
+                && holds_name(parent)
+            {
+                found.push(Reference {
+                    from: from(),
+                    kind: ReferenceKind::DetectionModel,
+                    target: text(parent),
+                    field_path: vec!["detection_model".to_owned()],
+                });
+            }
+        }
+        "objective" => {
+            let objective = block(root, "objective");
+            for (position, threat) in items(objective.and_then(|o| o.get("threats")))
+                .iter()
+                .enumerate()
+            {
+                found.push(Reference {
+                    from: from(),
+                    kind: ReferenceKind::Threat,
+                    target: text(threat),
+                    field_path: vec![
+                        "objective".to_owned(),
+                        "threats".to_owned(),
+                        position.to_string(),
+                    ],
+                });
+            }
+            let signals = objective.and_then(|o| o.get("signals"));
+            for (position, signal) in items(signals).iter().enumerate() {
+                if let Some(id) = signal.get("uuid").filter(|id| holds_name(id)) {
+                    found.push(Reference {
+                        from: from(),
+                        kind: ReferenceKind::Signal,
+                        target: text(id),
+                        field_path: vec![
+                            "objective".to_owned(),
+                            "signals".to_owned(),
+                            position.to_string(),
+                            "uuid".to_owned(),
+                        ],
+                    });
+                }
+            }
+        }
+        "threat" => {
+            let links = items(block(root, "threat").and_then(|t| t.get("chaining")));
+            if !links.is_empty() {
+                chaining.entry(object.uuid.clone()).or_default();
+            }
+            for (position, link) in links.iter().enumerate() {
+                if !matches!(link.value, Value::Map(_)) {
+                    continue;
+                }
+                let relation = link
+                    .get("relation")
+                    .filter(|r| holds_name(r))
+                    .map(|r| text(r));
+                let Some(vector) = link.get("vector").filter(|v| holds_name(v)) else {
+                    continue;
+                };
+                let vector = text(vector);
+                found.push(Reference {
+                    from: from(),
+                    kind: ReferenceKind::Chaining {
+                        relation: relation.clone(),
+                    },
+                    target: vector.clone(),
+                    field_path: vec![
+                        "threat".to_owned(),
+                        "chaining".to_owned(),
+                        position.to_string(),
+                        "vector".to_owned(),
+                    ],
+                });
+                if let Some(relation) = relation {
+                    let targets = chaining
+                        .entry(object.uuid.clone())
+                        .or_default()
+                        .entry(relation)
+                        .or_default();
+                    if !targets.contains(&vector) {
+                        targets.push(vector);
+                    }
+                }
+            }
+        }
+        _ => {}
+    }
 }
 
 impl Index {
@@ -649,6 +692,102 @@ impl Index {
     /// [`Self::overlay`].
     pub fn refresh_references(&mut self) {
         references(self);
+    }
+
+    /// How to put in place the documents of files read again, each
+    /// `(path, before, after)`: `before` the parse the index was assembled
+    /// from, `after` the new one. `Some` only when [`Self::replace`] then
+    /// leaves the index [`assemble`] makes from the new parses: no UUID is
+    /// used twice in a family, and each file is, before and after, a document
+    /// whose UUID names the same object, indexed from that file alone, of a
+    /// family other than the objectives (whose signals depend on each other's).
+    pub(crate) fn replacements(
+        &self,
+        edits: &[(&Path, &Parsed, &Parsed)],
+    ) -> Option<Vec<Replacement>> {
+        if !self.duplicates.is_empty() {
+            return None;
+        }
+        edits
+            .iter()
+            .map(|&(path, before, after)| {
+                let (Parsed::Document(before), Parsed::Document(after)) = (before, after) else {
+                    return None;
+                };
+                let id = identifier(after.root()?).filter(|id| holds_name(id))?;
+                let uuid = text(id);
+                // The index's sources share the parse's document: the one
+                // source of this file is the one that holds it.
+                let mut sources = self
+                    .sources
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, source)| Arc::ptr_eq(&source.document, before));
+                let (position, source) = sources.next()?;
+                if sources.next().is_some() || source.path != path || source.family == "objective" {
+                    return None;
+                }
+                let object = self.get(&source.family, &uuid)?;
+                (object.path == path && Arc::ptr_eq(&object.document, before)).then(|| {
+                    Replacement {
+                        source: position,
+                        family: source.family.clone(),
+                        uuid,
+                        document: Arc::clone(after),
+                    }
+                })
+            })
+            .collect()
+    }
+
+    /// Puts each of `replacements` in place: its document in its source and
+    /// its object, its references and chaining links in place of the ones
+    /// the document it replaces wrote, where they are in index order. The
+    /// references the replaced documents wrote are returned.
+    pub(crate) fn replace(&mut self, replacements: Vec<Replacement>) -> Vec<Reference> {
+        let mut replaced = Vec::new();
+        for replacement in replacements {
+            let Replacement {
+                source,
+                family,
+                uuid,
+                document,
+            } = replacement;
+            if let Some(source) = self.sources.get_mut(source) {
+                source.document = Arc::clone(&document);
+            }
+            let Some((family_at, _, objects)) = self.objects.get_full_mut(&family) else {
+                continue;
+            };
+            let Some((object_at, _, object)) = objects.get_full_mut(&uuid) else {
+                continue;
+            };
+            object.document = document;
+            let mut found = Vec::new();
+            let mut links = Chaining::new();
+            object_references(&family, object, &mut found, &mut links);
+            // References are in index order: by family, then by object.
+            let here = Some((family_at, object_at));
+            let objects = &self.objects;
+            let start = self
+                .references
+                .partition_point(|reference| reference_position(objects, reference) < here);
+            let end = self
+                .references
+                .partition_point(|reference| reference_position(objects, reference) <= here);
+            replaced.extend(self.references.splice(start..end, found));
+            if family == "threat" {
+                self.chaining.shift_remove(&uuid);
+                if let Some((threat, relations)) = links.pop() {
+                    let threats = objects.get("threat");
+                    let at = self.chaining.partition_point(|key, _| {
+                        threats.and_then(|threats| threats.get_index_of(key)) < Some(object_at)
+                    });
+                    self.chaining.shift_insert(at, threat, relations);
+                }
+            }
+        }
+        replaced
     }
 
     /// The objects of `family`.

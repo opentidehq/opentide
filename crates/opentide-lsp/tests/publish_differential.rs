@@ -65,20 +65,43 @@ fn workspace(name: &str) -> (Scratch, String, String) {
     (scratch, other, edited)
 }
 
-/// The texts rule 1 is edited to, one after another: text outside ASCII, a
-/// reference that names no object, its name made rule 0's, its UUID made
-/// rule 0's, YAML that does not load, nothing, and itself again.
-fn steps() -> Vec<String> {
+/// The texts the two open rules are edited to, one step after another,
+/// `(rule 0, rule 1)`: rule 1's text outside ASCII, a reference that names no
+/// object, its name made rule 0's, its UUID made rule 0's, YAML that does
+/// not load, nothing, and itself again; then both rules' descriptions in one
+/// batch, and rule 1's reference again, each an edit the workspace makes in
+/// its index in place.
+fn steps() -> Vec<(String, String)> {
     let base = rule(1);
-    vec![
-        base.replace("Minimal valid", "Une règle minimale é😀"),
+    let described = |text: String| text.replace("Minimal valid", "Une règle minimale é😀");
+    let mut steps: Vec<(String, String)> = [
+        described(base.clone()),
         base.replace(MODEL, "00000000-0000-4000-8002-0000000000ff"),
         base.replacen("name: Règle é😀 1", "name: Règle é😀 0", 1),
         base.replace(&uuid(1), &uuid(0)),
         base.replacen("name: Règle é😀 1", "name: [", 1),
         String::new(),
-        base,
+        base.clone(),
     ]
+    .into_iter()
+    .map(|text| (rule(0), text))
+    .collect();
+    steps.push((described(rule(0)), described(base.clone())));
+    steps.push((
+        described(rule(0)),
+        described(base).replace(MODEL, "00000000-0000-4000-8002-0000000000ff"),
+    ));
+    steps
+}
+
+/// Sends the step's texts as edits, each document's only if it changes.
+fn edit(lsp: &mut Lsp, uris: [&str; 2], texts: [&str; 2], before: &mut [String; 2]) {
+    for ((uri, text), was) in uris.iter().zip(texts).zip(before.iter_mut()) {
+        if *was != text {
+            change(lsp, uri, text);
+            text.clone_into(was);
+        }
+    }
 }
 
 fn start(params: &Value) -> Lsp {
@@ -150,13 +173,19 @@ fn diagnostics_published_after_edits_equal_a_fresh_server_s() {
     open(&mut kept, &edited, &rule(1));
     settle(&mut kept, &mut published);
     let mut seen: Vec<BTreeMap<String, Vec<String>>> = Vec::new();
-    for (step, text) in steps().iter().enumerate() {
-        change(&mut kept, &edited, text);
+    let mut texts = [rule(0), rule(1)];
+    for (step, (other_text, text)) in steps().iter().enumerate() {
+        edit(
+            &mut kept,
+            [&other, &edited],
+            [other_text.as_str(), text.as_str()],
+            &mut texts,
+        );
         settle(&mut kept, &mut published);
 
         let mut fresh = start(&params);
         let mut opened = BTreeMap::new();
-        open(&mut fresh, &other, &rule(0));
+        open(&mut fresh, &other, other_text);
         open(&mut fresh, &edited, text);
         settle(&mut fresh, &mut opened);
         let mut now = BTreeMap::new();
@@ -180,6 +209,8 @@ fn diagnostics_published_after_edits_equal_a_fresh_server_s() {
     assert!(has(3, "duplicate_id"), "{seen:?}");
     assert!(has(4, "yaml_parse"), "{seen:?}");
     assert!(!has(6, "duplicate_id"), "{seen:?}");
+    assert!(!has(7, "invalid_ref"), "{seen:?}");
+    assert!(has(8, "invalid_ref"), "{seen:?}");
 }
 
 /// Each closed file's diagnostics in a `workspace/diagnostic` report, and
@@ -235,12 +266,18 @@ fn workspace_diagnostics_pulled_after_edits_equal_a_fresh_server_s() {
     // Every rule and the objective.
     let first = pulled(&mut kept, &open_rules);
     assert_eq!(first.len(), RULES + 1, "{first:#?}");
-    for (step, text) in steps().iter().enumerate() {
-        change(&mut kept, &edited, text);
+    let mut texts = [rule(0), rule(1)];
+    for (step, (other_text, text)) in steps().iter().enumerate() {
+        edit(
+            &mut kept,
+            open_rules,
+            [other_text.as_str(), text.as_str()],
+            &mut texts,
+        );
         let after = pulled(&mut kept, &open_rules);
 
         let mut fresh = start(&params);
-        open(&mut fresh, &other, &rule(0));
+        open(&mut fresh, &other, other_text);
         open(&mut fresh, &edited, text);
         assert_eq!(
             after,
