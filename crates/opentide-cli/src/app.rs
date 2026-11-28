@@ -11,6 +11,7 @@ use crate::commands::result::{ExitCode, Status};
 use crate::crash::{self, Facts, Internal};
 use crate::env::Env;
 use crate::envelope::{Failure, INTERRUPTED_EXIT_CODE, NextAction, Outcome, USAGE_EXIT_CODE, code};
+use crate::json::Object;
 use crate::json::document_text;
 use crate::logging::{self, LogLayer, Sink};
 use crate::mode::{self, Inputs, Mode};
@@ -469,15 +470,15 @@ impl Run<'_> {
                     command: String::new(),
                     status: Status::Completed,
                     message: format!("Installed {shell} completion in {shown}"),
-                    data: vec![
+                    data: Object::from_iter([
                         ("shell".into(), crate::json::Json::Str(shell.to_owned())),
                         (
                             "path".into(),
                             crate::json::Json::Str(installed.path.to_string_lossy().into_owned()),
                         ),
-                    ],
+                    ]),
                     exit_code: ExitCode::Success,
-                    summary: Vec::new(),
+                    summary: Object::new(),
                     next_actions: vec![next],
                     failure: None,
                 }
@@ -640,9 +641,9 @@ impl Run<'_> {
                     command: "commands".into(),
                     status: Status::Completed,
                     message: format!("{count} commands"),
-                    data,
+                    data: Object::from_iter(data),
                     exit_code: ExitCode::Success,
-                    summary,
+                    summary: Object::from_iter(summary),
                     next_actions: Vec::new(),
                     failure: None,
                 };
@@ -2203,13 +2204,11 @@ struct ServerPlaces {
 
 /// The subcommand path `matches` ran.
 /// The string a result holds at `key`, if any.
-fn data_text(data: &[(String, crate::json::Json)], key: &str) -> Option<String> {
-    data.iter()
-        .find(|(name, _)| name == key)
-        .and_then(|(_, value)| match value {
-            crate::json::Json::Str(text) => Some(text.clone()),
-            _ => None,
-        })
+fn data_text(data: &crate::json::Object, key: &str) -> Option<String> {
+    data.get(key).and_then(|value| match value {
+        crate::json::Json::Str(text) => Some(text.clone()),
+        _ => None,
+    })
 }
 
 fn command_path(matches: &clap::ArgMatches) -> Vec<String> {
@@ -2759,10 +2758,10 @@ mod tests {
         assert_eq!(data_text(&outcome.data, "advice"), None);
         outcome
             .data
-            .push(("advice".into(), crate::json::Json::str("do this")));
+            .insert("advice".into(), crate::json::Json::str("do this"));
         outcome
             .data
-            .push(("detail".into(), crate::json::Json::Int(1)));
+            .insert("detail".into(), crate::json::Json::Int(1));
         assert_eq!(
             data_text(&outcome.data, "advice").as_deref(),
             Some("do this")
@@ -3993,9 +3992,9 @@ mod tests {
                 command: "mcp start".into(),
                 status: Status::Completed,
                 message: "done".into(),
-                data: Vec::new(),
+                data: Object::new(),
                 exit_code: ExitCode::Success,
-                summary: Vec::new(),
+                summary: Object::new(),
                 next_actions: Vec::new(),
                 failure: None,
             };

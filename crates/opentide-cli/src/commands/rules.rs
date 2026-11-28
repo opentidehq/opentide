@@ -9,7 +9,7 @@ use opentide_workspace::review::{Window, unreviewed, window_text};
 use super::result::Status;
 use super::{Block, Report, USAGE_INVALID_VALUE, counted, json, placement};
 use crate::env::Env;
-use crate::json::Json;
+use crate::json::{Json, Object};
 use crate::render::outcome::OutcomeKind;
 use crate::render::text::Text;
 
@@ -91,10 +91,10 @@ pub fn run(
             .collect();
     }
     let mut report = Report::completed(COMMAND, data);
-    report.outcome.summary = vec![(
+    report.outcome.summary = Object::from_iter([(
         "unreviewed".into(),
         Json::Int(i64::try_from(count).unwrap_or(i64::MAX)),
-    )];
+    )]);
     report.warnings = warnings;
     if count > 0 {
         let noun = counted(count, "rule");

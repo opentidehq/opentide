@@ -21,7 +21,7 @@ use super::result::{ExitCode, Status};
 use super::{ISSUES_FOUND, Report, placement};
 use crate::env::Env;
 use crate::envelope::Failure;
-use crate::json::Json;
+use crate::json::{Json, Object};
 use crate::render::outcome::OutcomeKind;
 
 const COMMAND: &str = "migrate vocab-scope";
@@ -382,10 +382,10 @@ fn report(migration: &Migration, args: &Args) -> Report {
     };
     let files = super::counted(changed.len(), "file");
     report.outcome.message = format!("{verb} {files} · {} scanned", migration.scanned);
-    report.outcome.summary = vec![
+    report.outcome.summary = Object::from_iter([
         ("files".to_owned(), int(changed.len())),
         ("scanned".to_owned(), int(migration.scanned)),
-    ];
+    ]);
     if !migration.failed_files.is_empty() {
         let message = format!(
             "{} file(s) could not be migrated safely and were left unchanged.",
@@ -437,13 +437,7 @@ mod tests {
     }
 
     fn data<'r>(report: &'r Report, key: &str) -> &'r Json {
-        &report
-            .outcome
-            .data
-            .iter()
-            .find(|(name, _)| name == key)
-            .unwrap()
-            .1
+        report.outcome.data.get(key).unwrap()
     }
 
     const OBJECTIVE: &str = "\

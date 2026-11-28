@@ -54,7 +54,7 @@ use opentide_workspace::{OsFs, RootOptions, Workspace, root};
 use crate::commands::result::{ExitCode, Status};
 use crate::env::Env;
 use crate::envelope::{Failure, NextAction, Outcome, code};
-use crate::json::Json;
+use crate::json::{Json, Object};
 use crate::render::outcome::OutcomeKind;
 use crate::render::text::Text;
 
@@ -271,7 +271,7 @@ impl Report {
                 message: "Completed successfully".into(),
                 data: data.into_iter().collect(),
                 exit_code: ExitCode::Success,
-                summary: Vec::new(),
+                summary: Object::new(),
                 next_actions: Vec::new(),
                 failure: None,
             },
@@ -536,7 +536,7 @@ pub fn open_for(command: &str, options: RootOptions) -> Result<Workspace, Box<Re
     report
         .outcome
         .data
-        .push(("diagnostics".to_owned(), Json::Array(vec![diagnostic])));
+        .insert("diagnostics".to_owned(), Json::Array(vec![diagnostic]));
     Err(Box::new(report))
 }
 
@@ -547,12 +547,7 @@ pub fn refusal_parts(report: &Report) -> (String, String, Option<Json>) {
         || (COMMAND_FAILED.to_owned(), report.outcome.message.clone()),
         |failure| (failure.code.clone(), failure.message.clone()),
     );
-    let diagnostics = report
-        .outcome
-        .data
-        .iter()
-        .find(|(key, _)| key == "diagnostics")
-        .map(|(_, value)| value.clone());
+    let diagnostics = report.outcome.data.get("diagnostics").cloned();
     (code, message, diagnostics)
 }
 
@@ -616,12 +611,7 @@ mod tests {
             "{}",
             report.outcome.message
         );
-        let Some((_, Json::Array(diagnostics))) = report
-            .outcome
-            .data
-            .iter()
-            .find(|(key, _)| key == "diagnostics")
-        else {
+        let Some(Json::Array(diagnostics)) = report.outcome.data.get("diagnostics") else {
             panic!("no diagnostics: {:?}", report.outcome.data);
         };
         let Json::Object(first) = &diagnostics[0] else {

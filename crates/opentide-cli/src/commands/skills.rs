@@ -18,7 +18,7 @@ use tokio_util::sync::CancellationToken;
 use crate::commands::{Block, Report};
 use crate::env::Env;
 use crate::envelope::NextAction;
-use crate::json::Json;
+use crate::json::{Json, Object};
 use crate::render::text::Text;
 use anstyle::{AnsiColor, Style};
 
@@ -480,10 +480,10 @@ pub fn discover(args: &DiscoverArgs, network: Network<'_>, width: usize) -> Repo
             ("count".into(), count(kept.len())),
         ],
     );
-    report.outcome.summary = vec![
+    report.outcome.summary = Object::from_iter([
         ("skills".into(), count(kept.len())),
         ("installed".into(), count(installed_count)),
-    ];
+    ]);
     let noun = if kept.len() == 1 { "skill" } else { "skills" };
     let counted = match args.query.as_deref() {
         Some(query) if !query.is_empty() => format!("{} {noun} match '{query}'", kept.len()),
@@ -549,12 +549,12 @@ pub fn show(name: &str, repo: &Path, refresh: bool, network: Network<'_>, json: 
         let mut report = Report::error(command, message.clone());
         if json {
             // The document carries the catalogue's keys after the error.
-            report.outcome.data = vec![
+            report.outcome.data = Object::from_iter([
                 ("error".into(), Json::str(&message)),
                 ("source".into(), Json::str(&source)),
                 ("manifest_source".into(), Json::str("remote")),
                 ("manifest_refreshed".into(), Json::Bool(manifest.refreshed)),
-            ];
+            ]);
         }
         return report;
     };
@@ -786,13 +786,11 @@ mod tests {
     }
 
     fn data<'a>(report: &'a Report, key: &str) -> &'a Json {
-        &report
+        report
             .outcome
             .data
-            .iter()
-            .find(|(name, _)| name == key)
+            .get(key)
             .unwrap_or_else(|| panic!("no {key} in {:?}", report.outcome.data))
-            .1
     }
 
     #[test]
@@ -879,10 +877,10 @@ mod tests {
         );
         assert_eq!(
             report.outcome.summary,
-            vec![
+            Object::from([
                 ("skills".to_owned(), Json::Int(2)),
                 ("installed".to_owned(), Json::Int(2))
-            ]
+            ])
         );
 
         // `show` of an installed skill says so and offers no install.

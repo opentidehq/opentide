@@ -20,7 +20,7 @@ use super::{
 use crate::commands::result::{ExitCode, Status};
 use crate::env::Env;
 use crate::envelope::Failure;
-use crate::json::Json;
+use crate::json::{Json, Object};
 use crate::render::glyphs::SEPARATOR;
 use crate::render::table::{Column, Table, columns};
 use crate::render::text::Text;
@@ -280,7 +280,7 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
         load_errors,
     );
     let mut report = Report::completed(COMMAND, if section.is_some() { out } else { overview });
-    report.outcome.summary = summary;
+    report.outcome.summary = Object::from_iter(summary);
     report.outcome_line = Some(outcome);
     if load_errors > 0 {
         report.next("opentide validate", "show where each object failed to load");

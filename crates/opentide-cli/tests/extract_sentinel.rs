@@ -24,7 +24,7 @@ use opentide_cassette::{Cassette, Mode, Proxy, Redaction};
 use opentide_cli::commands::extract::{Context, sentinel_with};
 use opentide_cli::commands::result::ExitCode;
 use opentide_cli::env::Env;
-use opentide_cli::json::Json;
+use opentide_cli::json::{Json, Object};
 
 /// The credential the replayed tenant gets; redacted, as the recording's was.
 const SECRET: &str = "replayed-credential-value";
@@ -171,7 +171,7 @@ fn sentinel_rules_are_extracted_as_the_recorded_run_extracted_them() {
     assert_eq!(report.outcome.message, oracle["message"].as_str().unwrap());
     assert_eq!(
         report.outcome.data,
-        vec![("import".to_owned(), Json::str("sentinel"))]
+        Object::from([("import".to_owned(), Json::str("sentinel"))])
     );
     let summary: Vec<(String, i64)> = report
         .outcome
@@ -275,12 +275,7 @@ fn a_rule_with_a_mistyped_field_is_skipped_and_the_others_imported() {
         "{:?}",
         report.outcome.failure
     );
-    let skipped = report
-        .outcome
-        .data
-        .iter()
-        .find(|(key, _)| key == "skipped")
-        .map(|(_, value)| value.clone());
+    let skipped = report.outcome.data.get("skipped").cloned();
     let Some(Json::Array(skipped)) = skipped else {
         panic!("no skipped list: {:?}", report.outcome.data);
     };

@@ -49,7 +49,7 @@ use super::result::{ExitCode, Status};
 use super::{Block, Report, placement};
 use crate::env::Env;
 use crate::envelope::Failure;
-use crate::json::Json;
+use crate::json::{Json, Object};
 use crate::render::glyphs;
 use crate::render::text::Text;
 use anstyle::{AnsiColor, Style};
@@ -2022,13 +2022,13 @@ fn report(checks: &[Check], text: bool) -> Report {
     let mut report = Report::completed(COMMAND, data);
     report.outcome.status = status;
     report.outcome.message.clone_from(&message);
-    report.outcome.summary = vec![
+    report.outcome.summary = Object::from_iter([
         ("checks".to_owned(), int(checks.len())),
         ("passed".to_owned(), int(passed)),
         ("warnings".to_owned(), int(warned)),
         ("failed".to_owned(), int(failed)),
         ("skipped".to_owned(), int(skipped)),
-    ];
+    ]);
     if failed > 0 {
         report.outcome.exit_code = ExitCode::Failure;
         report.outcome.failure = Some(Failure::new(CHECKS_FAILED, message));
@@ -2183,9 +2183,7 @@ mod tests {
     }
 
     fn checks(report: &Report) -> Vec<(String, String, String)> {
-        let Some((_, Json::Array(items))) =
-            report.outcome.data.iter().find(|(key, _)| key == "checks")
-        else {
+        let Some(Json::Array(items)) = report.outcome.data.get("checks") else {
             panic!("no checks");
         };
         items

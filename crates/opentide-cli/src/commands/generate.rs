@@ -32,7 +32,7 @@ use super::result::ExitCode;
 use super::{Report, placement};
 use crate::env::Env;
 use crate::envelope::Failure;
-use crate::json::Json;
+use crate::json::{Json, Object};
 use crate::render::progress::{Step, StepStatus, plural, seconds_text};
 
 /// Where a generate command runs.
@@ -167,12 +167,12 @@ fn generated(command: &str, leading: Vec<(String, Json)>, steps: Vec<Step>) -> R
     ));
     let mut report = Report::completed(command, data);
     report.outcome.message = message;
-    report.outcome.summary = vec![
+    report.outcome.summary = Object::from_iter([
         ("files".into(), count_json(written)),
         ("removed".into(), count_json(removed)),
         ("phases".into(), count_json(steps.len())),
         ("seconds".into(), Json::Float(rounded(seconds))),
-    ];
+    ]);
     report.steps = steps;
     report
 }
@@ -198,7 +198,7 @@ pub(crate) fn phase_failed(
     );
     let mut data = vec![("phase".to_owned(), Json::str(phase))];
     data.extend(extra);
-    report.outcome.data = data;
+    report.outcome.data = Object::from_iter(data);
     report.steps = steps;
     report
 }
@@ -243,8 +243,8 @@ fn workspace_in_step(
                     .outcome
                     .data
                     .iter()
-                    .filter(|(key, _)| key == "diagnostics")
-                    .cloned(),
+                    .filter(|(key, _)| key.as_str() == "diagnostics")
+                    .map(|(key, value)| (key.clone(), value.clone())),
             );
         }
         Box::new(report)
@@ -614,7 +614,7 @@ pub fn docs(args: &DocsArgs, cx: &Context<'_>) -> Report {
             ExitCode::Failure,
             Failure::new(COMMAND_FAILED, &message),
         );
-        report.outcome.data = run.data;
+        report.outcome.data = Object::from_iter(run.data);
         report.steps = vec![step];
         report.warnings = warnings;
         return report;
@@ -1746,8 +1746,8 @@ mod tests {
                 .message
                 .starts_with("Generated 3 files in 0.1s · exports")
         );
-        assert_eq!(report.outcome.summary[0].1, Json::Int(3));
-        assert_eq!(report.outcome.summary[3].1, Json::Float(0.123));
+        assert_eq!(report.outcome.summary[0], Json::Int(3));
+        assert_eq!(report.outcome.summary[3], Json::Float(0.123));
         let mut removed = Step::new("docs");
         removed.status = StepStatus::Ok;
         removed.count = Some(2);
@@ -1881,8 +1881,22 @@ mod tests {
             report.outcome.message,
             "exports: missing key `version` while rendering x"
         );
-        assert_eq!(report.outcome.data[0].0, "phase");
-        assert_eq!(report.outcome.data[1].0, "target");
+        assert_eq!(
+            report
+                .outcome
+                .data
+                .get_index(0)
+                .map(|(key, _)| key.as_str()),
+            Some("phase")
+        );
+        assert_eq!(
+            report
+                .outcome
+                .data
+                .get_index(1)
+                .map(|(key, _)| key.as_str()),
+            Some("target")
+        );
     }
 
     /// A relative docs output is under the repository root, not under the
@@ -2020,14 +2034,7 @@ mod tests {
             proxy: None,
             version: "0.0.0",
         };
-        let phase_of = |report: &Report| {
-            report
-                .outcome
-                .data
-                .iter()
-                .find(|(key, _)| key == "phase")
-                .map(|(_, value)| value.clone())
-        };
+        let phase_of = |report: &Report| report.outcome.data.get("phase").cloned();
         let all = phases(&[], &cx, "0.0.0");
         assert_eq!(
             all.outcome.exit_code,

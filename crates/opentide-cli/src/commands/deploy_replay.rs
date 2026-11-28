@@ -29,7 +29,7 @@ use super::result::{ExitCode, Status};
 use super::{Report, counted};
 use crate::env::Env;
 use crate::envelope::Failure;
-use crate::json::Json;
+use crate::json::{Json, Object};
 
 /// The deployment-state folder, relative to the repository root.
 pub const DEPLOYMENT_STATES: &str = ".opentide/states/deployment";
@@ -251,11 +251,11 @@ pub fn report(cwd: &Path, env: &Env, state_commit: &str) -> Report {
                 ],
             );
             let count = |count: usize| Json::Int(i64::try_from(count).unwrap_or(i64::MAX));
-            report.outcome.summary = vec![
+            report.outcome.summary = Object::from_iter([
                 ("written".to_owned(), count(result.written.len())),
                 ("removed".to_owned(), count(result.removed.len())),
                 ("conflicts".to_owned(), count(result.conflicts.len())),
-            ];
+            ]);
             report.outcome.message = format!(
                 "Replayed deployment state · {} written, {} removed, {} conflicting",
                 counted(result.written.len(), "shard"),

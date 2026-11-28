@@ -13,7 +13,7 @@ use crate::envelope::{
     CRASH_EXIT_CODE, Failure, INTERRUPTED_EXIT_CODE, NextAction, Outcome, PARTIAL_EXIT_CODE,
     USAGE_EXIT_CODE,
 };
-use crate::json::Json;
+use crate::json::{Json, Object};
 
 /// The envelope's `status` (`docs/cli/json-output.md`).
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -350,7 +350,7 @@ impl CommandResult {
             message,
             data: report.outcome.data,
             exit_code: self.exit,
-            summary: self.summary,
+            summary: Object::from_iter(self.summary),
             next_actions: self.next_actions,
             failure,
         };
