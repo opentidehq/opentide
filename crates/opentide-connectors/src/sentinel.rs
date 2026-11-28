@@ -49,6 +49,11 @@ pub const LOGS_SCOPE: &str = "https://api.loganalytics.io/.default";
 pub const ALERT_RULES_API_VERSION: &str = "2025-10-01-preview";
 /// The longest a Log Analytics query may run on the server (`server_timeout`).
 pub const MAX_SERVER_TIMEOUT: Duration = Duration::from_secs(600);
+/// The shortest read timeout of a query: azure-core reads for 300 s, and
+/// the server holds a query up to its own timeout (`Prefer: wait`).
+pub const MIN_QUERY_TIMEOUT: Duration = Duration::from_secs(300);
+/// The read timeout of a deploy's ARM session (it sends no query).
+pub const DEPLOY_TIMEOUT: Duration = Duration::from_secs(60);
 
 /// The HTTP settings of a Sentinel tenant: *timeout* on each request, and
 /// the connectors' retries.

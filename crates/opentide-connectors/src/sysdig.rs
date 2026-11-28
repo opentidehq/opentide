@@ -36,6 +36,10 @@ const RULES: &str = "/api/secure/rules";
 /// Runtime policies.
 const POLICIES: &str = "/api/v2/policies";
 
+/// The connect timeout and the read timeout of each request to the tenant;
+/// with retries, a whole request can take longer.
+pub const REQUEST_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
+
 /// How a Sysdig tenant is reached: 30 s, and the connectors' retries. Only
 /// a read or a delete is sent again after a transient answer: a rule create
 /// is a `POST`, and every update is a `PUT` that is never retried once
@@ -43,7 +47,7 @@ const POLICIES: &str = "/api/v2/policies";
 /// held, and a policy is sent back as the tenant listed it.
 pub fn http_defaults() -> HttpSettings {
     HttpSettings {
-        timeout: std::time::Duration::from_secs(30),
+        timeout: REQUEST_TIMEOUT,
         retry: RetryPolicy::standard(),
         ..HttpSettings::default()
     }

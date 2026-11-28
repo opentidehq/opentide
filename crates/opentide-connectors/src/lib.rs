@@ -92,9 +92,7 @@ pub fn http_settings(platform: &str, timeout: std::time::Duration) -> HttpSettin
         "elastic" => elastic::http_settings(timeout),
         "splunk" => splunk::http_settings(timeout),
         "carbon_black_cloud" => carbon_black::http_settings(timeout),
-        // azure-core reads for 300 s; the server holds a query up to its own
-        // timeout (`Prefer: wait`).
-        "sentinel" => sentinel::http_settings(timeout.max(std::time::Duration::from_secs(300))),
+        "sentinel" => sentinel::http_settings(timeout.max(sentinel::MIN_QUERY_TIMEOUT)),
         _ => HttpSettings::default(),
     }
 }
@@ -108,10 +106,9 @@ pub fn http_settings(platform: &str, timeout: std::time::Duration) -> HttpSettin
 /// [`http_settings`]. Only the timeout follows 0.28: the retries are the
 /// connectors' own ([`retry::RetryPolicy`]).
 pub fn deploy_http_settings(platform: &str) -> HttpSettings {
-    use std::time::Duration;
     match platform {
-        "sentinel" => sentinel::http_settings(Duration::from_secs(60)),
-        "elastic" => elastic::http_settings(Duration::from_secs(30)),
+        "sentinel" => sentinel::http_settings(sentinel::DEPLOY_TIMEOUT),
+        "elastic" => elastic::http_settings(elastic::DEPLOY_TIMEOUT),
         "google_secops" => google_secops::http_defaults(),
         _ => http_settings(platform, http::DEFAULT_TIMEOUT),
     }

@@ -494,32 +494,31 @@ fn repository_dir(path: &Path) -> PathBuf {
 
 /// The branch GitHub and Azure jobs deploy from, and which setting named it
 /// (`_detect_default_branch`): `origin/HEAD`, the checked-out branch, then
-/// `init.defaultBranch`, else `main`.
+/// `init.defaultBranch`, else `main`. The repository is read with gix, so
+/// git need not be installed; the configuration files are found through the
+/// run's environment, as git would find them.
 fn detect_default_branch(env: &Env, path: &Path) -> (String, &'static str) {
-    use crate::git_baseline::stdout;
+    use opentide_compile::git;
     let dir = repository_dir(path);
-    let short = |args: &[&str]| stdout(env, &dir, args).unwrap_or_default();
-    let remote_head = short(&[
-        "symbolic-ref",
-        "--quiet",
-        "--short",
-        "refs/remotes/origin/HEAD",
-    ]);
-    let remote = remote_head
-        .strip_prefix("origin/")
-        .unwrap_or_default()
-        .to_owned();
+    let checkout = git::checkout(&dir);
+    let lookup = |name: &str| env.get(name).map(str::to_owned);
     for (source, branch) in [
-        ("origin/HEAD", remote),
+        (
+            "origin/HEAD",
+            checkout
+                .as_ref()
+                .and_then(|checkout| checkout.default_branch.clone()),
+        ),
         (
             "HEAD",
-            short(&["symbolic-ref", "--quiet", "--short", "HEAD"]),
+            checkout.and_then(|checkout| checkout.current_branch),
         ),
         (
             "init.defaultBranch",
-            short(&["config", "--get", "init.defaultBranch"]),
+            git::config_value(&dir, "init.defaultBranch", &lookup),
         ),
     ] {
+        let branch = branch.unwrap_or_default();
         if is_valid_branch_name(&branch) {
             return (branch, source);
         }
@@ -529,24 +528,12 @@ fn detect_default_branch(env: &Env, path: &Path) -> (String, &'static str) {
 
 /// A detected branch that is likely not the one that deploys
 /// (`_default_branch_warnings`).
-fn default_branch_warnings(env: &Env, path: &Path, branch: &str, source: &str) -> Vec<String> {
-    use crate::git_baseline::stdout;
+fn default_branch_warnings(path: &Path, branch: &str, source: &str) -> Vec<String> {
+    use opentide_compile::git;
     let dir = repository_dir(path);
-    let local: Vec<String> = stdout(
-        env,
-        &dir,
-        &["for-each-ref", "--format=%(refname)", "refs/heads/"],
-    )
-    .unwrap_or_default()
-    .lines()
-    .map(|line| line.strip_prefix("refs/heads/").unwrap_or(line).to_owned())
-    .collect();
+    let local = git::local_branches(&dir);
     let quoted = repr(branch);
-    if source == "fallback"
-        && stdout(env, &dir, &["rev-parse", "--git-dir"])
-            .unwrap_or_default()
-            .is_empty()
-    {
+    if source == "fallback" && !git::in_repository(&dir) {
         return vec![format!(
             "This folder is not a git repository yet, so the pipeline targets {quoted}; create it on that branch with 'git init -b {branch}', or write the pipeline for another one with 'opentide setup ci <provider> --default-branch <branch>'."
         )];
@@ -959,7 +946,7 @@ pub(crate) fn prepare(
         (_, Some(given)) => given.clone(),
         (_, None) => {
             let (branch, source) = detect_default_branch(cx.env, root);
-            warnings.extend(default_branch_warnings(cx.env, root, &branch, source));
+            warnings.extend(default_branch_warnings(root, &branch, source));
             branch
         }
     };

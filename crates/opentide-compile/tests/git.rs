@@ -1818,6 +1818,68 @@ fn a_commits_changes_under_a_folder_carry_both_sides() {
     );
 }
 
+/// `config_value` reads what `git config --get` prints: the global file the
+/// environment names (and its includes), the repository's file over it, the
+/// last value of a key winning, and `GIT_CONFIG_COUNT` over every file.
+/// `local_branches` lists packed and loose branches (#1955).
+#[test]
+fn configuration_and_branches_are_read_as_git_reads_them() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().canonicalize().unwrap();
+    let included = root.join("inclus é.gitconfig");
+    std::fs::write(&included, "[init]\n\tdefaultBranch = included\n").unwrap();
+    let global = root.join("global.gitconfig");
+    std::fs::write(
+        &global,
+        format!(
+            "[init]\n\tdefaultBranch = first\n[include]\n\tpath = {}\n",
+            included.display()
+        ),
+    )
+    .unwrap();
+    let global_text = global.to_str().unwrap().to_owned();
+    let env = move |name: &str| match name {
+        "GIT_CONFIG_GLOBAL" => Some(global_text.clone()),
+        "GIT_CONFIG_NOSYSTEM" => Some("1".to_owned()),
+        _ => None,
+    };
+    let outside = root.join("outside");
+    std::fs::create_dir_all(&outside).unwrap();
+    assert_eq!(
+        git::config_value(&outside, "init.defaultBranch", &env).as_deref(),
+        Some("included")
+    );
+    assert!(!git::in_repository(&outside));
+    assert!(git::local_branches(&outside).is_empty());
+    let repo = root.join("repo");
+    std::fs::create_dir_all(&repo).unwrap();
+    git_cmd(&repo, &["init", "-q", "-b", "main"]);
+    git_cmd(&repo, &["config", "init.defaultBranch", "local"]);
+    assert!(git::in_repository(&repo));
+    assert_eq!(
+        git::config_value(&repo, "init.defaultBranch", &env).as_deref(),
+        Some("local")
+    );
+    let overridden = |name: &str| match name {
+        "GIT_CONFIG_COUNT" => Some("2".to_owned()),
+        "GIT_CONFIG_KEY_0" => Some("init.defaultbranch".to_owned()),
+        "GIT_CONFIG_VALUE_0" => Some("zero".to_owned()),
+        "GIT_CONFIG_KEY_1" => Some("other.key".to_owned()),
+        "GIT_CONFIG_VALUE_1" => Some("one".to_owned()),
+        other => env(other),
+    };
+    assert_eq!(
+        git::config_value(&repo, "init.defaultBranch", &overridden).as_deref(),
+        Some("zero")
+    );
+    write(&repo, "a.txt", "a");
+    commit(&repo, "first");
+    git_cmd(&repo, &["branch", "feature/x"]);
+    git_cmd(&repo, &["pack-refs", "--all"]);
+    git_cmd(&repo, &["branch", "loose"]);
+    assert_eq!(git::local_branches(&repo), ["feature/x", "loose", "main"]);
+}
+
 /// Discovery without the process's git variables (a hook running the tests
 /// exports `GIT_DIR`).
 fn no_env(_: &str) -> Option<std::ffi::OsString> {

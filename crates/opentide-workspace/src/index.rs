@@ -39,7 +39,7 @@ pub struct Object {
     pub family: String,
     /// The file it was read from.
     pub path: PathBuf,
-    /// The document.
+    /// Its parsed content, with the positions findings point at.
     pub document: Arc<Document>,
 }
 
@@ -112,7 +112,7 @@ pub struct Source {
     pub path: PathBuf,
     /// The family of the folder it is in.
     pub family: String,
-    /// The document.
+    /// Its parsed content, with the positions findings point at.
     pub document: Arc<Document>,
 }
 
@@ -130,7 +130,7 @@ pub struct Nested {
 /// An object folder the registry did not scan.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SkippedFolder {
-    /// The family.
+    /// The family whose folder it is (`rule`).
     pub family: String,
     /// The folder, when `paths.toml` names one.
     pub path: Option<PathBuf>,
@@ -289,11 +289,11 @@ pub fn posix(path: &Path) -> String {
 /// One family's scan, or why it was not scanned.
 #[derive(Debug, Clone)]
 pub struct FamilyScan {
-    /// The family.
+    /// The family scanned (`rule`).
     pub family: String,
-    /// The folder.
+    /// Its object folder, resolved; `None` when `paths.toml` names none.
     pub folder: Option<PathBuf>,
-    /// The scan.
+    /// The files found in the folder, or why it could not be scanned.
     pub scan: Result<Scan, FolderProblem>,
 }
 
@@ -659,7 +659,7 @@ impl Index {
             .flat_map(IndexMap::values)
     }
 
-    /// The rules.
+    /// The rule objects, in the index's order.
     pub fn rules(&self) -> impl Iterator<Item = &Object> {
         self.family("rule")
     }

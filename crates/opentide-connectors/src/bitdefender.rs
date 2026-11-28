@@ -106,11 +106,15 @@ pub const ACTIONS_UNSUPPORTED: &str = "bitdefender_actions_unsupported";
 /// event, not a warning).
 pub const CREATE_RETRIED: &str = "bitdefender_create_retried";
 
+/// The connect timeout and the read timeout of each request to the tenant;
+/// with retries, a whole request can take longer.
+pub const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
+
 /// How a GravityZone tenant is reached: 30 s, and no transport retry (a
 /// create that got no answer must not be sent again blindly).
 pub fn http_defaults() -> HttpSettings {
     HttpSettings {
-        timeout: Duration::from_secs(30),
+        timeout: REQUEST_TIMEOUT,
         retry: RetryPolicy::none(),
         ..HttpSettings::default()
     }

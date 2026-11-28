@@ -29,6 +29,10 @@ use std::time::Duration;
 
 use crate::env::Env;
 
+/// How long the event loop waits for a key or a mouse event before it
+/// redraws.
+const EVENT_POLL: Duration = Duration::from_millis(100);
+
 /// What the UI needs of the run that opened it.
 #[derive(Debug, Clone)]
 pub struct Launch {
@@ -102,7 +106,7 @@ fn event_loop(
         if ui.quit {
             return Ok(());
         }
-        if event::poll(Duration::from_millis(100))? {
+        if event::poll(EVENT_POLL)? {
             match event::read()? {
                 Event::Key(key) if key.kind != KeyEventKind::Release => ui.on_key(key),
                 Event::Mouse(mouse) => ui.on_mouse(mouse),
