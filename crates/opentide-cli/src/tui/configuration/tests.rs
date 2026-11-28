@@ -1,4 +1,4 @@
-//! The redaction and the view (`tests/test_cli/test_tui_configuration.py`).
+//! The redaction and the view.
 
 use super::*;
 

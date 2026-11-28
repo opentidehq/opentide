@@ -3,13 +3,11 @@
 //!
 //! What the server says of itself (its name, instructions, capabilities, the
 //! protocol version it falls back to, every tool's description and schemas,
-//! every resource and template) was the Python server's
-//! (generated once into `data/mcp/manifest.json`, which is hand-edited since the
-//! generator was removed): MCP shapes are a plan §3 invariant.
+//! every resource and template) is `data/mcp/manifest.json`, edited by hand:
+//! MCP shapes are a plan §3 invariant.
 //!
 //! Every tool ([`TOOLS`]) and every resource runs here, on the workspace
-//! crates, and answers as the Python server's handlers did (it was replayed
-//! against their recorded sessions until #1142): no Python is needed.
+//! crates: no Python is needed.
 //! The tools that reach a tenant (`validate_query` and `run_query` with
 //! `live`, `deploy_rule` without `dry_run`) run the command line's own
 //! commands in this process.

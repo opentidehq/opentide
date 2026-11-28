@@ -1,11 +1,12 @@
 //! The `git` program, asked for what the gix crates `opentide-compile` reads
 //! git with do not answer yet: the author's `user.name` for `new`, and the
-//! repository's layout and default branch for `setup hooks` and `setup ci`
-//! (`cli/services/setup/ci.py`). What changed against the default branch
+//! repository's layout and default branch for `setup hooks` and `setup ci`.
+//! What changed against the default branch
 //! is read with gix, `opentide_compile::git::changed_in_folders` (#1955).
 //!
-//! git runs with the run's environment ([`Env`]), as the oracle's
-//! subprocesses inherit its own.
+//! git runs with the run's environment ([`Env`]) and nothing else: the
+//! process's own variables are cleared first, so what a test injects is what
+//! git sees.
 
 use std::path::Path;
 use std::process::Command;

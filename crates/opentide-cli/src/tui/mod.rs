@@ -1,5 +1,5 @@
-//! `opentide tui` on ratatui (UC-3.6d, #951; `cli/tui_app.py`,
-//! `cli/tui_tabs/`): the catalogue as a tree, each object as a page or as
+//! `opentide tui` on ratatui (UC-3.6d, #951): the catalogue as a tree, each
+//! object as a page or as
 //! its file with what the language server and the last validate run report
 //! in place, ATT&CK coverage, the Results of the commands run from it, the
 //! Visibility report and threat chaining, in a terminal UI drawn through

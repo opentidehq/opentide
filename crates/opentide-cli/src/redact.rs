@@ -1,15 +1,15 @@
 //! Credentials and tenant identifiers out of everything the CLI writes about
 //! itself: crash logs, the crash report, log lines (plan §3 invariant 9).
 //!
-//! What is redacted is opentide's own rule set (`cli/ui/crash.py` in the
-//! oracle): secret-named environment variables and configuration keys, proxy
+//! What is redacted is opentide's own rule set: secret-named environment
+//! variables and configuration keys, proxy
 //! and URL passwords, `Authorization` values, `Bearer` and `Basic`
 //! credentials, well-known token shapes, `key=value` pairs whose key names a
 //! secret, and the names, hosts and ids of the tenants and sharing
 //! destinations of `.opentide/configurations/`. The patterns run on the
-//! `regex` crate; the two the oracle wrote with look-around (a whole-word
-//! identifier, a pair's value) are matched here by checking the neighbouring
-//! characters instead.
+//! `regex` crate, which has no look-around; the two rules that need it (a
+//! whole-word identifier, a pair's value) check the neighbouring characters
+//! instead.
 
 use crate::env::Env;
 use regex::Regex;
@@ -314,8 +314,9 @@ fn redact_assignments(text: &str) -> String {
     let mut search = 0;
     while let Some(caps) = p.assignment_key.captures_at(text, search) {
         let whole = caps.get(0).map_or(0..0, |m| m.range());
-        // The value is a lookahead in the oracle's pattern: the next search
-        // starts after the key and separator (never empty: the key is not).
+        // The key's match stops before the value, which is matched apart:
+        // the next search starts after the key and separator (never empty:
+        // the key is not), and past a value once one is masked.
         search = whole.end;
         if whole.start < position || !is_secret_name(&caps["key"]) {
             continue;

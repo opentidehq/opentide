@@ -3,8 +3,8 @@
 //!
 //! Each builds text (or a JSON document) from data; the command writes it to
 //! its stream. Their output is the CLI's contract (plan §3 invariant 1,
-//! `docs/internal/cli-experience.md`, `docs/cli/diagnostics.md`), proven byte
-//! for byte against the oracle by `tests/render.rs`.
+//! `docs/internal/cli-experience.md`, `docs/cli/diagnostics.md`), held byte
+//! for byte by `tests/render.rs`'s reviewed snapshots.
 //!
 //! | Module | What |
 //! |--------|------|

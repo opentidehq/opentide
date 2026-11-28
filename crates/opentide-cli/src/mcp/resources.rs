@@ -1,5 +1,5 @@
-//! The `opentide://` resources (`src/opentide/mcp_server/resources.py`):
-//! the index, the objects, the generated schemas and templates, the
+//! The `opentide://` resources: the index, the objects, the generated
+//! schemas and templates, the
 //! vocabularies and the platforms, each an indented JSON document
 //! (`application/json`), except an object template (`opentide://templates/{type}`),
 //! which is its YAML as it is (`application/yaml`). `templates/systems` and the
@@ -191,7 +191,7 @@ fn sorted_names<'a>(names: impl IntoIterator<Item = &'a String>) -> Json {
 }
 
 /// `rule::1.0`, `rule.1.0` or `rule` as its family and version, the family's
-/// plural read as the family (`_split_schema_id`).
+/// plural read as the family.
 fn split_schema_id(identifier: &str) -> (String, Option<String>) {
     let text = identifier.trim();
     let (family, version) = text
@@ -221,8 +221,7 @@ fn version_order(version: &str) -> Vec<(u8, u64, String)> {
         .collect()
 }
 
-/// The key of `keys` a family alias names, the highest version first
-/// (`_resolve_family_key`).
+/// The key of `keys` a family alias names, the highest version first.
 fn resolve_family_key<'k>(
     keys: impl IntoIterator<Item = &'k str>,
     requested: &str,
@@ -288,7 +287,7 @@ fn schema_artifact_identifier(name: &str) -> Option<String> {
 }
 
 /// The generated JSON Schemas of the workspace, by identifier, with their
-/// files (`_scan_framework_schemas`).
+/// files.
 fn json_schemas(workspace: &Workspace) -> Vec<(String, PathBuf, Json)> {
     let config = &workspace.configuration().resolved.tree;
     let dir = workspace_dir(

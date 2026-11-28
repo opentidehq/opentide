@@ -1,12 +1,10 @@
 //! The command tree of `opentide`, in clap derive (plan §3 invariant 1).
 //!
-//! Every path, option, type, choice, default and environment variable of the
-//! Python CLI (opentide 0.28.1, the oracle; written from 0.23.0's) is here, hidden ones included, so
-//! that every command line the oracle parses parses the same way. It was
-//! written from the oracle's Click tree once; it is code now, and a command's
-//! port (UC-3.5, UC-3.6) changes its struct here. `opentide --json commands`
-//! is generated from it ([`crate::catalog`]), and `tests/framework_catalog.rs`
-//! holds that document to the oracle's byte for byte.
+//! Every path, option, type, choice, default and environment variable is
+//! declared here, hidden ones included. A command's port (UC-3.5, UC-3.6)
+//! changes its struct here. `opentide --json commands` is generated from it
+//! ([`crate::catalog`]), and its snapshot case (`commands` in
+//! `tests/golden/cases.toml`) holds that document byte for byte.
 //!
 //! What clap cannot say about an argument, the catalogue reads from
 //! `tree_meta.rs`: the negative flag of a pair (`--publish` /

@@ -1,4 +1,4 @@
-//! The UI's state, its keys and its drawing (`tui_app.py`'s `OpentideTui`).
+//! The UI's state, its keys and its drawing.
 //!
 //! One command runs at a time, on a thread of its own, so the UI stays
 //! responsive; when it finishes, the catalogue is read again. Quitting while
@@ -126,7 +126,7 @@ pub fn commands() -> Vec<Command> {
 /// The `opentide tui` application.
 #[expect(
     clippy::struct_excessive_bools,
-    reason = "the UI's switches, one field each, as the Python app has them"
+    reason = "the UI's switches, each an independent toggle with its own field"
 )]
 pub struct App {
     launch: Launch,

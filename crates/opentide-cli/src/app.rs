@@ -1563,7 +1563,7 @@ impl Run<'_> {
         }
     }
 
-    /// Prints a dry run in this run's mode, in the oracle's order: the
+    /// Prints a dry run in this run's mode, in this order: the
     /// progress events, then the plan (stdout), the rules that would fail
     /// (stderr), the CI job summary, the result, and the closing note.
     fn emit_deploy(
@@ -1766,8 +1766,8 @@ impl Run<'_> {
         if !report.steps.is_empty() && self.mode != Mode::Mcp && !self.globals.quiet {
             let console = self.console(self.host.stderr_tty);
             if self.mode == Mode::Human && self.host.stderr_tty {
-                // The oracle's live display keeps its rows below the lines
-                // logged while it runs: they end up above the checklist.
+                // The lines logged while the steps ran are written first, so
+                // they end up above the checklist rather than inside it.
                 for line in &report.after_steps {
                     line.log();
                 }
@@ -3116,7 +3116,8 @@ mod tests {
                     Ok(0)
                 });
                 assert_eq!(result.stdout, "", "{line}");
-                // `--json` writes its log lines as JSON, as the oracle does.
+                // `--json` writes its log lines as JSON objects, on stderr:
+                // stdout stays empty.
                 let (warned, loaded) = if line.contains("--json") {
                     (
                         "\"event\":\"tenant_targets_failed\",\"level\":\"warning\"",

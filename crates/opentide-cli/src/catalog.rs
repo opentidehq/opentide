@@ -4,8 +4,8 @@
 //! lists them, with its arguments, options (types, choices, defaults,
 //! environment variables) and its first example. Each command's
 //! `output_schema` names the JSON Schema of its `--json` document in `$defs`
-//! ([`crate::schemas`]). Plan §3 invariant 2: the document is byte-identical
-//! to the oracle's, or differs by approved additions only.
+//! ([`crate::schemas`]). The document is held byte for byte by its snapshot
+//! case (`commands` in `tests/golden/cases.toml`).
 
 use crate::json::Json;
 use crate::tree::Cli;

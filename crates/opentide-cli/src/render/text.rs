@@ -25,7 +25,7 @@ pub fn cell_len(text: &str) -> usize {
 }
 
 /// How a [`Text`] holds `ch`: `None` for the controls a terminal would act on
-/// mid-line and the oracle dropped (bell, backspace, vertical tab, form feed,
+/// mid-line, which are dropped (bell, backspace, vertical tab, form feed,
 /// carriage return); the Unicode control picture (`␛`, `␀`, `␡`) for the other
 /// C0 controls but tab and newline and for DEL, and `�` for a C1 control, so
 /// text from a file never reaches the terminal as an escape sequence; else `ch`.

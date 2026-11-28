@@ -1,4 +1,4 @@
-//! The commands `opentide tui` runs (`cli/services/tui.py`'s actions): each
+//! The commands `opentide tui` runs: each
 //! is the command line itself, run in this process as a person at a terminal
 //! runs it, so what the Results tab shows is what the command prints. Its
 //! output comes from the CLI's renderers (code frames, a dry run's plan, the

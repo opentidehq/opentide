@@ -1,5 +1,5 @@
 //! Which detection workspace the server serves when an Agent Plugin starts it
-//! (#431, `src/opentide/mcp_server/workspace.py`).
+//! (#431).
 //!
 //! An Agent Plugins 1.0 client starts a plugin's stdio server in the plugin
 //! root. For the opentide skills plugin that root is the skills package, not

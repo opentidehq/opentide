@@ -1,9 +1,9 @@
 //! The JSON envelope every `--json` document carries (`docs/cli/json-output.md`).
 //!
-//! Key order is the oracle's: the command's own keys, then `ok`, `status`,
-//! `message`, `warnings` when there are any, then `schema_version`,
-//! `command`, `duration_ms`, `exit_code`, `summary`, `next_actions` and
-//! `failure`. A non-zero exit always carries `error`: where the command put it,
+//! Key order is fixed, as part of the `--json` contract: the command's own
+//! keys, then `ok`, `status`, `message`, `warnings` when there are any, then
+//! `schema_version`, `command`, `duration_ms`, `exit_code`, `summary`,
+//! `next_actions` and `failure`. A non-zero exit always carries `error`: where the command put it,
 //! else after `message`.
 
 use crate::json::{Json, Object};
@@ -182,8 +182,8 @@ impl Outcome {
         members.push(("ok".into(), Json::Bool(self.ok())));
         members.push(("status".into(), Json::str(&self.status)));
         members.push(("message".into(), Json::str(&self.message)));
-        // The oracle's `envelope` adds `error` to the payload it was given,
-        // after the command's own keys and its message.
+        // `error`, unless the command put it among its own keys, goes after
+        // those keys and the message.
         if self.exit_code != 0 && !members.iter().any(|(k, _)| k == "error") {
             let message = if self.message.is_empty() {
                 self.failure
@@ -228,7 +228,7 @@ mod tests {
     use crate::json::document_text;
 
     #[test]
-    fn framework_envelope_a_usage_error_document_has_the_oracles_key_order() {
+    fn framework_envelope_a_usage_error_document_keeps_its_key_order() {
         let mut failure = Failure::new(code::USAGE_UNKNOWN_COMMAND, "No such command 'valdiate'.");
         failure.argument = Some("valdiate".into());
         failure.suggestion = Some("validate".into());
