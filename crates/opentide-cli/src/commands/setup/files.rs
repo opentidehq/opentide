@@ -1040,12 +1040,24 @@ pub fn mcp(
             server.hint
         ));
     }
-    if server.is_some_and(|server| server.not_on_path) {
+    // The other hosts run a bare `opentide`, which needs `PATH`; Claude
+    // Desktop's entry names the absolute command, unless none was found.
+    let bare = hosts.iter().any(|host| host != desktop::HOST);
+    if bare && server.is_some_and(|server| server.not_on_path) {
         available = false;
         warnings.push(
             "These configs launch opentide mcp start, but opentide is not on PATH, so the editor cannot start the server. Put opentide on PATH (pipx install opentide, or activate its virtual environment before starting the editor), or set the full path as the server command."
                 .to_owned(),
         );
+    }
+    if let Some(config) = &desktop_config
+        && server.is_none_or(|server| server.desktop.launch.is_none())
+    {
+        available = false;
+        warnings.push(format!(
+            "No opentide program was found to start from Claude Desktop, which does not read your shell's PATH, so {} runs a bare opentide. Set the full path of opentide as the server command there.",
+            shown(config)
+        ));
     }
     result.set("mcp_available", Json::Bool(available));
     if !warnings.is_empty() {
@@ -1082,7 +1094,8 @@ fn claude_desktop(
             ),
         ));
     };
-    let root = std::path::absolute(target).unwrap_or_else(|_| target.to_path_buf());
+    // As `doctor` compares it: absolute, `..` and links resolved.
+    let root = super::real(&std::path::absolute(target).unwrap_or_else(|_| target.to_path_buf()));
     let template = desktop::template(found.and_then(|found| found.launch.as_ref()), &root);
     match desktop::write(stage, &config, &template) {
         Ok(()) => Ok(config),
@@ -1571,6 +1584,43 @@ mod tests {
             Some(shown(&config).as_str())
         );
         assert_eq!(result.text("advice"), Some(desktop::ADVICE));
+        // No command was found (`launch: None`): the entry runs a bare
+        // `opentide`, which Claude Desktop cannot find without PATH.
+        assert_eq!(result.get("mcp_available"), Some(&Json::Bool(false)));
+        assert!(
+            result
+                .strings("warnings")
+                .iter()
+                .any(|warning| warning.contains("runs a bare opentide")),
+            "{:?}",
+            result.strings("warnings")
+        );
+        // With one, nothing warns, though opentide is not on PATH: the
+        // entry names it by its path.
+        let found = McpServer {
+            not_on_path: true,
+            desktop: desktop::Desktop {
+                config: Some(config.clone()),
+                launch: Some(desktop::Launch {
+                    command: dir.path().join("venv").join("opentide"),
+                    args: vec!["mcp".into(), "start".into()],
+                }),
+            },
+            ..McpServer::default()
+        };
+        let alone = mcp(&mut Stage::new(), &root, &hosts[..1], Some(&found));
+        assert_eq!(alone.get("mcp_available"), Some(&Json::Bool(true)));
+        assert_eq!(alone.get("warnings"), None);
+        // The workspace as `doctor` compares it: `..` resolved.
+        let mut climbed = Stage::new();
+        let roundabout = dir.path().join("é😀").join("..").join("ws");
+        mcp(&mut climbed, &roundabout, &hosts[..1], Some(&found));
+        let text = String::from_utf8(climbed.read(&config).unwrap().unwrap()).unwrap();
+        let value: serde_json::Value = serde_json::from_str(&text).unwrap();
+        assert_eq!(
+            value["mcpServers"]["opentide"]["env"]["OPENTIDE_REPO_ROOT"],
+            super::super::real(&root).to_string_lossy().as_ref()
+        );
         assert!(stage.is_outside(&config));
         assert!(!stage.is_outside(&root.join(".cursor/mcp.json")));
         // Without a home folder there is nowhere to write it: a warning.

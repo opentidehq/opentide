@@ -48,13 +48,17 @@ impl Machine {
     }
 
     fn vars(&self) -> Vec<(&'static str, String)> {
+        self.vars_with_path(&self.bin.to_string_lossy())
+    }
+
+    fn vars_with_path(&self, path: &str) -> Vec<(&'static str, String)> {
         let home = self.home.to_string_lossy().into_owned();
         vec![
             ("HOME", home.clone()),
             ("USERPROFILE", home.clone()),
             ("APPDATA", format!("{home}/AppData/Roaming")),
             ("XDG_CONFIG_HOME", format!("{home}/.config")),
-            ("PATH", self.bin.to_string_lossy().into_owned()),
+            ("PATH", path.to_owned()),
         ]
     }
 
@@ -65,12 +69,23 @@ impl Machine {
     }
 
     fn run(&self, args: &[&str]) -> (i32, Value) {
-        let output = Command::new(env!("CARGO_BIN_EXE_opentide-cli"))
+        self.run_as(args, &self.bin.to_string_lossy(), None)
+    }
+
+    /// `args` run with `PATH` set to `path`, and started as `argv0` (the
+    /// console script's interpreter) when given.
+    fn run_as(&self, args: &[&str], path: &str, argv0: Option<&Path>) -> (i32, Value) {
+        use std::os::unix::process::CommandExt as _;
+        let mut command = Command::new(env!("CARGO_BIN_EXE_opentide-cli"));
+        if let Some(argv0) = argv0 {
+            command.arg0(argv0);
+        }
+        let output = command
             .arg("--json")
             .args(args)
             .current_dir(&self.workspace)
             .env_clear()
-            .envs(self.vars())
+            .envs(self.vars_with_path(path))
             .output()
             .unwrap();
         let stdout = String::from_utf8_lossy(&output.stdout);
@@ -169,6 +184,47 @@ fn the_server_is_merged_into_the_users_file_and_doctor_counts_it() {
             .unwrap()
             .contains("MCP configured for Claude Desktop"),
         "{check}"
+    );
+}
+
+/// The case the host exists for: `opentide` is not on `PATH` (a virtual
+/// environment that is not activated), and the entry names it by its path,
+/// so the server is available and nothing warns about `PATH`.
+#[test]
+fn opentide_off_path_is_named_by_its_path_and_available() {
+    use std::os::unix::fs::PermissionsExt as _;
+    let machine = Machine::new();
+    let venv = machine.home.join("venv é😀").join("bin");
+    std::fs::create_dir_all(&venv).unwrap();
+    let script = venv.join("opentide");
+    std::fs::write(&script, "#!/usr/bin/python3\n").unwrap();
+    std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let empty = machine.home.join("empty");
+    std::fs::create_dir_all(&empty).unwrap();
+    let (code, result) = machine.run_as(
+        &["setup", "mcp", "--claude-desktop", "--yes"],
+        &empty.to_string_lossy(),
+        Some(&venv.join("python3")),
+    );
+    assert_eq!(code, 0, "{result}");
+    assert_eq!(result["mcp_available"], true, "{result}");
+    assert!(strings(&result["warnings"]).is_empty(), "{result}");
+    let written: Value =
+        serde_json::from_str(&std::fs::read_to_string(machine.config()).unwrap()).unwrap();
+    assert_eq!(
+        written["mcpServers"]["opentide"]["command"],
+        script.to_string_lossy().as_ref()
+    );
+    // Another host still runs a bare `opentide`, which needs PATH.
+    let (_, result) = machine.run_as(
+        &["setup", "mcp", "--claude-desktop", "--cursor", "--yes"],
+        &empty.to_string_lossy(),
+        Some(&venv.join("python3")),
+    );
+    assert_eq!(result["mcp_available"], false, "{result}");
+    assert!(
+        result.to_string().contains("opentide is not on PATH"),
+        "{result}"
     );
 }
 
