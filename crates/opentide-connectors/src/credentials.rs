@@ -10,6 +10,8 @@
 
 use std::fmt;
 
+use opentide_schema::platforms::PlatformId;
+
 use crate::Environment;
 use crate::error::ConnectorError;
 
@@ -142,4 +144,102 @@ pub fn resolve(
         credential: Credential::Value(Secret::new(value)),
         legacy_variable: None,
     })
+}
+
+/// The credentials a built-in platform's runner reads from a tenant's setup:
+/// the client a refusal names and the setup keys it checks, in order
+/// (`reject_unsubstituted_placeholders`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Keys {
+    /// The client a refusal names when the credentials are unset
+    /// (`Microsoft Graph`, `CBC`).
+    pub client: &'static str,
+    /// The setup keys whose `$NAME` placeholders must be set, in order.
+    pub keys: &'static [&'static str],
+}
+
+/// The credentials *platform*'s runner checks before it reaches a tenant, or
+/// `None` for a platform whose runner checks none this way.
+pub const fn keys(platform: PlatformId) -> Option<Keys> {
+    let (client, keys): (&'static str, &'static [&'static str]) = match platform {
+        PlatformId::MicrosoftDefender => (
+            "Microsoft Graph",
+            &["tenant_id", "client_id", "client_secret"],
+        ),
+        PlatformId::Crowdstrike => ("CrowdStrike", &["client_id", "client_secret"]),
+        PlatformId::SentinelOne => ("SentinelOne", &["url", "api_token"]),
+        PlatformId::Elastic => ("Elastic", &["api_key"]),
+        PlatformId::Harfanglab => ("HarfangLab", &["url", "api_token"]),
+        PlatformId::Splunk => ("Splunk", &["url", "port", "token", "app", "ssl"]),
+        PlatformId::CarbonBlackCloud => ("CBC", &["url", "org_key", "token"]),
+        PlatformId::Sentinel => (
+            "Azure",
+            &["azure_tenant_id", "azure_client_id", "azure_client_secret"],
+        ),
+        PlatformId::Graylog => ("Graylog", &["url", "token"]),
+        PlatformId::Sysdig
+        | PlatformId::Bitdefender
+        | PlatformId::Exabeam
+        | PlatformId::GoogleSecops
+        | PlatformId::Datadog => return None,
+    };
+    Some(Keys { client, keys })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn each_runner_names_its_client_and_keys() {
+        assert_eq!(
+            keys(PlatformId::Harfanglab),
+            Some(Keys {
+                client: "HarfangLab",
+                keys: &["url", "api_token"],
+            })
+        );
+        assert_eq!(
+            keys(PlatformId::Elastic).map(|found| found.keys),
+            Some(&["api_key"][..])
+        );
+        assert_eq!(
+            keys(PlatformId::Crowdstrike).map(|found| found.client),
+            Some("CrowdStrike")
+        );
+        assert_eq!(
+            keys(PlatformId::MicrosoftDefender).map(|found| found.keys.len()),
+            Some(3)
+        );
+        assert_eq!(
+            keys(PlatformId::Splunk).map(|found| found.keys),
+            Some(&["url", "port", "token", "app", "ssl"][..])
+        );
+        assert_eq!(
+            keys(PlatformId::CarbonBlackCloud).map(|found| found.client),
+            Some("CBC")
+        );
+        assert_eq!(
+            keys(PlatformId::Sentinel).map(|found| found.keys.len()),
+            Some(3)
+        );
+        assert_eq!(
+            keys(PlatformId::Graylog),
+            Some(Keys {
+                client: "Graylog",
+                keys: &["url", "token"],
+            })
+        );
+        assert_eq!(keys(PlatformId::Sysdig), None);
+    }
+
+    #[test]
+    fn every_platform_with_keys_names_a_client_and_a_key() {
+        for platform in PlatformId::ALL {
+            if let Some(found) = keys(platform) {
+                assert!(!found.client.is_empty(), "{platform}");
+                assert!(!found.keys.is_empty(), "{platform}");
+            }
+        }
+    }
 }

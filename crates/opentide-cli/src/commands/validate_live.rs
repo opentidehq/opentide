@@ -37,9 +37,7 @@ use opentide_schema::vocab::Vocabularies;
 use opentide_workspace::{FileSystem as _, OsFs, Workspace};
 use tokio_util::sync::CancellationToken;
 
-use super::query::{
-    Configured, default_host, http_settings, log_unset, toml_value, unset_credentials,
-};
+use super::query::{Configured, http_settings, log_unset, toml_value, unset_credentials};
 use super::result::CommandResult;
 use super::validate_query::{Args, COMMAND};
 use super::{Report, placement};
@@ -1556,7 +1554,15 @@ fn tenant_host(platform: &str, tenant: &Configured) -> String {
     }
     text("url")
         .filter(|url| !url.is_empty())
-        .unwrap_or_else(|| default_host(platform).to_owned())
+        .unwrap_or_else(|| {
+            let host = match PlatformKey::new(platform) {
+                PlatformKey::BuiltIn(platform) => {
+                    opentide_connectors::tenant::default_host(platform)
+                }
+                PlatformKey::Plugin(_) => None,
+            };
+            host.unwrap_or_default().to_owned()
+        })
 }
 
 /// A tenant's connection, made once per batch.
