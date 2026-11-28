@@ -1,12 +1,12 @@
-"""Write config_table.json: what the oracle reports for each case of config_cases.toml.
+"""Write config_table.json: what the Pydantic models reports for each case of config_cases.toml.
 
-Run it with the oracle's interpreter (tests/corpora/oracle.in, tests/corpora/README.md):
+Run it with the Pydantic models' interpreter (tests/corpora/oracle.in, tests/corpora/README.md):
 
     <oracle python> -I crates/opentide-schema/tests/oracle/config_table.py
 
 Each case is checked the way the CLI and the language server check
-configuration files (`validation/configuration.py`, `core/files.py`,
-`core/lint_config.py`, `sharing/config.py`); `tests/configuration.rs` runs the
+configuration files (the Python package's configuration validation, file
+loading, lint configuration and sharing configuration); `tests/configuration.rs` runs the
 same case through `opentide_schema::configuration` and compares.
 """
 
@@ -34,7 +34,7 @@ from opentide.validation.configuration import (
 )
 
 HERE = Path(__file__).resolve().parent
-#: Where the oracle's bundled configuration folder is installed.
+#: Where the Pydantic models' bundled configuration folder is installed.
 BUNDLED = str(Path(opentide.__file__).parent / "data" / "configurations")
 
 

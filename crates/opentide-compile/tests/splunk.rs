@@ -1,8 +1,8 @@
 //! A Splunk block's `advanced` table (0.24.0, #878): the `savedsearches.conf`
-//! keys a deploy sends as written. The oracle (0.23.0) refuses the table, so
-//! the compile corpus cannot hold such a rule (`tests/oracle.rs` compares
-//! every rule of it with the oracle); these are the cases of 0.24.0's
-//! `tests/test_platforms/test_splunk_deployer.py`.
+//! keys a deploy sends as written. Opentide 0.23.0 refuses the table, so
+//! the compile corpus cannot hold such a rule (`tests/payload_corpus.rs` compares
+//! every rule of it with opentide 0.23.0); these are the cases of 0.24.0's
+//! Splunk deployer tests.
 #![expect(
     clippy::unwrap_used,
     reason = "test helpers: every workspace here opens"

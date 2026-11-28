@@ -20,7 +20,7 @@ depends on opentide-core (`codes`, `suggest`). Not published yet (`publish = fal
 
 | Path | What |
 | --- | --- |
-| `src/keys.rs` | The 22 `tide.*` keys as constants, each with where the oracle sets it (`Origin`) |
+| `src/keys.rs` | The 22 `tide.*` keys as constants, each with where the Pydantic models sets it (`Origin`) |
 | `src/error.rs` | `SchemaError`, `ErrorKind` (Pydantic's error type) and `code(Surface)` (the CLI's code) |
 | `src/pins.rs` | `Pins`: the contracts a revision pins, by field path (`contract`) and by vocabulary (`version`), garde's context; `PinTable`: every revision's, from `src/opentide/data/pins/*.toml` (`bundled`) |
 | `src/platforms.rs` | The platform registry (R0): `PLATFORMS`, one row per built-in platform (identifier, label, configuration name, model class, `ExternalId`, deploy/offline/live-check/query-runner capabilities, runner and offline languages, query-file suffixes, a rank per `Order`); `ordered(Order)` (a constant), `ids_where`, `select`, `get`. Every crate reads its platform lists from it: adding a platform is a row here plus its modules |
@@ -30,18 +30,18 @@ depends on opentide-core (`codes`, `suggest`). Not published yet (`publish = fal
 | `src/migration.rs` | Forward one-step `From` impls (`From<RuleV1_0> for RuleV1_1`), `TideObject::step`, `migrate_to`, `into_newest`, `path` (`SchemaVersionChain`), `stamp_schema_identifier`; `migration/tests.rs`: the migration properties |
 | `src/revision.rs` | `revisions!`: one struct per revision, shared fields written once, in groups `@0,` … `@3,` around overridden fields |
 | `src/sample.rs` | Every derive and field convention on a two-revision family; not part of the model |
-| `src/generate/` | The generated artifacts (UC-1.8, #814): `json` (keys in insertion order, written as Python's `json.dumps(indent=4)`), `annotate` (`schema_annotations.py`: Markdown to text through `opentide_core::markdown`, its other patterns on `regex`, the sentence end's look-ahead by hand and held to `fancy-regex` in the tests), `router` (`opentide.schema.json`), `models` (each model's field order, from its derived `Deserialize`: the schemas schemars writes keep their keys sorted), `template` (`pydantic_skeleton.py`, walking the schemars schema), `snippets` (`vscode_snippets.py`), `schema` (UC-1.8b, #900: each revision's editor schema and `visibility.toml`'s, schemars' schema with opentide's `Transform`s: root extras, pins, platform recomposition, vocabulary and configured enums with their dropdowns and search hints, closure, the pinned identifier, `tide.*` stripped), `configuration` (each configuration file's schema from the configuration models' derived `JsonSchema`, and the router), `workspace` (the `schemas`, `templates` and `snippets` phases from a resolved configuration), `catalog` (UC-3.5d, #933: the language server's `fields.json` and `deprecations.json`, from each revision's model schema and its editor schema without the platform recomposition; one generator for `generate schemas` and the language server, #926), `tests.rs` (the committed platform templates and the tide-corpus templates) |
+| `src/generate/` | The generated artifacts (UC-1.8, #814): `json` (keys in insertion order, written as Python's `json.dumps(indent=4)`), `annotate`(Markdown to text through `opentide_core::markdown`, its other patterns on `regex`, the sentence end's look-ahead by hand and held to `fancy-regex` in the tests), `router` (`opentide.schema.json`), `models` (each model's field order, from its derived `Deserialize`: the schemas schemars writes keep their keys sorted), `template` (walking the schemars schema), `snippets`, `schema` (UC-1.8b, #900: each revision's editor schema and `visibility.toml`'s, schemars' schema with opentide's `Transform`s: root extras, pins, platform recomposition, vocabulary and configured enums with their dropdowns and search hints, closure, the pinned identifier, `tide.*` stripped), `configuration` (each configuration file's schema from the configuration models' derived `JsonSchema`, and the router), `workspace` (the `schemas`, `templates` and `snippets` phases from a resolved configuration), `catalog` (UC-3.5d, #933: the language server's `fields.json` and `deprecations.json`, from each revision's model schema and its editor schema without the platform recomposition; one generator for `generate schemas` and the language server, #926), `tests.rs` (the committed platform templates and the tide-corpus templates) |
 | `src/objects/` | The object models (UC-1.3, #809): `metadata` (`ObjectMetadata`, `RuleMetadata`, `ObjectReferences`, `Organisation`), `response`, `threat` (`ThreatVectorV1_0`), `objective` (`ObjectiveV1_0`), `rule` (`RuleV1_0`, `RuleV1_1`, `RuleConfigurations`), `role` (`FieldRole`), `any` (an unchecked value), `checks` (the validators, run by the conversion and by garde), `tests.rs` (ported from 0.28.0's `tests/test_models/`, which left with the Pydantic models in UC-6.2) |
-| `src/objects/platform/` | The platform blocks (UC-1.4, #810): one module per platform with its nested models (`platform_block!` puts `PlatformConfigBase`'s fields first), `PLATFORM_CONFIG_MODELS` (closed), `LEGACY_KEYS` (the oracle declares none to tolerate), the named checks `elastic_rule_shape` and `sysdig_rule_shape` (`NAMED_CHECKS`, each block's before-validator: codes judged on the raw block, one `value_error` naming them), `QueryText`, the Sentinel ATT&CK v18 and duration checks, `durations` (Elastic; `opentide_core::duration` re-exported), `falco_text` (the oracle's `resolve_list` and macro scan; Falco's terms are `opentide_core::falco`'s), `schema` (`platform_schema.py`), `deprecation` (`deprecated_field`), `table.rs` (`tests/oracle/platform_cases.toml` against the oracle) and `tests.rs` (the ported Python tests) |
+| `src/objects/platform/` | The platform blocks (UC-1.4, #810): one module per platform with its nested models (`platform_block!` puts `PlatformConfigBase`'s fields first), `PLATFORM_CONFIG_MODELS` (closed), `LEGACY_KEYS` (the Pydantic models declares none to tolerate), the named checks `elastic_rule_shape` and `sysdig_rule_shape` (`NAMED_CHECKS`, each block's before-validator: codes judged on the raw block, one `value_error` naming them), `QueryText`, the Sentinel ATT&CK v18 and duration checks, `durations` (Elastic; `opentide_core::duration` re-exported), `falco_text` (the Pydantic models' `resolve_list` and macro scan; Falco's terms are `opentide_core::falco`'s), `schema`, `deprecation` (`deprecated_field`), `table.rs` (`tests/oracle/platform_cases.toml` against the Pydantic models) and `tests.rs` (the ported Python tests) |
 | `tests/platform.rs` | Every block of `tests/fixtures/sysdig` and `tests/fixtures/elastic` |
 | `src/node.rs` | The YAML node tree (UC-1.2), re-exported from `opentide_core::node` (#850: saphyr-parser's events, saphyr's YAML 1.2 core-schema scalars, every node's position, `locate` placing a field path), and `node/dump.rs`, which writes a model (serde-saphyr) |
 | `src/from_node.rs` | `FromNode` and what `#[derive(FromNode)]` (`opentide-schema-derive`) expands to: every structural error collected, with its path and position |
-| `src/configuration/` | The configuration TOML files (UC-1.5): `toml` (toml_edit into the node tree, with positions), `models` (one per file, `#[derive(FromNode)]`), `types` (constraints with Pydantic's messages), `errors` (`model_errors`: union branches dropped as the oracle drops them), `merge` and `resolve` (the layering, once per run), `checks` (`configuration_text_issues`, the buffer and workspace checks), `sharing`, `lint`, `repr` (values quoted as the CLI quotes them), `bundled` (the bundled files, compiled in from `src/opentide/data/`) |
-| `tests/configuration.rs` | `tests/oracle/config_cases.toml` against the oracle (`config_table.json`, from `config_table.py`): findings, resolved JSON, lint settings, sharing findings; the bundled list; no panic (proptest) |
-| `YAML.md` | Generated: every YAML case read by the oracle (PyYAML, YAML 1.1) and by `node` (YAML 1.2), with each difference and its reason |
-| `tests/yaml_table.rs` | `tests/oracle/yaml_cases.toml` against the oracle (`yaml_table.json`, from `yaml_table.py`); writes `YAML.md` |
-| `tests/from_node_table.rs` | `tests/oracle/from_node_cases.toml` against the oracle (`from_node_table.json`, from `from_node_table.py`); the Rust results are the insta snapshot |
-| `src/objects/table.rs` (a unit test: rules read under `cfg(test)`; no disk reads) | `tests/oracle/objects_cases.toml` and every object file of `tests/fixtures/tide_corpus` and the VS Code fixture against the oracle (`objects_table.json`, from `objects_table.py`); the Rust results are the insta snapshot |
+| `src/configuration/` | The configuration TOML files (UC-1.5): `toml` (toml_edit into the node tree, with positions), `models` (one per file, `#[derive(FromNode)]`), `types` (constraints with Pydantic's messages), `errors` (`model_errors`: union branches dropped as the Pydantic models drops them), `merge` and `resolve` (the layering, once per run), `checks` (`configuration_text_issues`, the buffer and workspace checks), `sharing`, `lint`, `repr` (values quoted as the CLI quotes them), `bundled` (the bundled files, compiled in from `src/opentide/data/`) |
+| `tests/configuration.rs` | `tests/oracle/config_cases.toml` against the Pydantic models (`config_table.json`, from `config_table.py`): findings, resolved JSON, lint settings, sharing findings; the bundled list; no panic (proptest) |
+| `YAML.md` | Generated: every YAML case read by the Pydantic models (PyYAML, YAML 1.1) and by `node` (YAML 1.2), with each difference and its reason |
+| `tests/yaml_table.rs` | `tests/oracle/yaml_cases.toml` against the Pydantic models (`yaml_table.json`, from `yaml_table.py`); writes `YAML.md` |
+| `tests/from_node_table.rs` | `tests/oracle/from_node_cases.toml` against the Pydantic models (`from_node_table.json`, from `from_node_table.py`); the Rust results are the insta snapshot |
+| `src/objects/table.rs` (a unit test: rules read under `cfg(test)`; no disk reads) | `tests/oracle/objects_cases.toml` and every object file of `tests/fixtures/tide_corpus` and the VS Code fixture against the Pydantic models (`objects_table.json`, from `objects_table.py`); the Rust results are the insta snapshot |
 | `tests/objects_table_files.rs` | The table holds every corpus object file as it is on disk; each `[[difference]]` has its CHANGELOG.md entry |
 | `tests/round_trip_property.rs`, `tests/from_node_api.rs`, `tests/fuzz_regressions.rs` | proptest round trip, the API, and the `from_node` fuzz target's seeds and saved crashes |
 | `tests/roundtrip.rs` | YAML → struct → YAML byte for byte; optional, defaulted, alias, closure, pins |
@@ -54,10 +54,10 @@ depends on opentide-core (`codes`, `suggest`). Not published yet (`publish = fal
 
 ## Invariants
 
-- The Pydantic models in `src/opentide/models` at the frozen tag are the oracle. A model here is
+- The Pydantic models in `src/opentide/models` at the frozen tag are the Pydantic models. A model here is
   the same shape: field names, serialised names, order, optional and defaulted fields, closure,
   constraints, metadata keys. A difference is deliberate, with its `CHANGELOG.md` entry, or a bug
-  (the approved-diffs ledger was retired with the oracle's recordings, #1142).
+  (the approved-diffs ledger was retired with the Pydantic models' recordings, #1142).
 - One concrete struct per revision; no generic model (`#[pyclass]` cannot take one).
 - Every model is a `#[pyclass(frozen, get_all, eq, name = "<Pydantic name>", module =
   "opentide._native.models")]` behind `python`, listed in `python.rs` (`py_models!` and the
@@ -69,19 +69,19 @@ depends on opentide-core (`codes`, `suggest`). Not published yet (`publish = fal
   classes they were compared with left in UC-6.2 (#841).
 - A `tide.*` key keeps its name and value: `#[schemars(extend("tide.…" = …))]`, and the key is in
   `keys::ALL`. A new key is a new row in the ADR's table and in `keys.rs` (`tests/adr.rs` checks).
-- Identifiers stay `String`, checked where the oracle checks them (`invalid_uuid` is a workspace
+- Identifiers stay `String`, checked where the Pydantic models checks them (`invalid_uuid` is a workspace
   check, not a schema error).
 - Errors are `SchemaError`; codes are the CLI's, as constants (`error::codes`, which re-exports
   `opentide_core::codes::SCHEMA_VALIDATION`): never mint one, never a second string at a call site.
 - No `std::fs` in `src/` (`scripts/engine/check-io-free.sh`). The derives compile for wasm32.
 - Suggestions are `opentide_core::suggest`'s (strsim), never a port of Python's `difflib`: where
-  one differs from the oracle's, the difference was reviewed when `vocab diff` ran (retired, #1142).
+  one differs from the Pydantic models', the difference was reviewed when `vocab diff` ran (retired, #1142).
   Accepted values and validity never differ.
 - YAML is YAML 1.2, read by the saphyr crates; never re-implement a YAML 1.1 rule to match the
-  oracle. A case where the oracle reads YAML differently names a `[[difference]]` in
+  oracle. A case where the Pydantic models reads YAML differently names a `[[difference]]` in
   `tests/oracle/yaml_cases.toml` (reason, CHANGELOG lead); `YAML.md` shows them all.
 - Configuration TOML is read by `toml_edit` (TOML 1.0), never by a hand-written parser; a case of
-  `tests/oracle/config_cases.toml` where the result differs from the oracle names its
+  `tests/oracle/config_cases.toml` where the result differs from the Pydantic models names its
   `[[difference]]`. Regenerate the table with `<oracle python> -I tests/oracle/config_table.py`.
 - A field takes its declared type, without Pydantic's lax coercion; a case of
   `tests/oracle/from_node_cases.toml` or `objects_cases.toml` where the result differs from the
@@ -89,21 +89,21 @@ depends on opentide-core (`codes`, `suggest`). Not published yet (`publish = fal
 - A validator is written once (`objects::checks`) and run by both hosts: the structural
   conversion (`#[from_node(with = ...)]`, so its error sits among the others in Pydantic's order)
   and garde (`#[garde(custom(...))]`).
-- A platform block's checks are the oracle's, with its messages: a before-validator's codes are
-  judged on the raw block in the oracle's terms (Python's truthiness, `isinstance(x, int)` taking
+- A platform block's checks are the Pydantic models', with its messages: a before-validator's codes are
+  judged on the raw block in the Pydantic models' terms (Python's truthiness, `isinstance(x, int)` taking
   a boolean) and reported as one `value_error` on the block (`<Model> validation failed with
   code(s): a, b`); a block without `status` is left to "Field required". A case of
-  `tests/oracle/platform_cases.toml` where the result differs from the oracle names its
+  `tests/oracle/platform_cases.toml` where the result differs from the Pydantic models names its
   `[[difference]]`.
 - Falco's terms (operators, modifiers, priorities, keywords, the name rule) and the Elastic
   duration grammar are `opentide_core::falco` and `opentide_core::duration`, shared with
   opentide-tide's `sysdig` and `elastic` (the language server): never a second table here. This
-  crate is the one Sysdig constraint engine: it is checked against the oracle
+  crate is the one Sysdig constraint engine: it is checked against the Pydantic models
   (`tests/oracle/platform_cases.toml`) and `opentide validate` reports it, the language server
   with it (UC-2.6, #821). The language server's own walk of the block, and
   `xtask/tests/sysdig_engines.rs`, which held the two engines together, went with that;
   opentide-tide's `sysdig` keeps only `sysdig_list_self_reference`, the advisory `lint` owns.
-- A generated template, snippet file or router schema was held byte for byte to what the oracle
+- A generated template, snippet file or router schema was held byte for byte to what the Pydantic models
   writes, and a generated JSON Schema by verdict (UC-1.8b, #900), until the recordings were retired
   (#1142); the CLI's `generate` snapshots, `tests/generate_files.rs` and `cargo xtask codegen
   --check` hold them now. Its text (titles, descriptions, key order, `type` arrays for Pydantic's
@@ -123,8 +123,8 @@ cargo nextest run -p opentide-schema                       # native, no Python
 cargo nextest run -p opentide-schema --features python     # + the Python class and trybuild
 cargo build -p opentide-schema --target wasm32-unknown-unknown
 cargo nextest run -p opentide-schema vocab                 # the vocabularies, 13k misspellings
-cargo nextest run -p opentide-schema objects::table        # the object models against the oracle's table
-cargo nextest run -p opentide-schema platform              # the platform blocks, against the oracle's table too
+cargo nextest run -p opentide-schema objects::table        # the object models against the Pydantic models' table
+cargo nextest run -p opentide-schema platform              # the platform blocks, against the Pydantic models' table too
 cargo xtask corpus faults --check --engine rust --only platforms
 cargo nextest run -p opentide-schema revision migration    # the registry, dispatch and migrations (properties)
 cargo xtask corpus faults --check --engine rust --only objects
@@ -134,7 +134,7 @@ cargo xtask codegen --check                                # the committed artif
 
 `tests/python.rs` embeds CPython: it links the shared libpython of `PYO3_PYTHON` (or `python3`),
 which must be 3.10 or later; put its `LIBDIR` on `LD_LIBRARY_PATH` if the loader cannot find it.
-The oracle tables are regenerated with the oracle's interpreter (opentide 0.28.1's wheel):
+The Pydantic models tables are regenerated with the Pydantic models' interpreter (opentide 0.28.1's wheel):
 `<oracle python> tests/oracle/yaml_table.py`, `from_node_table.py` and `objects_table.py`; after a change to what the
 loader reads, `UPDATE_YAML_TABLE=1 cargo test -p opentide-schema --test yaml_table` rewrites
 `YAML.md`. After an intended schema change, `cargo insta review`; after a compiler message change,

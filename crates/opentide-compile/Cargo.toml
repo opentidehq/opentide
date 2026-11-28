@@ -52,19 +52,19 @@ gix-attributes = "0.38"
 gix-filter = "0.37"
 gix-path = "0.14"
 gix-command = "0.12"
-# Paths without Windows' verbatim prefix (`\\?\`), which git, the oracle
+# Paths without Windows' verbatim prefix (`\\?\`), which git, opentide 0.23.0
 # and a user's own paths do not use: the messages name paths that way.
 dunce.workspace = true
 # CrowdStrike's delete names the rule in its query string, encoded as a form.
 form_urlencoded.workspace = true
 # HarfangLab's Sigma rule is YAML (the crate opentide-schema writes models with).
 serde-saphyr.workspace = true
-# Request bodies keep the order their keys are built in, as the oracle's dicts do.
+# Request bodies keep the order their keys are built in, as opentide 0.23.0's dicts do.
 indexmap = { workspace = true, features = ["serde"] }
 # generate: a phase's files written in parallel (UC-3.2).
 rayon.workspace = true
 # generate exports: the Navigator layer lists objects by name under full
-# Unicode case folding, as the oracle's `str.casefold()` sorts them.
+# Unicode case folding, as opentide 0.23.0's `str.casefold()` sorts them.
 caseless.workspace = true
 # generate docs (UC-3.2b): CVE identifiers read with regex and quoted into
 # links with percent-encoding, heading anchors by Unicode general category.
@@ -86,7 +86,7 @@ tracing.workspace = true
 # above): `[[ ]]` delimits a value, since GitHub Actions spells its own
 # expressions `${{ }}`.
 # `setup ci` reads each enabled platform's tenants for the variables its
-# live query check needs; the oracle test reads its approved differences
+# live query check needs; opentide 0.23.0 test reads its approved differences
 # (tests/golden/payloads/APPROVED.toml) with it too.
 toml.workspace = true
 

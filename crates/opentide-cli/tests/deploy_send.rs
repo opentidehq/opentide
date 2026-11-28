@@ -1,12 +1,12 @@
 //! A deploy that sends, on the platforms a golden case cannot replay (UC-4.6,
 //! #979): Sentinel (MSAL's and azure-core's random request ids), a Carbon
 //! Black Cloud report built or updated (the SDK stamps it with the time) and
-//! HarfangLab (the oracle's deploy stopped before any request). Each runs here
+//! HarfangLab (opentide 0.23.0's deploy stopped before any request). Each runs here
 //! through the CLI flow, the ids and the time fixed, against the requests of
 //! its connector's cassette recorded from the Python client
 //! (`tests/cassettes/<platform>/deploy.json`): the rules of a workspace,
 //! through the deploy plan, the tenant's batch and the connector, send
-//! exactly the requests the oracle sent. The flow's own rules (a refused
+//! exactly the requests opentide 0.23.0 sent. The flow's own rules (a refused
 //! rule fails alone and the run goes on; deployment state written
 //! only when the platform accepted the rule) run against a scripted deployer.
 
@@ -2145,7 +2145,7 @@ fn pushed_files(ws: &Path, files: &[&str]) {
 }
 
 /// A RELEASE deploy on a push promotes the rule the push changed (UC-4.6c,
-/// #979); an invalid promotion target ends the run as the oracle's
+/// #979); an invalid promotion target ends the run as opentide 0.23.0's
 /// `sys.exit(1)` does: exit 1, no document, the failed step on stderr.
 #[test]
 fn a_push_promotes_its_rules_and_an_invalid_target_exits_without_a_document() {
@@ -2356,7 +2356,7 @@ fn push_promotes_the_whole_folder(extra: &[(&str, &str)]) -> bool {
 /// VS Code's integrated terminal (`TERM_PROGRAM=vscode`) does not turn on
 /// debug promotion: a push promotes the rule it changed and leaves the other
 /// rule files in the rules folder as they are, as it does from any terminal.
-/// The oracle promoted every rule file from that terminal.
+/// Opentide 0.23.0 promoted every rule file from that terminal.
 #[test]
 fn a_push_from_vs_codes_terminal_promotes_only_the_changed_rules() {
     assert!(!push_promotes_the_whole_folder(&[(

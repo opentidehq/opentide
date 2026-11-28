@@ -1,7 +1,7 @@
 //! The Graylog block model (`platform::graylog::1.0`): every constraint code
 //! at the path graylog-1.0 fixes for it, the nested models, and the
 //! repository's fixtures. The cases are 0.28.0's
-//! `tests/test_platforms/test_graylog_model.py`.
+//! 0.28.0's Graylog model tests.
 #![expect(
     clippy::unwrap_used,
     reason = "test helpers outside #[test]: a fixture that cannot be read fails the test"
@@ -210,7 +210,7 @@ fn each_code_is_reported_at_its_spec_path() {
 }
 
 #[test]
-fn the_messages_are_the_oracles() {
+fn the_messages_are_the_models() {
     let message = |extra: &str| {
         let (_, errors) = convert(&block(extra));
         errors
@@ -652,7 +652,7 @@ fn a_tenant_id_is_24_lower_case_hex() {
     assert!(!errors.is_empty());
 }
 
-// --- advisories (test_graylog_advisories.py) ------------------------------------
+// --- advisories (0.28.0's Graylog advisory tests) ------------------------------------
 
 use opentide_schema::objects::platform::graylog::{
     TenantView, advisories, leading_wildcard_allowed,

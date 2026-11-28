@@ -422,7 +422,7 @@ fn crowdstrike_stops_the_search_a_cancelled_run_stops_waiting_for() {
         matches!(outcome, Err(ConnectorError::Cancelled)),
         "{outcome:?}"
     );
-    // The oracle's run polled again; this one stopped instead: the
+    // Opentide 0.23.0's run polled again; this one stopped instead: the
     // DELETE is the fourth request, and nothing after it was sent.
     let mismatches = replay.proxy.verify();
     assert_eq!(mismatches[0].index, 3, "{mismatches:?}");

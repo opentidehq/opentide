@@ -707,7 +707,7 @@ fn changed_names(root: &Path, folder: &str) -> Vec<String> {
 }
 
 /// What git itself reports for `folder` against `base`: `git diff
-/// --name-only` and `git ls-files --others --exclude-standard`, the oracle's
+/// --name-only` and `git ls-files --others --exclude-standard`, opentide 0.23.0's
 /// two commands.
 fn git_reports(root: &Path, base: &str, folder: &str) -> Vec<String> {
     let mut names: Vec<String> = git_cmd(
@@ -1053,11 +1053,11 @@ fn a_push_without_its_trigger_or_with_an_unknown_one_fails() {
     );
 }
 
-/// `--since` names a commit as the oracle read it: a full id, a branch,
+/// `--since` names a commit as opentide 0.23.0 read it: a full id, a branch,
 /// `origin/<branch>`, `refs/...` (an annotated tag peeled); never a short id
 /// or a revision expression.
 #[test]
-fn since_names_a_commit_as_the_oracle_read_it() {
+fn since_names_a_commit_as_dulwich_read_it() {
     let h = history();
     let local = |since: &str| through_head(&h.root, &[], Some(since));
     assert_eq!(local(&h.b).unwrap(), ["objects/rules/r2.yaml"]);

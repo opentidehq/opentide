@@ -1,6 +1,6 @@
 //! `validate` over a workspace in memory: each check's findings, their
 //! places and steps, the scope options, the verdict and the counts. The
-//! CLI's `validate` snapshots hold what `validate --json` prints (the oracle
+//! CLI's `validate` snapshots hold what `validate --json` prints (opentide 0.23.0
 //! comparison, `cargo xtask validate diff`, was retired in #1142).
 
 #![expect(
@@ -660,10 +660,10 @@ mod validate {
             "configurations.bitdefender.yara.signature is a YAML alias; write the YARA \
              signature out in the block"
         );
-        // On the anchor's line, as the oracle's reader places an alias.
+        // On the anchor's line, as opentide 0.23.0's reader places an alias.
         let anchor = rule(U2, "B").lines().count();
         assert_eq!(aliased[0].yaml_line, Some(anchor));
-        // The aliased text, `&sig |`, as the oracle spans it.
+        // The aliased text, `&sig |`, as opentide 0.23.0 spans it.
         assert_eq!(
             (aliased[0].line, aliased[0].column, aliased[0].end_column),
             (Some(anchor + 1), Some(14), Some(20))
@@ -774,7 +774,7 @@ mod validate {
     /// #913 (0.26.0): a legacy `rule_id::<tenant>` key whose id is text, on
     /// blocks whose models refuse unknown keys (Sysdig) and accept them as
     /// legacy keys (SentinelOne), is `external_id_in_rule`, and nothing reads
-    /// the tenant in its name as a vocabulary or schema version: the oracle
+    /// the tenant in its name as a vocabulary or schema version: opentide 0.23.0
     /// (0.23.0) crashed with `invalid literal for int() with base 10`.
     #[test]
     fn a_legacy_tenant_key_with_a_text_id_is_external_id_in_rule() {

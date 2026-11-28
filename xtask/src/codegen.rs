@@ -21,7 +21,7 @@
 //!   `opentide_schema::generate::catalog`: the committed copy in
 //!   `data/catalogs/tide/generated/` (`--check`).
 //!
-//! The comparisons with the oracle's recordings (`--oracle`) were retired
+//! The comparisons with the recordings' comparisons (`--oracle`) were retired
 //! with the recordings (#1142). Engine lint runs `codegen --check`.
 
 use std::path::Path;

@@ -2,7 +2,7 @@
 //! `models` module the binding exports as `opentide._native.models`, run in
 //! an embedded CPython (see `tests/python.rs` for the interpreter it links).
 //! The comparison with the Pydantic models, on every corpus, is the Python
-//! suite's (`tests/test_models/test_native_models.py`).
+//! suite's (its native-models test).
 #![cfg(feature = "python")]
 
 use std::ffi::CString;

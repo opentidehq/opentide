@@ -1,9 +1,9 @@
 //! Sysdig against the cassette the Python deployer recorded
 //! (`tests/cassettes/sysdig/deploy.json`): the tide corpus's Falco rule,
-//! compiled here by `opentide-compile` as the oracle compiled it (its macros
+//! compiled here by `opentide-compile` as opentide 0.23.0 compiled it (its macros
 //! and lists expanded into the condition), goes through the same ten steps
 //! as `client.py`, and every request is the Python deployer's, in order
-//! (a JSON body as the same data); each step changes deployment state as the oracle's did
+//! (a JSON body as the same data); each step changes deployment state as opentide 0.23.0's did
 //! (the outcomes `client.py` printed when it recorded).
 
 #![expect(clippy::unwrap_used, reason = "a test: a failed set-up is a failure")]

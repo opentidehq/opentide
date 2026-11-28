@@ -1,5 +1,5 @@
-//! `validate --fix --dry-run`'s diff against the oracle's
-//! (`cli/ui/fixes.py` `FixPlan.diff`: CPython's `difflib.unified_diff` over
+//! `validate --fix --dry-run`'s diff against opentide 0.23.0's
+//! (0.23.0's `FixPlan.diff`: CPython's `difflib.unified_diff` over
 //! the lines as YAML breaks them), on generated files and the in-place
 //! value edits `--fix` makes (UC-2.3, #818).
 //!
@@ -10,7 +10,7 @@
 //! `fix-diff-alignment`). What must hold is the behaviour:
 //! both diffs patch the file before into the file after, and this test
 //! checks that they do, on generated files and the in-place value edits
-//! `--fix` makes; the recorded dry run's diff is the oracle's text.
+//! `--fix` makes; the recorded dry run's diff is opentide 0.23.0's text.
 //!
 //! Needs a Python 3: `OPENTIDE_PYTHON`, or this checkout's `.venv`
 //! (`uv sync --group dev`). The fast nextest profile leaves `external_*`
@@ -34,7 +34,7 @@ use proptest::prelude::*;
 use proptest::strategy::ValueTree as _;
 use proptest::test_runner::TestRunner;
 
-/// The oracle's `FixPlan.diff`, as `cli/ui/fixes.py` writes it.
+/// Opentide 0.23.0's `FixPlan.diff`.
 const ORACLE: &str = r#"
 import difflib, json, re, sys
 _LINE_END = re.compile(r"(?<=\r\n)|(?<=\r)(?!\n)|(?<=\n)")
@@ -84,7 +84,7 @@ fn oracle_diffs(cases: &[(String, String, String)]) -> Vec<String> {
         .write_all(serde_json::to_string(cases).unwrap().as_bytes())
         .unwrap();
     let output = child.wait_with_output().unwrap();
-    assert!(output.status.success(), "the oracle failed");
+    assert!(output.status.success(), "opentide 0.23.0 failed");
     serde_json::from_slice(&output.stdout).unwrap()
 }
 
@@ -227,7 +227,7 @@ fn the_diff_patches_the_file_as_difflibs_does() {
         assert_eq!(
             patch(before, expected),
             *after,
-            "{path}: the oracle's does not apply\n{expected}"
+            "{path}: opentide 0.23.0's does not apply\n{expected}"
         );
         realigned.push(path.clone());
     }

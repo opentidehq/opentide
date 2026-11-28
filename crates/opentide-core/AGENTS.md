@@ -57,7 +57,7 @@ crate depends on it.
   opt-in `digest` feature, which only opentide-cli and xtask turn on: the engines, the facade and
   the hosts never build `sha2` (`cargo tree -p opentide-wasm -i sha2` prints nothing).
 - YAML is read with `node` only: never `serde_yaml`, `serde_yml` or a second parser (#850).
-  What it reads differently from the oracle is `crates/opentide-schema/YAML.md`.
+  What it reads differently from the Pydantic models is `crates/opentide-schema/YAML.md`.
 - Codes, severities, field paths and position rules are invariant 3 of the plan: a change is a recorded decision, not a refactor.
 
 ## Test

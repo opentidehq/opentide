@@ -1,6 +1,6 @@
 //! Every body of the compile corpus (`tests/golden/payloads/corpus`) against
-//! what the oracle compiled from it (`tests/golden/payloads/oracle.json`,
-//! recorded by `cargo xtask payloads`, retired with the oracle in #1142): the dry run's body, each tenant's (the writes a deployer
+//! what was recorded from opentide 0.23.0 for it (`tests/golden/payloads/recorded.json`,
+//! retired with the Python CLI in #1142): the dry run's body, each tenant's (the writes a deployer
 //! sends, for the six platforms whose body is built from the tenant), and
 //! the dry run's payload entry, byte for byte.
 #![expect(
@@ -23,14 +23,14 @@ use opentide_schema::vocab::Vocabularies;
 use opentide_workspace::{FileSystem, Options, OsFs, RootOptions, Workspace};
 use serde_json::Value;
 
-/// The Splunk clock the oracle's probe pinned when it recorded:
+/// The Splunk clock the recording's probe pinned when it recorded:
 /// a random minute and hour of 7, the time 03:04 UTC.
 const PROBE_CLOCK: splunk::Clock = splunk::Clock {
     random: (7, 7),
     now: (4, 3),
 };
 
-/// The Carbon Black report timestamp the oracle's probe pins.
+/// The Carbon Black report timestamp the recording's probe pins.
 const PROBE_TIMESTAMP: i64 = 1_767_225_600;
 
 fn repo() -> PathBuf {
@@ -69,7 +69,7 @@ fn candidate(result: Result<Json, CompileError>) -> String {
 }
 
 /// `text` (compact JSON) with the workspace `ws` written `<WS>` and the rest
-/// of each path under it with `/` separators, as the oracle's record writes
+/// of each path under it with `/` separators, as the recorded record writes
 /// it on every system.
 fn in_workspace(text: &str, ws: &str) -> String {
     let escaped = ws.replace('\\', "\\\\");
@@ -145,17 +145,17 @@ fn without_nulls(value: Json) -> Json {
 }
 
 /// The class a model-dump preview that differs falls in: `nulls` (the
-/// oracle's `null` members left out, it is the candidate), `order` (the
-/// same value, keys in another order) or `wrapped` (the oracle's request
+/// recorded's `null` members left out, it is the candidate), `order` (the
+/// same value, keys in another order) or `wrapped` (the recorded request
 /// as the candidate's `payload`, beside the block the candidate adds);
 /// `None` for any other difference. The platforms whose dry run shows the
 /// writes are the `request` class ([`request_problem`]).
-fn dump_class(oracle: &str, mine: &str) -> Option<&'static str> {
-    let oracle: Json = serde_json::from_str(oracle).ok()?;
-    if oracle.get("status").is_some() || oracle.get("api_request").is_none() {
+fn dump_class(recorded: &str, mine: &str) -> Option<&'static str> {
+    let recorded: Json = serde_json::from_str(recorded).ok()?;
+    if recorded.get("status").is_some() || recorded.get("api_request").is_none() {
         return None;
     }
-    // `wrapped`: the oracle's entry, byte for byte (key order kept), once
+    // `wrapped`: the recorded entry, byte for byte (key order kept), once
     // the candidate's `api_request` is replaced by its `payload`.
     let candidate: Json = serde_json::from_str(mine).ok()?;
     if let Json::Object(entry) = &candidate
@@ -173,11 +173,11 @@ fn dump_class(oracle: &str, mine: &str) -> Option<&'static str> {
                 })
                 .collect(),
         );
-        if unwrapped.to_compact() == oracle.to_compact() {
+        if unwrapped.to_compact() == recorded.to_compact() {
             return Some("wrapped");
         }
     }
-    let trimmed = without_nulls(oracle).to_compact();
+    let trimmed = without_nulls(recorded).to_compact();
     if trimmed == mine {
         return Some("nulls");
     }
@@ -185,7 +185,7 @@ fn dump_class(oracle: &str, mine: &str) -> Option<&'static str> {
     (value(&trimmed)? == value(mine)?).then_some("order")
 }
 
-/// The `[[writes]] search` class: Splunk's writes as the oracle's probe
+/// The `[[writes]] search` class: Splunk's writes as the recording's probe
 /// recorded them, without the `search` each update of the saved search
 /// carries first, which must be the create's: the first update without it,
 /// the last with it at its end. `None` when an update does not start with
@@ -267,7 +267,7 @@ fn corpus_file(path: &Path) -> String {
 }
 
 /// The `[[writes]] url` class: Splunk's and Carbon Black's writes with each
-/// `url` as the oracle's probe recorded it, the path under the tenant's app
+/// `url` as the recording's probe recorded it, the path under the tenant's app
 /// namespace (`saved/searches`, `saved/searches/<name>`, decoded) or under
 /// its `url` (`/threathunter/...`). The candidate's is the whole URL a
 /// deploy sends to, which must start with the tenant's: `None` when one
@@ -411,7 +411,7 @@ fn a_send_time_placeholder_stands_for_a_number_only() {
 /// platforms whose deploy writes are built from the tenant
 /// (`preview::deployers()`), checked against those writes as
 /// [`preview::compile_tenant`] compiles them with the probe's clock and
-/// timestamp, which `tenant:<name>` holds to the oracle. The entry is the
+/// timestamp, which `tenant:<name>` holds to the recording. The entry is the
 /// first tenant's writes, named by `tenant`, with `<send-time:NAME>` where a
 /// number was sent; or, when a tenant cannot take the rule, the failure of
 /// the first such tenant, naming it. `None` when it is; else the problem.
@@ -472,13 +472,13 @@ fn rewrites() -> Vec<(String, Vec<String>)> {
         .collect()
 }
 
-/// The oracle's Splunk writes (compact JSON) as opentide writes them since
+/// The recorded Splunk writes (compact JSON) as opentide writes them since
 /// #1657 (`splunk_as_written`): each `search` the rule's query alone, without
 /// the `| eval MDR_UUID=…, MDR_status=…` line and the mapping macro after it;
-/// `alert.managedBy` empty (the oracle's responders); and the `description` ending with the line that
+/// `alert.managedBy` empty (the recorded responders); and the `description` ending with the line that
 /// names the rule *uuid*. `None` for a text that is not a list of writes.
-fn splunk_as_written(oracle: &str, uuid: &str) -> Option<String> {
-    let Json::Array(writes) = serde_json::from_str::<Json>(oracle).ok()? else {
+fn splunk_as_written(recorded: &str, uuid: &str) -> Option<String> {
+    let Json::Array(writes) = serde_json::from_str::<Json>(recorded).ok()? else {
         return None;
     };
     let writes = writes
@@ -508,7 +508,7 @@ fn splunk_as_written(oracle: &str, uuid: &str) -> Option<String> {
 
 /// The approved differences of the compile corpus (`[[diff]]` entries of
 /// `tests/golden/payloads/APPROVED.toml` for the corpus `payloads`): uuid,
-/// platform, what, oracle and candidate.
+/// platform, what, recorded and candidate.
 fn approved() -> Vec<[String; 5]> {
     let text = std::fs::read_to_string(repo().join("tests/golden/payloads/APPROVED.toml")).unwrap();
     let file: toml::Table = toml::from_str(&text).unwrap();
@@ -524,14 +524,14 @@ fn approved() -> Vec<[String; 5]> {
                 field(entry, "uuid"),
                 field(entry, "platform"),
                 field(entry, "what"),
-                field(entry, "oracle"),
+                field(entry, "recorded"),
                 field(entry, "candidate"),
             ]
         })
         .collect()
 }
 
-/// The approved oracle faults (`[[fault]]` entries of
+/// The approved recorded faults (`[[fault]]` entries of
 /// `tests/golden/payloads/APPROVED.toml`): platform and failure.
 fn fault_approvals() -> Vec<(String, String)> {
     let text = std::fs::read_to_string(repo().join("tests/golden/payloads/APPROVED.toml")).unwrap();
@@ -552,10 +552,10 @@ fn fault_approvals() -> Vec<(String, String)> {
 
 #[test]
 #[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
-fn the_compile_corpus_compiles_as_the_oracle_compiles_it() {
+fn the_compile_corpus_compiles_as_recorded() {
     let corpus = dunce::canonicalize(repo().join("tests/golden/payloads/corpus")).unwrap();
     let record: Value = serde_json::from_str(
-        &std::fs::read_to_string(repo().join("tests/golden/payloads/oracle.json")).unwrap(),
+        &std::fs::read_to_string(repo().join("tests/golden/payloads/recorded.json")).unwrap(),
     )
     .unwrap();
     let workspace = Workspace::open(
@@ -611,32 +611,32 @@ fn the_compile_corpus_compiles_as_the_oracle_compiles_it() {
             object.root().unwrap(),
             Some(object.path.to_string_lossy().into_owned()),
         );
-        let mut check = |what: String, oracle: String, mine: String| {
+        let mut check = |what: String, recorded: String, mine: String| {
             compared += 1;
             let mine = in_workspace(&mine, &ws);
             // The writes as opentide sends them since #1657, when approved;
-            // an approved difference's oracle is read the same way.
+            // an approved difference's recorded is read the same way.
             let rewrite = |text: &str| match what.strip_prefix("tenant:") {
                 Some(_) if rewrites_here("splunk_as_written", platform) => {
                     splunk_as_written(text, uuid).unwrap_or_else(|| text.to_owned())
                 }
                 _ => text.to_owned(),
             };
-            let oracle = rewrite(&oracle);
+            let recorded = rewrite(&recorded);
             if let Some(at) = approved.iter().position(|[u, p, w, o, c]| {
-                u == uuid && p == platform && *w == what && rewrite(o) == oracle && *c == mine
+                u == uuid && p == platform && *w == what && rewrite(o) == recorded && *c == mine
             }) {
                 used[at] = true;
-            } else if oracle != mine
+            } else if recorded != mine
                 && !(what == "preview"
-                    && dump_class(&oracle, &mine).is_some_and(|class| {
+                    && dump_class(&recorded, &mine).is_some_and(|class| {
                         classes.iter().any(|(rule, platforms)| {
                             rule == class && platforms.iter().any(|known| known == platform)
                         })
                     }))
             {
                 differences.push(format!(
-                    "{uuid} {platform} {what}\n  oracle:    {oracle}\n  candidate: {mine}"
+                    "{uuid} {platform} {what}\n  recorded:    {recorded}\n  candidate: {mine}"
                 ));
             }
         };
@@ -653,7 +653,7 @@ fn the_compile_corpus_compiles_as_the_oracle_compiles_it() {
         let mut sent: Vec<(String, Result<Json, CompileError>)> = Vec::new();
         for tenant in entry["tenants"].as_array().unwrap() {
             let name = tenant["tenant"].as_str().unwrap();
-            // The oracle's own client failed and the probe worked around it:
+            // The recorded own client failed and the probe worked around it:
             // the failure is an approved intended difference.
             if let Some(fault) = tenant.get("fault").and_then(Value::as_str) {
                 faulted += 1;
@@ -661,7 +661,7 @@ fn the_compile_corpus_compiles_as_the_oracle_compiles_it() {
                     faults
                         .iter()
                         .any(|(p, error)| p == platform && error == fault),
-                    "{uuid} {platform} {name}: the oracle fails ({fault}) with no [[fault]] approval"
+                    "{uuid} {platform} {name}: the recording fails ({fault}) with no [[fault]] approval"
                 );
             }
             let inputs = Inputs {
@@ -671,7 +671,7 @@ fn the_compile_corpus_compiles_as_the_oracle_compiles_it() {
             };
             let compiled = preview::compile_tenant(&cx, platform_id, &rule, name, &inputs);
             let mut mine = candidate(compiled.clone());
-            // The `[[writes]]` classes: the writes as the oracle's probe
+            // The `[[writes]]` classes: the writes as the recording's probe
             // recorded them.
             if let Ok(writes) = &compiled {
                 let class = |rule: &str| {
@@ -712,9 +712,9 @@ fn the_compile_corpus_compiles_as_the_oracle_compiles_it() {
             sent.push((name.to_owned(), compiled));
         }
         if writes_preview.contains(&platform) {
-            // The oracle showed the block; the dry run shows the writes the
+            // The recording showed the block; the dry run shows the writes the
             // first tenant receives (#1712), held to them here, and they to
-            // the oracle's above.
+            // the recorded above.
             compared += 1;
             assert!(
                 classes.iter().any(|(class, platforms)| class == "request"
@@ -751,7 +751,7 @@ fn the_compile_corpus_compiles_as_the_oracle_compiles_it() {
     assert!(compared >= 150, "{compared} comparisons");
     // Every HarfangLab body the corpus sends (four Sigma or YARA writes and
     // a delete) is one the 0.23.0 client never sent.
-    assert!(faulted >= 5, "{faulted} oracle faults");
+    assert!(faulted >= 5, "{faulted} recorded faults");
 }
 
 /// Every `<tenant:KEY>` placeholder in `value`, by key.
@@ -843,7 +843,7 @@ fn unreached_setup(file: &str, platform: &str, shown: &Json) -> Vec<String> {
 fn a_dry_run_without_a_tenant_shows_the_writes_with_tenant_placeholders() {
     let corpus = dunce::canonicalize(repo().join("tests/golden/payloads/corpus")).unwrap();
     let record: Value = serde_json::from_str(
-        &std::fs::read_to_string(repo().join("tests/golden/payloads/oracle.json")).unwrap(),
+        &std::fs::read_to_string(repo().join("tests/golden/payloads/recorded.json")).unwrap(),
     )
     .unwrap();
     let workspace = Workspace::open(
@@ -888,7 +888,7 @@ fn a_dry_run_without_a_tenant_shows_the_writes_with_tenant_placeholders() {
     }
     seen.sort_unstable();
     // Microsoft Defender's requests are held by the specification's goldens
-    // (tests/microsoft_defender.rs): the oracle knew only the pre-1.0 API.
+    // (tests/microsoft_defender.rs): 0.23.0 knew only the pre-1.0 API.
     let mut expected: Vec<&str> = deployers
         .iter()
         .copied()
@@ -972,12 +972,12 @@ fn documented_placeholders() -> std::collections::BTreeSet<String> {
 /// The placeholders a dry run writes are the ones `docs/cli/json-output.md`
 /// lists, no more and no fewer (#1719): over the compile corpus, each
 /// deployer's rule with no tenant (every `<tenant:KEY>` it can show:
-/// `tenant_keys`), and with the tenants the oracle compiled for.
+/// `tenant_keys`), and with the tenants the recording holds for.
 #[test]
 fn the_documented_placeholders_are_those_a_dry_run_writes() {
     let corpus = dunce::canonicalize(repo().join("tests/golden/payloads/corpus")).unwrap();
     let record: Value = serde_json::from_str(
-        &std::fs::read_to_string(repo().join("tests/golden/payloads/oracle.json")).unwrap(),
+        &std::fs::read_to_string(repo().join("tests/golden/payloads/recorded.json")).unwrap(),
     )
     .unwrap();
     let workspace = Workspace::open(

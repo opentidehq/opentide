@@ -1,4 +1,4 @@
-# Recorded by oracle.py from the Python CLI (retired, #1142); edited since:
+# Recorded from opentide 0.23.0 (retired, #1142); edited since:
 # a platform with no tenants has no [credentials] entry.
 ci = "github"
 path = ".github/workflows/opentide.yml"

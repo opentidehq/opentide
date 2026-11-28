@@ -4,8 +4,8 @@
 //! each runs here with the time fixed, against its connector's cassette
 //! recorded from the Python client (`tests/cassettes/<platform>/validate.json`):
 //! the rules of a workspace, through the deploy plan, the tenant's batch and
-//! the connector, send exactly the requests the oracle sent, and the result
-//! reads as the oracle's.
+//! the connector, send exactly the requests opentide 0.23.0 sent, and the result
+//! reads as opentide 0.23.0's.
 
 #![cfg(unix)]
 #![expect(clippy::unwrap_used, reason = "a test: a failed set-up is a failure")]
@@ -442,7 +442,7 @@ fn read_timeout() -> ConnectorError {
 }
 
 #[test]
-fn each_outcome_of_a_check_is_the_oracles() {
+fn each_outcome_of_a_check_is_the_recorded_one() {
     let ws = splunk_rules(5);
     let accepted = LiveCheck {
         warnings: vec!["the parser timed out".into()],
@@ -499,7 +499,7 @@ fn each_outcome_of_a_check_is_the_oracles() {
     );
     // A refusal fails the run too, so the timeouts are not its only failures:
     // `query_check_timeout` does not name it. It was `command_failed`; the run
-    // now says a tenant rejected a query (a departure from the oracle).
+    // now says a tenant rejected a query (a departure from opentide 0.23.0).
     assert_eq!(failure_code(&live), Some("query_rejected"));
     // A run that rejected a query has no tick (#1658, E8).
     assert_eq!(

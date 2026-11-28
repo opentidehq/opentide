@@ -784,7 +784,7 @@ fn platforms_the_engine_cannot_parse_are_refused() {
 fn live_without_a_platform_is_refused_and_tenant_options_need_it() {
     let (_scratch, ws) = corpus();
     // A live check reads one platform's tenants: a run that names none is
-    // refused as the oracle refuses it (UC-4.4c, #834).
+    // refused as opentide 0.23.0 refuses it (UC-4.4c, #834).
     let live = opentide(&ws, &["--json", "validate", "query", "--live"], &[]);
     assert_eq!(live.code, 2);
     assert_eq!(failure_code(&live.json()), "usage_missing_option");

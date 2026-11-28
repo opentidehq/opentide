@@ -268,7 +268,7 @@ pub enum JsonDifference {
     Value {
         /// Where.
         pointer: Vec<String>,
-        /// The oracle's value.
+        /// The reference value.
         oracle: Option<Json>,
         /// The candidate's value.
         candidate: Option<Json>,
@@ -277,7 +277,7 @@ pub enum JsonDifference {
     KeyOrder {
         /// The object.
         pointer: Vec<String>,
-        /// Its keys in the oracle.
+        /// Its keys in the reference.
         oracle: Vec<String>,
         /// Its keys in the candidate.
         candidate: Vec<String>,

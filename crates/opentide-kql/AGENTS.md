@@ -25,7 +25,7 @@ cargo nextest run --profile fast -p opentide-kql
 `tests/oracle_probes.rs` holds the recorded verdicts of Microsoft's own KQL parser;
 `scripts/engine/ci-oracle.sh` re-runs that oracle where its reference is installed. The crate's
 package is licence-scanned for oracle names (`scripts/engine/license-scan.sh`): never name the
-oracle's library in a file the crate ships. Catalog syncs:
+Kusto's library in a file the crate ships. Catalog syncs:
 `scripts/engine/sync_kql_learn_signatures.py`, `sync_azure_monitor_tables.py`,
 `sync_asim_schemas.py`, `sync_defender_functions.py` (advanced hunting's own functions, the
 Defender dialect's).

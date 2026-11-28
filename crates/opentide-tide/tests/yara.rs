@@ -391,7 +391,7 @@ fn decomposed_tokens_stay_in_the_bodies() {
 }
 
 /// The review of #165: the decomposed form is assembled exactly as
-/// `compile_yara_deployment` (opentide 0.24, `platforms/harfanglab/deployer.py`)
+/// `compile_yara_deployment` (opentide 0.24)
 /// writes it. The expected text is that function's output for this rule.
 const DEPLOYED_RULE: &str = "name: Cmd String\nmetadata:\n  uuid: 00000000-0000-4000-8003-000000000018\n  schema: rule::1.0\n  version: 1\n  created: \"2026-01-01\"\n  modified: \"2026-01-02\"\n  tlp: clear\n  author: Jane \"J\" Doe\ndescription: |\n  Finds \"cmd.exe\".\nreferences:\n  public:\n    1: https://example.com/a\n    2: https://example.com/b\nstatus: STAGING\nseverity: High\nresponse:\n  alert_severity: High\nconfigurations:\n  harfanglab:\n    enabled: true\n    schema: platform::harfanglab::1.0\n    status: STAGING\n    action: \"Alert & Block\"\n    confidence: Strong\n    tags:\n      - attack.t1059\n      - cmd\n    yara:\n      meta:\n        context:\n          - file\n          - memory\n        os: Windows\n        arch:\n          - x86\n          - x64\n        classification: trojan\n      imports:\n        - pe\n      strings: |\n        $a = \"cmd.exe\" ascii\n      condition: |\n        $a and pe.is_dll()\n";
 

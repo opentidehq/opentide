@@ -35,7 +35,7 @@ crate = "opentide-compile"
 lines = 90
 item = "UC-3.1 (#823)"
 
-# 90 again: the oracle replays are #[ignore]d (#1121) and drove much of the
+# 90 again: the Python replays were #[ignore]d (#1121) and drove much of the
 # command line's code; the Rust-owned snapshot and end-to-end tests (#1139)
 # restored it (90.84% at Coverage run 43739348896).
 [[gate]]

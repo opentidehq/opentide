@@ -74,7 +74,7 @@ jiff = { workspace = true }
 caseless.workspace = true
 
 [dev-dependencies]
-# The oracle's sentence-end pattern, with its look-ahead: the tests hold
+# The Pydantic models' sentence-end pattern, with its look-ahead: the tests hold
 # `generate::annotate`'s hand-written match to it.
 fancy-regex.workspace = true
 insta.workspace = true

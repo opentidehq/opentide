@@ -6,7 +6,7 @@
 //! analyzed without their `prod:` tag line, as the corpus gate reads them)
 //! and every other file whose extension names a query language
 //! (`LanguageId::from_extension`): the conformance sets with their `.broken.`
-//! fault twins, and the oracle inputs. Each goes through
+//! fault twins, and the vendor-oracle inputs. Each goes through
 //! `opentide_analysis::analyze`, the entry point the language server calls for
 //! a raw query document, and the snapshot keeps, per file, every diagnostic
 //! (`code severity start-end message`, 0-based UTF-16 `line:character`) and

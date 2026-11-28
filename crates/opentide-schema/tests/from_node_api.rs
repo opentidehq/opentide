@@ -1,4 +1,4 @@
-//! The conversion's API beyond the oracle tables: garde after a successful
+//! The conversion's API beyond the Pydantic models tables: garde after a successful
 //! conversion ([`from_node::validate`]), the work budget on a document of
 //! nested aliases, open and tolerant models, and the field types no table
 //! model uses.

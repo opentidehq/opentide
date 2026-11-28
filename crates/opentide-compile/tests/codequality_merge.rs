@@ -2,8 +2,7 @@
 //! (#1656), run as GitLab runs it: the script is read from the rendered
 //! pipeline and run by `bash` in a folder that holds the reports, on the
 //! `python3` the job's image has. The cases are 0.28.1's
-//! `tests/test_ci/test_codequality_merge.py`, whose module the script
-//! replaces.
+//! tests of the merge, whose module the script replaces.
 
 #![cfg(unix)]
 #![expect(

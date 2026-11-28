@@ -16,7 +16,7 @@ A behaviour change is therefore a unit or end-to-end assertion first; a snapshot
 when the `--json` document, a written file, an exit code or the rendering set changes. This folder
 holds the snapshots' inputs: [`cases.toml`](cases.toml), the argument sets, and
 [`fixtures/`](fixtures/), the workspaces they run in; [`payloads/`](payloads/) is the deploy
-compile's corpus (`crates/opentide-compile/tests/oracle.rs`), which compares with 0.28.1's real
+compile's corpus (`crates/opentide-compile/tests/payload_corpus.rs`), which compares with 0.28.1's real
 requests and is not part of this slimming.
 
 Until #1139 and #1142 this folder also held the recordings of the frozen Python CLI (the oracle:

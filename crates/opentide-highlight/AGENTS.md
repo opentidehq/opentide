@@ -24,7 +24,6 @@ opentide-analysis, opentide-lsp and opentide-wasm depend on it.
 ```bash
 cargo nextest run --profile fast -p opentide-highlight
 cargo run -p opentide-lsp -- generate-highlights --check
-uv run pytest tests/test_generation/test_bundled_tide_catalog.py --no-cov -q
 ```
 
 ## Do not

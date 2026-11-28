@@ -1,8 +1,8 @@
 # The YAML resolution table (UC-1.2, #808): each case is a document read by
-# the oracle's loader (`opentide.core.io.parse_yaml`: PyYAML's CSafeLoader,
+# the Pydantic models' loader (`opentide.core.io.parse_yaml`: PyYAML's CSafeLoader,
 # YAML 1.1, with opentide's timestamp and duplicate-key handling) and by
 # opentide-schema's (`opentide_schema::node`: saphyr, YAML 1.2 core schema).
-# `yaml_table.py` runs each case through the oracle and writes
+# `yaml_table.py` runs each case through the Pydantic models and writes
 # `yaml_table.json`:
 #
 #   <oracle python> crates/opentide-schema/tests/oracle/yaml_table.py
@@ -25,7 +25,7 @@ workspace = true
 
 [[difference]]
 id = "timestamps"
-reason = "YAML 1.2's core schema has no timestamp type: a date is the string written. The oracle turned a date or timestamp into ISO 8601 text (`2026-01-01 10:00:00` became `2026-01-01T10:00:00`) and refused the file when the date cannot exist (`2026-02-30`). The text is kept as written; checking that a date exists is the date field's own check (UC-1.3), not the YAML reader's."
+reason = "YAML 1.2's core schema has no timestamp type: a date is the string written. The Pydantic models turned a date or timestamp into ISO 8601 text (`2026-01-01 10:00:00` became `2026-01-01T10:00:00`) and refused the file when the date cannot exist (`2026-02-30`). The text is kept as written; checking that a date exists is the date field's own check (UC-1.3), not the YAML reader's."
 changelog = "**Tide objects are read as YAML 1.2**"
 workspace = true
 
@@ -37,7 +37,7 @@ workspace = true
 
 [[difference]]
 id = "integer-range"
-reason = "An integer is a 64-bit integer. One that does not fit refuses the file, where saphyr alone would read it as an approximate float or a string; the oracle read Python's unbounded `int`. No Tide field holds such a number."
+reason = "An integer is a 64-bit integer. One that does not fit refuses the file, where saphyr alone would read it as an approximate float or a string; the Pydantic models read Python's unbounded `int`. No Tide field holds such a number."
 changelog = "**Tide objects are read as YAML 1.2**"
 workspace = false
 
@@ -49,7 +49,7 @@ workspace = false
 
 [[difference]]
 id = "duplicate-keys"
-reason = "A key is the same key when it is the same type and value, as the YAML specification defines node equality: `null` and `~` collide (the oracle compared the raw text and kept the last), and `1`, `1.0` and `\"1\"` are three keys (the oracle compared Python values or raw text). A repeated key refuses the file, as it did."
+reason = "A key is the same key when it is the same type and value, as the YAML specification defines node equality: `null` and `~` collide (the Pydantic models compared the raw text and kept the last), and `1`, `1.0` and `\"1\"` are three keys (the Pydantic models compared Python values or raw text). A repeated key refuses the file, as it did."
 changelog = "**Tide objects are read as YAML 1.2**"
 workspace = true
 
@@ -61,13 +61,13 @@ workspace = false
 
 [[difference]]
 id = "merge-keys"
-reason = "Merge keys (`<<: *base`) are a YAML 1.1 type that YAML 1.2 dropped: `<<` is an ordinary key. A model reports it as an unknown key (`extra_forbidden`); the oracle merged the anchored mapping in."
+reason = "Merge keys (`<<: *base`) are a YAML 1.1 type that YAML 1.2 dropped: `<<` is an ordinary key. A model reports it as an unknown key (`extra_forbidden`); the Pydantic models merged the anchored mapping in."
 changelog = "**Tide objects are read as YAML 1.2**"
 workspace = true
 
 [[difference]]
 id = "bom"
-reason = "A byte order mark may start the file; inside a value it refuses the file, as YAML 1.2 says. The oracle kept it in the string."
+reason = "A byte order mark may start the file; inside a value it refuses the file, as YAML 1.2 says. The Pydantic models kept it in the string."
 changelog = "**Tide objects are read as YAML 1.2**"
 workspace = true
 
@@ -79,7 +79,7 @@ workspace = true
 
 [[difference]]
 id = "tags"
-reason = "Tags follow the YAML 1.2 core schema: the non-specific `!` makes a string (`! 12` is the string 12), an explicit `!!int`, `!!float`, `!!bool` or `!!null` must fit its text, and other tags (`!!binary`, `!!set`, `!!omap`, `!!pairs`, `!!timestamp`, local tags) refuse the file, where the oracle constructed Python objects. A plain `=` or `<<` is a string (PyYAML had no constructor for them)."
+reason = "Tags follow the YAML 1.2 core schema: the non-specific `!` makes a string (`! 12` is the string 12), an explicit `!!int`, `!!float`, `!!bool` or `!!null` must fit its text, and other tags (`!!binary`, `!!set`, `!!omap`, `!!pairs`, `!!timestamp`, local tags) refuse the file, where the Pydantic models constructed Python objects. A plain `=` or `<<` is a string (PyYAML had no constructor for them)."
 changelog = "**Tide objects are read as YAML 1.2**"
 workspace = false
 

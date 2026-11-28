@@ -2,7 +2,7 @@
 //! as raw `.spl` files and inside a Tide rule's splunk block (#136).
 //!
 //! Splunk 10.6.1's parser accepts every fixture but `search-operator-tstats.spl`
-//! (`WHERE clause is not an exact query`). The fixtures are not in the oracle
+//! (`WHERE clause is not an exact query`). The fixtures are not in the vendor-oracle
 //! corpus yet: the SPL grammar still reports `spl_parse_error` on these
 //! operators.
 

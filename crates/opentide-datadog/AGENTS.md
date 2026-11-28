@@ -52,7 +52,7 @@ on a 1 MB stack), `tests/long_runs.rs` (growth, never absolute time), `tests/tre
 
 - Hand-edit `data/catalogs/datadog/` or `src/generated/ast.rs`: regenerate them.
 - Copy Datadog's documentation text into the catalogue: it holds facts only (`NOTICE`).
-- Vendor VRL's grammar: the oracle fetches it at a pinned commit, and nothing VRL-derived ships.
+- Vendor VRL's grammar: the Datadog oracle fetches it at a pinned commit, and nothing VRL-derived ships.
 
 ## Every engine crate
 

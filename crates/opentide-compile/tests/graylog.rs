@@ -1,7 +1,7 @@
 //! The Graylog compiler on the repository's fixtures (`tests/fixtures/graylog`,
 //! from 0.28.0): each `*.api.json` is the request a rule deploys on the
 //! fixture tenant at one server version, compared as data. The other cases
-//! are 0.28.0's `tests/test_platforms/test_graylog_compile.py`.
+//! are 0.28.0's Graylog compile tests.
 #![expect(
     clippy::unwrap_used,
     reason = "test helpers: every fixture opens and every workspace loads"

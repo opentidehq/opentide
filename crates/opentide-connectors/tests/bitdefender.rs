@@ -1,5 +1,5 @@
 //! Bitdefender GravityZone deploys against a fake Incidents API: the cases
-//! of 0.28.0's `tests/test_platforms/test_bitdefender_deployer.py`, whose
+//! of 0.28.0's Bitdefender deployer tests, whose
 //! `FakeGravityZone` answers here as a wiremock responder, JSON-RPC errors
 //! in HTTP 200 included. Everything above the HTTP boundary is real: the
 //! client, the pacing, the deploy steps and `opentide-compile`'s params;

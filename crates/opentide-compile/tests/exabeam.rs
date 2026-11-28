@@ -1,5 +1,5 @@
 //! The Exabeam compiler (exabeam-1.0), ported from 0.28.0's
-//! `tests/test_platforms/test_exabeam_compile.py`: the request bodies of
+//! Exabeam compile tests: the request bodies of
 //! `tests/fixtures/exabeam/*.api.json`, as data and in the specification's
 //! key order, and each derivation.
 #![expect(

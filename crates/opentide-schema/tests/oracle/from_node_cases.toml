@@ -1,7 +1,7 @@
 # The structural conversion's table (UC-1.2, #808): documents checked against
-# the models of `from_node_table.py` (Pydantic, the oracle) and of
+# the models of `from_node_table.py` (Pydantic, the Pydantic models) and of
 # `tests/from_node_table.rs` (the Rust derive). `from_node_table.py` writes
-# what the oracle reports into `from_node_table.json`; the test compares the
+# what the Pydantic models reports into `from_node_table.json`; the test compares the
 # Rust result with it case by case.
 #
 # Where they differ, the case lists the `difference` entries that explain it;
@@ -10,12 +10,12 @@
 
 [[difference]]
 id = "one-union-error"
-reason = "A value that may be one of several types (`str | list[str]`, `str | int`, a string or a model) is reported as serde and JSON Schema validators report it, not as Pydantic's smart union: when no member's kind of value fits, one error at the value's own path, of the first member's type (`string_type`, `int_type`, `model_type`), naming what is accepted (`expected a string or a list of strings`); when a member's kind fits (a list for `list[str]`, a mapping for a model), that member's errors at their own paths (`killchain.1`). The oracle reported one error per member, each under a path segment naming the member (`killchain.str`, `killchain.list[str].1`), which is no key of the file; with the path now in the file, the error also has its span and `yaml_line`."
+reason = "A value that may be one of several types (`str | list[str]`, `str | int`, a string or a model) is reported as serde and JSON Schema validators report it, not as Pydantic's smart union: when no member's kind of value fits, one error at the value's own path, of the first member's type (`string_type`, `int_type`, `model_type`), naming what is accepted (`expected a string or a list of strings`); when a member's kind fits (a list for `list[str]`, a mapping for a model), that member's errors at their own paths (`killchain.1`). The Pydantic models reported one error per member, each under a path segment naming the member (`killchain.str`, `killchain.list[str].1`), which is no key of the file; with the path now in the file, the error also has its span and `yaml_line`."
 changelog = "**A value of the wrong type is reported once, at its own path**"
 
 [[difference]]
 id = "messages-quote-values"
-reason = "Every message quotes a value with Rust's string formatting, in double quotes with Rust's escapes (`\"x\"`, `\"a\\u{a0}b\"`), and writes any other value as YAML and JSON write it (`null`, `true`, `1.5`), where the oracle used Python's `repr` (`'x'`, `'a\\xa0b'`, `None`, `True`). Codes, paths and the rest of each message are unchanged."
+reason = "Every message quotes a value with Rust's string formatting, in double quotes with Rust's escapes (`\"x\"`, `\"a\\u{a0}b\"`), and writes any other value as YAML and JSON write it (`null`, `true`, `1.5`), where the Pydantic models used Python's `repr` (`'x'`, `'a\\xa0b'`, `None`, `True`). Codes, paths and the rest of each message are unchanged."
 changelog = "**Messages quote values the same way everywhere**"
 
 [[difference]]
@@ -25,7 +25,7 @@ changelog = "**Field types are checked as declared**"
 
 [[difference]]
 id = "positions"
-reason = "Positions come from the parser's node marks. A value written `null` or `~` has a `yaml_line` (the oracle gave none); a value left empty points at its key (the oracle pointed at whatever the next line held); a key that is not a string is found and pointed at; a collection in a list written on one line is spanned whole; an empty list item points at its `-`; an error on the document itself has `yaml_line` 0; a scalar's `yaml_line` is its key's line."
+reason = "Positions come from the parser's node marks. A value written `null` or `~` has a `yaml_line` (the Pydantic models gave none); a value left empty points at its key (the Pydantic models pointed at whatever the next line held); a key that is not a string is found and pointed at; a collection in a list written on one line is spanned whole; an empty list item points at its `-`; an error on the document itself has `yaml_line` 0; a scalar's `yaml_line` is its key's line."
 changelog = "**Findings point at the key or value they are about**"
 
 [[difference]]

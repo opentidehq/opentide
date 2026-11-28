@@ -158,7 +158,7 @@ lint, the facade's semver checks, cargo deny, docs) when its paths changed; one 
 package and its install on each OS, and Python 3.10 to 3.13; the nightly (`nightly.yml`) adds the
 workspace's tests on macOS and Windows, coverage, benchmarks, every fuzz target for ten minutes
 (`engine-fuzz.yml`), lsp parity and the vendor-parser oracles, and never gates. Nothing compares
-with the frozen Python oracle: the command line is held by its snapshots (`tests/golden/README.md`).
+with the retired Python CLI: the command line is held by its snapshots (`tests/golden/README.md`).
 The test profiles are in [`.config/nextest.toml`](.config/nextest.toml); CI's jobs are in
 [`.github/AGENTS.md`](.github/AGENTS.md).
 
