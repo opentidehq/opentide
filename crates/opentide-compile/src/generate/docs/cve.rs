@@ -231,9 +231,12 @@ pub enum EpssDetail {
 pub struct CveRecord {
     /// Its canonical identifier.
     pub identifier: String,
-    /// The CNA's title, or an OSV summary.
+    /// The CNA's title, an OSV record's `summary`, or another record's
+    /// `title` or `summary`.
     pub title: Option<String>,
-    /// The English description, whitespace collapsed.
+    /// The description, whitespace collapsed: the CNA's English one when it
+    /// gives one, else its first; an OSV record's `details`; another
+    /// record's `description` or `details`.
     pub description: Option<String>,
     /// Its publication date.
     pub published: Option<String>,
@@ -241,7 +244,8 @@ pub struct CveRecord {
     pub state: Option<String>,
     /// `HIGH (8.1)`, a score, or another severity.
     pub severity: Option<String>,
-    /// Aliases the linked GitHub advisories give.
+    /// A CVE record's aliases from its linked GitHub advisories; an OSV
+    /// record's own `aliases`.
     pub aliases: Vec<String>,
     /// Its page on the vulnerability-lookup instance.
     pub page_url: String,

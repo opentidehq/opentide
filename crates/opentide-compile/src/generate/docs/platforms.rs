@@ -52,7 +52,7 @@ pub const EXABEAM: CodeLanguage = language("Exabeam Query Language", "text");
 pub const DATADOG: CodeLanguage = language("Datadog search syntax", "text");
 /// YARA-L.
 pub const YARAL: CodeLanguage = language("YARA-L", "yaral");
-/// Markdown text: a `guide.` field, Datadog's `message`.
+/// Markdown text: an Elastic `guide.` field, Datadog's `message`.
 pub const MARKDOWN: CodeLanguage = language("Markdown", "markdown");
 /// Anything else.
 pub const TEXT: CodeLanguage = language("Text", "text");

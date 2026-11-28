@@ -336,8 +336,9 @@ impl Link {
 /// A titled group of nodes, a subgraph where the flavour draws one.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Lane {
-    /// The subgraph's title; where lanes cannot be drawn, the caption of each
-    /// member when `caption_fallback` is set.
+    /// The subgraph's title; where lanes cannot be drawn and
+    /// `caption_fallback` is set, the caption of each member that has none of
+    /// its own.
     pub title: String,
     /// The member keys.
     pub members: Vec<String>,
@@ -373,8 +374,8 @@ pub struct Diagram {
     pub nodes: IndexMap<String, Node>,
     /// The links in render order, each once ([`Diagram::add_link`]).
     pub links: Vec<Link>,
-    /// The lanes, in render order; a lane with no node in the diagram is not
-    /// drawn.
+    /// The lanes, in render order. A node is drawn in the first lane that
+    /// lists it; a lane left with no node to draw is not drawn.
     pub lanes: Vec<Lane>,
     /// What each line style means, for the legend.
     pub link_legend: Vec<(LinkStyle, String)>,

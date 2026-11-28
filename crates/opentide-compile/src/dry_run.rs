@@ -34,7 +34,9 @@ pub struct Request {
     pub files: Vec<String>,
     /// `--platform`: only this platform's blocks are planned.
     pub platform: Option<String>,
-    /// `--wide`: every block, whatever its status.
+    /// `--wide`: blocks whose status no `--strategy` run deploys are planned
+    /// too. Blocks of platforms that are not enabled, and the blocks
+    /// `keep_deprecated` leaves out, are still skipped.
     pub wide: bool,
     /// `--keep-deprecated` / `--drop-deprecated`; `None` when neither.
     pub keep_deprecated: Option<bool>,

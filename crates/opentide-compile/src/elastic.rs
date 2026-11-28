@@ -325,7 +325,7 @@ fn alert_level(block: &Json, rule: &Rule) -> &'static str {
 #[derive(Debug, Clone, Default)]
 pub struct Setup {
     /// `index`: the index patterns of a block that sets neither `index` nor
-    /// `data_view_id`.
+    /// `data_view_id` and is neither ES|QL nor machine learning.
     pub index: Option<Vec<String>>,
     /// `tags`: added to every rule's tags, after the marker tag and before the
     /// block's own.
