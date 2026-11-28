@@ -107,8 +107,10 @@ fn shard_names(fs: &dyn FileSystem, directory: &Path) -> Vec<String> {
         .unwrap_or_default()
 }
 
+/// The name without its `.json` suffix, in any case: the five ASCII bytes
+/// [`shard_names`] kept it for (no other character lowercases to them).
 fn stem_of(name: &str) -> &str {
-    &name[..name.len() - ".json".len()]
+    crate::cut(name, 0, name.len().saturating_sub(".json".len()))
 }
 
 /// The shard of rule `object_uuid`, checked (`DeploymentState.load`): `Ok`
@@ -570,5 +572,11 @@ mod tests {
                 ("sentinel_one".to_owned(), "rule_id::prod".to_owned())
             ]
         );
+    }
+
+    #[test]
+    fn a_shard_stem_keeps_its_multi_byte_text() {
+        assert_eq!(stem_of("é😀.json"), "é😀");
+        assert_eq!(stem_of("é😀.JSON"), "é😀");
     }
 }

@@ -20,6 +20,10 @@
     clippy::too_many_lines,
     reason = "engine dispatchers match every node kind in one function"
 )]
+// Slicing a `str` by byte index panics off a char boundary, and this crate
+// reads user queries: every slice is checked or says why it is safe (#1946;
+// the lint moves to `[workspace.lints]` once every crate is clean).
+#![warn(clippy::string_slice)]
 /// The typed AST `cargo xtask codegen` writes from `eql.ungram`. Public but hidden, as SPL's
 /// and KQL's, so that the accessors no check reads yet are not dead code.
 #[doc(hidden)]
@@ -55,6 +59,15 @@ use opentide_parse::ast::AstNode;
 use serde::Deserialize;
 use std::sync::OnceLock;
 use syntax::SyntaxKind as K;
+
+/// `text[start..end]`, a range this crate computes: a token's bounds, a
+/// character's, or an ASCII byte's, so its ends are char boundaries. A range
+/// that is not fails a debug assertion and reads as empty.
+pub(crate) fn cut(text: &str, start: usize, end: usize) -> &str {
+    let piece = text.get(start..end);
+    debug_assert!(piece.is_some(), "{start}..{end} in {} bytes", text.len());
+    piece.unwrap_or_default()
+}
 #[doc(hidden)]
 pub use syntax::{Lang, SyntaxKind, SyntaxNode, SyntaxToken};
 
@@ -931,10 +944,11 @@ fn innermost_call(before: &str) -> Option<(String, u32)> {
         i += 1;
     }
     let (open, commas) = *stack.last()?;
-    let name_start = opentide_core::word_start(&before[..open], |c| {
-        c.is_ascii_alphanumeric() || c == '_' || c == '~'
-    });
-    let name = before[name_start..open].to_string();
+    // `open` is a `(` byte, and the word before it starts on a char.
+    let head = cut(before, 0, open);
+    let name_start =
+        opentide_core::word_start(head, |c| c.is_ascii_alphanumeric() || c == '_' || c == '~');
+    let name = cut(head, name_start, head.len()).to_string();
     (!name.is_empty()).then_some((name, commas))
 }
 
@@ -1582,6 +1596,57 @@ mod tests {
         assert_eq!(hover(src, inside), None);
         assert!(signature_help(src, inside).is_none());
     }
+
+    /// Queries with multi-byte text in every place the crate cuts: string
+    /// escapes (`\é`, `\u{…}`), raw strings, quoted names, comments, the
+    /// regex operators and calls. The ranges are checked in debug builds
+    /// (`cut`).
+    const MULTI_BYTE: &[&str] = &[
+        "process where `é😀`.`a``😀` == \"é\\é\\😀\\u{é}\\u{1F600}\" and é😀 : \"\"\"é😀\"\"\"\"\" /* é😀 /* */ // 😀\n and startsWith~(é😀, \"😀",
+        "process where process.name regex~ (\"é😀.*\", \"\"\"😀[é-😀]\"\"\") and `é😀 ?\"é\" ?'😀' /* é😀",
+        "sequence by é😀 [process where `😀` == 'é'] ![network where é😀(\"😀\", ] until [é where \"\"\"é\n\"\"\"",
+        "é😀 where true | filter é😀 > 1 | head é | unique `é``",
+    ];
+
+    #[test]
+    fn multi_byte_text_is_read_whole_everywhere() {
+        for query in MULTI_BYTE {
+            let result = analyze(query);
+            for token in &result.tokens {
+                assert!(
+                    query.get(token.span.start..token.span.end).is_some(),
+                    "{query}"
+                );
+            }
+            let _ = ecs_diagnostics(query);
+            let _ = sequences(query);
+            for (offset, _) in query.char_indices().chain([(query.len(), ' ')]) {
+                let _ = hover(query, offset);
+                let _ = completions(query, offset);
+                let _ = signature_help(query, offset);
+                let prefix = query.get(..offset).unwrap();
+                let _ = analyze(prefix);
+                let _ = lexical::prepare(prefix);
+            }
+        }
+    }
+
+    #[test]
+    fn multi_byte_escapes_and_names_are_read_whole() {
+        assert_eq!(cut("é😀x", 0, 2), "é");
+        assert_eq!(cut("é😀x", 2, 7), "😀x");
+        let messages: Vec<String> = analyze("process where a == \"é\\😀\"")
+            .diagnostics
+            .into_iter()
+            .map(|d| d.message)
+            .collect();
+        assert!(messages.iter().any(|m| m.contains("\\😀")), "{messages:?}");
+        let call = "process where é😀 and startsWith(é, ";
+        assert_eq!(
+            signature_help(call, call.len()).map(|h| h.active_parameter),
+            Some(1)
+        );
+    }
 }
 
 #[cfg(test)]
@@ -1605,7 +1670,10 @@ mod walk_tests {
         let mut out: Vec<String> = SAMPLES.iter().map(|s| (*s).to_owned()).collect();
         let cut: Vec<String> = SAMPLES
             .iter()
-            .flat_map(|t| t.char_indices().map(|(i, _)| t[..i].to_owned()))
+            .flat_map(|t| {
+                t.char_indices()
+                    .map(|(i, _)| t.get(..i).unwrap().to_owned())
+            })
             .collect();
         out.extend(cut);
         out

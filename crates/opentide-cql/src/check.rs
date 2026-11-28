@@ -1094,7 +1094,10 @@ mod walk_tests {
         let mut out: Vec<String> = SAMPLES.iter().map(|s| (*s).to_owned()).collect();
         let cut: Vec<String> = SAMPLES
             .iter()
-            .flat_map(|t| t.char_indices().map(|(i, _)| t[..i].to_owned()))
+            .flat_map(|t| {
+                t.char_indices()
+                    .map(|(i, _)| t.get(..i).unwrap().to_owned())
+            })
             .collect();
         out.extend(cut);
         out

@@ -18,7 +18,7 @@
 //! | Where | Attribute | Effect |
 //! |-------|-----------|--------|
 //! | struct | `model = "ThreatBody"` | the model's name in `model_type` messages (default: the Rust name) |
-//! | struct | `before = "path"` | `fn(&Node, &mut Context) -> bool`, run first on the raw value; `false` stops |
+//! | struct | `before = "path"` | `fn(&Node, &mut Context) -> bool`, run first on the raw value; `false` stops; not run under `Context::without_model_checks` |
 //! | struct | `after = "path"` | `fn(&Self, &Node, &mut Context) -> bool`, a `mode="after"` model validator: run on the built value when the conversion reported no error; `false` drops it |
 //! | struct | `tolerate = "PATH"` | a `&[&str]` of keys a closed model does not report (the `__legacy_keys__` pre-pass) |
 //! | field | `before = "path"` | the same, on the field's value |
@@ -335,7 +335,7 @@ fn expand_struct(
     }
     let before_check = before.map(|path| {
         quote! {
-            if !#path(__node, __cx) {
+            if __cx.runs_model_checks() && !#path(__node, __cx) {
                 return ::core::option::Option::None;
             }
         }
@@ -608,7 +608,10 @@ mod tests {
         );
         assert!(code.contains("Some (vocab)"), "{code}");
         assert!(code.contains("convert (__n , __cx)"), "{code}");
-        assert!(code.contains("if ! check (__node , __cx)"), "{code}");
+        assert!(
+            code.contains("if __cx . runs_model_checks () && ! check (__node , __cx)"),
+            "{code}"
+        );
         assert!(code.contains("finish (__cx , true , LEGACY)"), "{code}");
         assert!(code.contains("& [\"type\"]"), "{code}");
         // The fields as Python reads them: the attribute, then the key.

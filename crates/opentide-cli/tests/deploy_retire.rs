@@ -13,6 +13,7 @@ use std::path::Path;
 use std::sync::{Arc, Mutex};
 
 use opentide_cli::commands::deploy_send::{Args, Context, Lines, Sent, run};
+use opentide_cli::commands::result::{ExitCode, Status};
 use opentide_cli::env::Env;
 use opentide_cli::json::Json;
 use opentide_cli::render::outcome::Console;
@@ -208,29 +209,17 @@ fn deploy(ws: &Path, args: &Args, registry: &Registry) -> (Sent, String) {
 /// The result's value at `key`.
 fn value<'a>(sent: &'a Sent, key: &str) -> &'a Json {
     sent.result
-        .iter()
-        .find(|(name, _)| name == key)
-        .map(|(_, value)| value)
+        .get(key)
         .unwrap_or_else(|| panic!("no {key} in {:?}", sent.result))
 }
 
 fn get<'a>(sent: &'a Sent, key: &str) -> Option<&'a Json> {
-    sent.result
-        .iter()
-        .find(|(name, _)| name == key)
-        .map(|(_, value)| value)
+    sent.result.get(key)
 }
 
-/// The run's warnings, as text.
+/// The run's warnings.
 fn warnings(sent: &Sent) -> Vec<String> {
-    match get(sent, "warnings") {
-        Some(Json::Array(items)) => items
-            .iter()
-            .filter_map(Json::as_str)
-            .map(str::to_owned)
-            .collect(),
-        _ => Vec::new(),
-    }
+    sent.result.warnings.clone()
 }
 
 /// Each result row: `(id, status, action, retired)`.
@@ -360,12 +349,13 @@ fn a_deleted_sentinel_rule_is_retired_by_its_uuid_with_prune() {
             true
         )]
     );
-    assert_eq!(value(&sent, "status"), &Json::str("completed"));
-    assert_eq!(value(&sent, "_exit_code"), &Json::Int(0));
-    let Json::Object(summary) = value(&sent, "_summary") else {
-        panic!("a summary")
-    };
-    assert_eq!(summary.get("delete"), Some(&Json::Int(1)));
+    assert_eq!(sent.result.status, Status::Completed);
+    assert_eq!(sent.result.exit, ExitCode::Success);
+    let summary = &sent.result.summary;
+    assert!(
+        summary.contains(&("delete".to_owned(), Json::Int(1))),
+        "{summary:?}"
+    );
     let Json::Array(changes) = value(&sent, "changes") else {
         panic!("changes")
     };
@@ -382,7 +372,7 @@ fn without_prune_a_deleted_rule_is_only_warned_about() {
     let (registry, recorder) = recorder("sentinel", Vec::new());
     let (sent, _) = deploy(ws.path(), &release("sentinel", false), &registry);
     assert!(recorder.seen.lock().unwrap().is_empty());
-    assert_eq!(value(&sent, "status"), &Json::str("skipped"));
+    assert_eq!(sent.result.status, Status::Skipped);
     // A CI script sees the drift without --prune: nothing was sent.
     assert_eq!(
         value(&sent, "retirable"),
@@ -414,15 +404,15 @@ fn prune_needs_a_release_run_and_no_selection() {
     let mut args = release("sentinel", true);
     args.strategies = vec!["PREVIEW".into()];
     let (sent, _) = deploy(ws.path(), &args, &registry);
-    assert_eq!(value(&sent, "_exit_code"), &Json::Int(2));
+    assert_eq!(sent.result.exit, ExitCode::Usage);
     assert_eq!(
-        value(&sent, "message"),
-        &Json::str("--prune retires rules, which only a --strategy RELEASE run does")
+        sent.result.message.as_deref(),
+        Some("--prune retires rules, which only a --strategy RELEASE run does")
     );
     let mut args = release("sentinel", true);
     args.uuids = vec![KEPT.into()];
     let (sent, _) = deploy(ws.path(), &args, &registry);
-    assert_eq!(value(&sent, "_exit_code"), &Json::Int(2));
+    assert_eq!(sent.result.exit, ExitCode::Usage);
     assert!(recorder.seen.lock().unwrap().is_empty());
 }
 
@@ -701,7 +691,7 @@ fn an_all_run_retires_what_deployment_state_records_and_forgets_it() {
             true
         )]
     );
-    assert_eq!(value(&sent, "_exit_code"), &Json::Int(0));
+    assert_eq!(sent.result.exit, ExitCode::Success);
 }
 
 #[test]
@@ -731,7 +721,7 @@ fn a_retirement_the_tenant_no_longer_has_is_skipped_and_forgotten() {
             .join(format!(".opentide/states/deployment/{GONE}.json"))
             .exists()
     );
-    assert_eq!(value(&sent, "_exit_code"), &Json::Int(0));
+    assert_eq!(sent.result.exit, ExitCode::Success);
 }
 
 #[test]

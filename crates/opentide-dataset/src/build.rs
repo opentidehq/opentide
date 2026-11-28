@@ -224,12 +224,12 @@ impl Datasets {
 fn named(text: &str, call: &str) -> Vec<String> {
     let mut paths = Vec::new();
     let mut rest = text;
-    while let Some(at) = rest.find(call) {
-        rest = rest[at + call.len()..].trim_start();
+    while let Some((_, after)) = rest.split_once(call) {
+        rest = after.trim_start();
         if let Some(literal) = rest.strip_prefix('"')
-            && let Some(end) = literal.find('"')
+            && let Some((path, _)) = literal.split_once('"')
         {
-            paths.push(literal[..end].to_owned());
+            paths.push(path.to_owned());
         }
     }
     paths
@@ -301,6 +301,9 @@ mod tests {
             named(source, "opentide_dataset::text!("),
             ["data/a.toml", "data/b.toml"]
         );
+        // Multi-byte text around the calls and in the literals.
+        let source = "// é😀 text!(\"x\")\né = text!(\"é/😀.toml\") 😀 text!(😀) text!(\"é";
+        assert_eq!(named(source, "text!("), ["x", "é/😀.toml"]);
     }
 
     #[test]

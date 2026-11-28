@@ -16,6 +16,7 @@ use opentide_schema::objects::platform::bitdefender::{
 };
 
 use crate::Context;
+use crate::compiler::{self, Compiler};
 use crate::deploy::{Action, setup};
 use crate::json::{Json, Object};
 use crate::rule::{CompileError, Rule};
@@ -592,10 +593,11 @@ pub fn request(
     if let Action::Delete(rule_id) = action {
         return Ok(request_body(DELETE, delete_params(rule_id)));
     }
-    let compiled = compile_rule(cx, rule, strategy(cx, rule)?, Some(tenant))?;
+    // The dry run's and the deploy's compile (#1952).
+    let compiled = <compiler::Bitdefender as Compiler>::compile(cx, rule, Some(tenant))?;
     Ok(match action {
         Action::Update(rule_id) => request_body(UPDATE, update_params(&compiled, rule_id)),
-        _ => request_body(CREATE, create_params(&compiled)),
+        _ => request_body(CREATE, <compiler::Bitdefender as Compiler>::body(&compiled)),
     })
 }
 

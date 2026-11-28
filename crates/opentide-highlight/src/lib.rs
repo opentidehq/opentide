@@ -10,6 +10,10 @@
     missing_docs,
     reason = "imported from language-server with public items undocumented: crates/AGENTS.md, Lints"
 )]
+// Slicing a `str` by byte index panics off a char boundary, and this crate
+// reads user text: every slice is checked or says why it is safe (#1946;
+// the lint moves to `[workspace.lints]` once every crate is clean).
+#![warn(clippy::string_slice)]
 
 mod engine;
 mod function_names;
@@ -24,6 +28,16 @@ pub use tide_grammar::{
 mod tm_extras;
 
 use opentide_core::{ByteSpan, LanguageId, LineIndex, Range};
+
+/// `text[start..end]`, a range this crate is given or computes: a token's
+/// bounds, a character's, or an ASCII byte's, so its ends are char
+/// boundaries. A range that is not fails a debug assertion and reads as
+/// empty.
+pub(crate) fn cut(text: &str, start: usize, end: usize) -> &str {
+    let piece = text.get(start..end);
+    debug_assert!(piece.is_some(), "{start}..{end} in {} bytes", text.len());
+    piece.unwrap_or_default()
+}
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, Mutex, OnceLock, RwLock};
@@ -812,14 +826,15 @@ pre{margin:0;white-space:pre-wrap}
         }
         let start = t.span.start.min(source.len());
         let end = t.span.end.min(source.len());
-        html.push_str(&html_escape(&source[last..start]));
+        // The engines' tokens start and end on char boundaries.
+        html.push_str(&html_escape(cut(source, last, start)));
         let class = t.capture.replace('.', "-");
         html.push_str(&format!("<span class=\"{class}\">"));
-        html.push_str(&html_escape(&source[start..end]));
+        html.push_str(&html_escape(cut(source, start, end)));
         html.push_str("</span>");
         last = end;
     }
-    html.push_str(&html_escape(&source[last..]));
+    html.push_str(&html_escape(cut(source, last, source.len())));
     html.push_str("</pre>");
     html
 }
@@ -1579,6 +1594,29 @@ mod tests {
         assert!(html.contains("#4fc1ff"));
         assert!(html.contains(".markdown-heading"));
         assert!(html.contains(".macro"));
+    }
+
+    #[test]
+    fn html_keeps_multi_byte_text_around_its_tokens() {
+        let spec = HighlightSpec::load().unwrap();
+        let src = "é😀 | é <😀>";
+        let tokens = tokens_from_spans(
+            &spec,
+            src,
+            &[
+                (ByteSpan::new(0, 6), "type"),
+                (ByteSpan::new(7, 8), "operator.pipe"),
+                (ByteSpan::new(9, 11), "keyword"),
+            ],
+        )
+        .unwrap();
+        let html = tokens_to_html(src, &tokens);
+        assert!(html.contains("<span class=\"type\">é😀</span>"), "{html}");
+        assert!(
+            html.contains("<span class=\"keyword\">é</span> &lt;😀&gt;"),
+            "{html}"
+        );
+        assert_eq!(cut("é😀x", 2, 7), "😀x");
     }
 
     #[test]

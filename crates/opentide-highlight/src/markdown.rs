@@ -22,7 +22,9 @@ pub fn highlight_markdown_line(line_start: usize, line: &str) -> Vec<(ByteSpan, 
     }
 
     let mut prose_capture = "string";
-    let rest = &line[i..];
+    // Past the leading spaces; every `i` below stops past ASCII markers or
+    // steps whole characters.
+    let rest = crate::cut(line, i, line.len());
     if let Some(end) = match_heading_marker(line, i) {
         push(&mut spans, line_start, i, end, "markdown.heading");
         i = end;
@@ -54,7 +56,7 @@ fn push(
 }
 
 fn match_heading_marker(line: &str, i: usize) -> Option<usize> {
-    let rest = &line[i..];
+    let rest = crate::cut(line, i, line.len());
     let hashes = rest.chars().take_while(|c| *c == '#').count();
     if !(1..=6).contains(&hashes) {
         return None;
@@ -70,7 +72,7 @@ fn match_heading_marker(line: &str, i: usize) -> Option<usize> {
 }
 
 fn match_list_marker(line: &str, i: usize) -> Option<usize> {
-    let rest = &line[i..];
+    let rest = crate::cut(line, i, line.len());
     let b = rest.as_bytes();
     if matches!(b.first(), Some(b'-' | b'*' | b'+')) && b.get(1) == Some(&b' ') {
         return Some(i + 2);
@@ -104,7 +106,10 @@ fn highlight_inline(
             prose_from = i;
             continue;
         }
-        i += line[i..].chars().next().map(|c| c.len_utf8()).unwrap_or(1);
+        i += crate::cut(line, i, line.len())
+            .chars()
+            .next()
+            .map_or(1, char::len_utf8);
     }
     if prose_from < bytes.len() {
         push(spans, base, prose_from, bytes.len(), prose);
@@ -112,7 +117,7 @@ fn highlight_inline(
 }
 
 fn match_inline(line: &str, i: usize) -> Option<(usize, &'static str)> {
-    let rest = &line[i..];
+    let rest = crate::cut(line, i, line.len());
     let bytes = rest.as_bytes();
     if let Some(inner) = rest.strip_prefix('`')
         && let Some(rel) = inner.find('`')
@@ -137,9 +142,9 @@ fn match_inline(line: &str, i: usize) -> Option<(usize, &'static str)> {
         return Some((i + 1 + rel + 1, "markdown.emphasis"));
     }
     if rest.starts_with('[')
-        && let Some(close) = rest.find(']')
+        && let Some((label, after)) = rest.split_once(']')
     {
-        let after = &rest[close + 1..];
+        let close = label.len();
         if after.starts_with('(')
             && let Some(end_paren) = after.find(')')
         {
@@ -168,7 +173,7 @@ mod tests {
     fn caps(line: &str) -> Vec<(&'static str, String)> {
         highlight_markdown_line(0, line)
             .into_iter()
-            .map(|(sp, c)| (c, line[sp.start..sp.end].to_string()))
+            .map(|(sp, c)| (c, line.get(sp.start..sp.end).unwrap().to_string()))
             .collect()
     }
 
@@ -212,6 +217,33 @@ mod tests {
         assert!(got.iter().any(|(c, _)| *c == "markdown.strong"), "{got:?}");
         assert!(
             got.iter().any(|(c, _)| *c == "markdown.emphasis"),
+            "{got:?}"
+        );
+    }
+
+    /// Lines with multi-byte text in every place the scanner cuts: markers,
+    /// inline code, emphasis, links and URLs, each from every character on.
+    #[test]
+    fn multi_byte_lines_are_read_whole() {
+        let lines = [
+            "  ### é😀 `é😀` **😀** __é__ *é* [é😀](😀) https://é.example/😀. é",
+            " - é😀 [é]😀 [😀](é *😀 `é",
+            "> 😀é https://😀 1. é",
+            "12. é😀 **é😀",
+            "😀",
+        ];
+        for line in lines {
+            for (at, _) in line.char_indices() {
+                let rest = line.get(at..).unwrap();
+                for (span, _) in highlight_markdown_line(0, rest) {
+                    assert!(rest.get(span.start..span.end).is_some(), "{rest}");
+                }
+            }
+        }
+        let got = caps("é [é😀](😀) 😀");
+        assert!(
+            got.iter()
+                .any(|(c, t)| *c == "markdown.link" && t == "[é😀](😀)"),
             "{got:?}"
         );
     }

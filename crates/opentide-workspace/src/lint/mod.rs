@@ -1426,9 +1426,9 @@ fn patterns() -> &'static Patterns {
     })
 }
 
-/// Code points in `text[..byte]`.
+/// Code points in `text[..byte]`; `byte` is a regex match's bound.
 fn chars_before(text: &str, byte: usize) -> usize {
-    text[..byte].chars().count()
+    crate::cut(text, 0, byte).chars().count()
 }
 
 /// `text` without leading whitespace.
@@ -1470,11 +1470,11 @@ fn placeholder_lines(text: &str) -> Vec<Marked> {
         let Some(comment) = patterns().placeholder.find(line) else {
             continue;
         };
-        let content = line[..comment.start()].trim_end();
+        let content = crate::cut(line, 0, comment.start()).trim_end();
         let (start, end, label) = if let Some(key) = patterns().marked_key.captures(content) {
             let whole = key.get(0).map_or(0, |m| m.end());
             let name = key.name("key").map_or((0, 0), |m| (m.start(), m.end()));
-            let rest = &content[whole..];
+            let rest = crate::cut(content, whole, content.len());
             if ["", "|", ">", "|-", ">-"].contains(&rest) {
                 (
                     chars_before(content, name.0),
@@ -2372,5 +2372,31 @@ impl crate::Workspace {
                 report
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod multi_byte_tests {
+    use super::*;
+
+    /// The marked values' columns (from 1) count code points of multi-byte
+    /// text.
+    #[test]
+    fn placeholder_columns_count_code_points() {
+        let text = "é😀: x # opentide:placeholder\nname: é😀 # opentide:placeholder\ndescription: | # opentide:placeholder\n  é\nlist:\n  - 😀é # opentide:placeholder\n é😀 # opentide:placeholder\n";
+        let marked: Vec<(usize, String, usize, usize)> = placeholder_lines(text)
+            .into_iter()
+            .map(|m| (m.line, m.label, m.column, m.end_column))
+            .collect();
+        assert_eq!(
+            marked,
+            [
+                (0, "value".to_owned(), 1, 6),
+                (1, "name".to_owned(), 7, 9),
+                (2, "description".to_owned(), 1, 12),
+                (5, "list[0]".to_owned(), 5, 7),
+                (6, "value".to_owned(), 2, 4),
+            ]
+        );
     }
 }

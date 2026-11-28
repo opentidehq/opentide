@@ -265,14 +265,13 @@ fn entity_path(link: &str) -> String {
     let raw = percent_encoding::percent_decode_str(link)
         .decode_utf8_lossy()
         .into_owned();
-    if let Some(at) = raw.find("servicesNS/") {
-        let rest = &raw[at + "servicesNS/".len()..];
+    if let Some((_, rest)) = raw.split_once("servicesNS/") {
         let mut parts = rest.splitn(3, '/');
         let (_, _, tail) = (parts.next(), parts.next(), parts.next());
         return tail.unwrap_or_default().to_owned();
     }
-    if let Some(at) = raw.find("services/") {
-        return raw[at + "services/".len()..].to_owned();
+    if let Some((_, rest)) = raw.split_once("services/") {
+        return rest.to_owned();
     }
     raw
 }
@@ -1690,5 +1689,15 @@ mod tests {
             epoch("2026-10-27T08:00:00.25Z".parse().unwrap()),
             "1793088000.250"
         );
+    }
+
+    #[test]
+    fn entity_paths_read_multi_byte_links() {
+        assert_eq!(
+            entity_path("/servicesNS/é/😀/saved/searches/é%F0%9F%98%80"),
+            "saved/searches/é😀"
+        );
+        assert_eq!(entity_path("😀/services/saved/é"), "saved/é");
+        assert_eq!(entity_path("é😀"), "é😀");
     }
 }

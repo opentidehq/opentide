@@ -574,3 +574,27 @@ fn a_bom_after_the_start_is_part_of_a_term() {
     assert_eq!(shape("\u{feff}a:b"), "(QUERY (FIELD_CLAUSE TAG_KEY TERM))");
     assert_eq!(shape("x\u{feff}:b"), "(QUERY (FIELD_CLAUSE TAG_KEY TERM))");
 }
+
+/// Queries with multi-byte text in every place the crate cuts: the token
+/// before a touching piece, a finding's shortened text, the word being
+/// completed. Each is read at every char offset.
+#[test]
+fn multi_byte_text_is_read_whole_everywhere() {
+    let queries = [
+        "@é😀:é😀* service:😀 -é😀:(é OR 😀) @é.😀:>5é \"é😀",
+        "é😀é😀é😀é😀é😀é😀é😀é😀é😀é😀é😀é😀é😀é😀é😀é😀é😀é😀é😀é😀é😀é😀:(",
+        "\u{feff}é @😀:[é TO 😀] #é😀 *:é😀",
+    ];
+    for query in queries {
+        for profile in [Profile::Rule, Profile::Search] {
+            for finding in findings(query, profile) {
+                assert!(!finding.message.is_empty());
+            }
+        }
+        for (offset, _) in query.char_indices().chain([(query.len(), ' ')]) {
+            let _ = crate::completions(query, offset);
+            let _ = crate::hover(query, offset);
+            let _ = findings(query.get(..offset).unwrap(), Profile::Rule);
+        }
+    }
+}

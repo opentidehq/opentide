@@ -245,7 +245,7 @@ mod tests {
             .into_iter()
             .map(|l| {
                 let range = std::ops::Range::<usize>::from(l.range);
-                (K::from_raw(l.kind), &source[range])
+                (K::from_raw(l.kind), source.get(range).unwrap())
             })
             .collect()
     }

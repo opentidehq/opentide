@@ -25,6 +25,12 @@
 //! `build::Datasets` (the `encode` feature, as a build dependency) and reads
 //! the blob with [`text!`] or [`value!`], each decoded once and shared.
 
+// Slicing a `str` by byte index panics off a char boundary, and this crate
+// reads the catalogs it compiles in: every slice is checked or says why it is
+// safe (#1946; the lint moves to `[workspace.lints]` once every crate is
+// clean).
+#![warn(clippy::string_slice)]
+
 use serde::de::DeserializeOwned;
 use std::io::Read;
 
