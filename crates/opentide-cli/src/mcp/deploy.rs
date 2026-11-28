@@ -24,7 +24,7 @@ fn error(uuid: &str, status: &str, dry_run: bool, rest: Vec<(&str, Json)>) -> Js
 }
 
 /// The refusal of a deploy to `platform` when its merged configuration
-/// declares no `[[tenants]]` table (`_missing_tenants`).
+/// declares no `[[tenants]]` table.
 fn missing_tenants(workspace: &Workspace, uuid: &str, platform: &str) -> Option<Json> {
     let tenants = workspace
         .configuration()

@@ -1,5 +1,5 @@
-//! The Configuration tab's content (`cli/services/configuration_view.py`,
-//! #776; UC-6.0d, #841): the workspace's configuration read, not as TOML.
+//! The Configuration tab's content (#776; UC-6.0d, #841): the workspace's
+//! configuration read, not as TOML.
 //!
 //! Each file (`deployment.toml`, `lint.toml`, `documentation.toml`,
 //! `sharing.toml` and each `platforms/*.toml`) is shown by section, each
@@ -231,7 +231,7 @@ fn scalar_text(value: &Value) -> String {
     }
 }
 
-/// A value as the tab shows it (`_format`).
+/// A value as the tab shows it.
 fn format_value(value: &Node) -> String {
     match &value.value {
         Value::Bool(flag) => if *flag { "true" } else { "false" }.to_owned(),
@@ -255,8 +255,7 @@ fn format_value(value: &Node) -> String {
     }
 }
 
-/// Each value that is no table, and no array of scalars, with its key path
-/// (`_leaves`).
+/// Each value that is no table, and no array of scalars, with its key path.
 fn leaves(value: &Node, parts: &mut Vec<String>, out: &mut Vec<(Vec<String>, Node)>) {
     match &value.value {
         Value::Map(entries) => {
@@ -281,7 +280,7 @@ fn leaves(value: &Node, parts: &mut Vec<String>, out: &mut Vec<(Vec<String>, Nod
     }
 }
 
-/// Every scalar, with its key path, array items by index (`_scalars`).
+/// Every scalar, with its key path, array items by index.
 fn scalars(value: &Node, parts: &mut Vec<String>, out: &mut Vec<(Vec<String>, Node)>) {
     match &value.value {
         Value::Map(entries) => {
@@ -302,7 +301,7 @@ fn scalars(value: &Node, parts: &mut Vec<String>, out: &mut Vec<(Vec<String>, No
     }
 }
 
-/// The node at `parts`, if any (`_at`).
+/// The node at `parts`, if any.
 fn at<'a, S: AsRef<str>>(document: &'a Node, parts: &[S]) -> Option<&'a Node> {
     let mut node = document;
     for part in parts {
@@ -316,7 +315,7 @@ fn at<'a, S: AsRef<str>>(document: &'a Node, parts: &[S]) -> Option<&'a Node> {
     Some(node)
 }
 
-/// A setting at `parts` (`_shown`): a secret is its reference, or hidden.
+/// A setting at `parts`: a secret is its reference, or hidden.
 fn shown(value: &Node, parts: &[String], env: &Env) -> Setting {
     let path = parts.join(".");
     let key = parts.last().cloned().unwrap_or_default();
@@ -348,8 +347,7 @@ fn shown(value: &Node, parts: &[String], env: &Env) -> Setting {
     setting
 }
 
-/// `dotted path → description` from the file's JSON Schema, list items as `*`
-/// (`_schema_descriptions`).
+/// `dotted path → description` from the file's JSON Schema, list items as `*`.
 fn schema_descriptions(file_key: &str) -> BTreeMap<String, String> {
     let mut found = BTreeMap::new();
     let Some(schema) = opentide_schema::generate::configuration::configuration_schema(file_key)
@@ -499,7 +497,7 @@ fn comment_descriptions(text: Option<&str>) -> BTreeMap<String, String> {
     found
 }
 
-/// The description of the setting at `parts` (`_description`).
+/// The description of the setting at `parts`.
 fn description(descriptions: &BTreeMap<String, String>, parts: &[String]) -> String {
     let starred: Vec<&str> = parts
         .iter()
@@ -751,7 +749,7 @@ fn redacted_text(text: &str, env: &Env) -> Result<String, ScanError> {
 }
 
 /// Every text a secret of `document` could show as: never to appear in a
-/// raw view (`_secrets`).
+/// raw view.
 fn secrets(document: &Node) -> HashSet<String> {
     let mut found = HashSet::new();
     let mut all = Vec::new();
@@ -786,7 +784,7 @@ fn secrets(document: &Node) -> HashSet<String> {
 }
 
 /// Whether `redacted` holds no secret of `document`, read back as TOML and
-/// as text (`_proven`).
+/// as text.
 fn proven(document: &Node, redacted: &str) -> bool {
     let Ok(shown) = config_toml::parse(redacted) else {
         return false;
@@ -843,12 +841,12 @@ pub fn redact_toml(text: &str, env: &Env) -> Result<String, UnsafeRawView> {
 
 // -- the view ------------------------------------------------------------------
 
-/// Whether `document` has a value at `parts` (`_has`).
+/// Whether `document` has a value at `parts`.
 fn has(document: &Node, parts: &[String]) -> bool {
     at(document, parts).is_some()
 }
 
-/// One configuration file (`_file`).
+/// One configuration file.
 fn file(
     file_key: &str,
     merged: Option<&Node>,
@@ -953,8 +951,7 @@ fn file(
     }
 }
 
-/// `validate --check configuration`'s findings, by the file they name
-/// (`_findings`).
+/// `validate --check configuration`'s findings, by the file they name.
 fn findings(resolved: &Node) -> BTreeMap<String, Vec<ConfigFinding>> {
     let mut found: BTreeMap<String, Vec<ConfigFinding>> = BTreeMap::new();
     let checked = std::panic::catch_unwind(|| {
@@ -1028,8 +1025,7 @@ fn sharing_findings(folders: &[PathBuf], resolved: &Node) -> Vec<ConfigFinding> 
         .collect()
 }
 
-/// Status name to strategy, from `deployment.toml` as written
-/// (`_status_strategies`).
+/// Status name to strategy, from `deployment.toml` as written.
 fn status_strategies(
     deployment: Option<&Node>,
 ) -> BTreeMap<String, opentide_compile::strategy::StatusStrategy> {
@@ -1054,7 +1050,7 @@ fn status_strategies(
     found
 }
 
-/// A card per platform file (`_platform_cards`): `rules` are the rule
+/// A card per platform file: `rules` are the rule
 /// bodies by UUID, in the catalogue's order.
 #[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 fn platform_cards(resolved: &Node, rules: &[(String, &Node)], env: &Env) -> Vec<PlatformCard> {

@@ -372,7 +372,7 @@ pub fn configuration_cells(item: &ConfigFile) -> [Line<'static>; 3] {
 }
 
 /// A setting's value: a credential as its variable and whether it is set,
-/// or hidden (`_value`).
+/// or hidden.
 fn setting_value(setting: &Setting) -> Vec<Span<'static>> {
     if setting.secret {
         let Some(variable) = &setting.variable else {

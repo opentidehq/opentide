@@ -1,5 +1,4 @@
-//! The catalogue tools (`src/opentide/mcp_server/catalog.py` and the
-//! registry tools of `tools.py`): `search`, `get_chaining`, `coverage`,
+//! The catalogue tools: `search`, `get_chaining`, `coverage`,
 //! `deployment_status` and `validate_rule`, on the workspace as it is on disk
 //! at the call.
 
@@ -376,7 +375,7 @@ fn lineage_edges(index: &Index) -> Vec<Edge> {
 }
 
 /// The connected sets reached through `objective.threats`,
-/// `detection_model` and `threat.chaining` (`_lineage_by_uuid`): each
+/// `detection_model` and `threat.chaining`: each
 /// member's set, in the order members were first linked.
 fn lineage_by_uuid(index: &Index, edges: &[Edge]) -> IndexMap<String, Lineage> {
     let mut parent: HashMap<String, String> = HashMap::new();
@@ -787,7 +786,7 @@ pub fn known_platform(platform: &str) -> bool {
 
 /// The `--strategy` values whose run deploys the rule's `platform` block;
 /// none for `INERT`. A status the deployment configuration does not define
-/// runs `PREVIEW` (`_run_strategies`).
+/// runs `PREVIEW`.
 fn run_strategies(workspace: &Workspace, body: &Node, platform: &str) -> Vec<&'static str> {
     use opentide_compile::strategy::{Statuses, deployed_by};
     let block_status = body

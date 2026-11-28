@@ -239,7 +239,7 @@ pub fn failed_result(payload: &Json) -> Value {
 /// - `validation_report`: a `queries` mode that is not one, an invalid
 ///   argument (the payload is `{"ok": false, "error": ...}`).
 ///
-/// What stays an answer, as the Python server had it: the findings of
+/// What stays an answer, not a failure: the findings of
 /// `validation_report` and `validate_rule`, and a lookup that finds nothing
 /// (`found: false`).
 fn is_failure(name: &str, payload: &Json) -> bool {
@@ -460,7 +460,7 @@ fn set(object: &mut Json, key: &str, value: Json) {
 }
 
 /// Explain the first error's code, then validate again once the fixes are
-/// written (`_validation_next_actions`).
+/// written.
 pub fn validation_next_actions(diagnostics: &[Json], again: Json) -> Vec<Json> {
     let string = |item: &Json, key: &str| match item.get(key) {
         Some(Json::Str(text)) => Some(text.clone()),

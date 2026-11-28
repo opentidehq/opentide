@@ -1,4 +1,4 @@
-//! What `opentide tui` shows, without a terminal (`cli/services/tui.py`):
+//! What `opentide tui` shows, without a terminal:
 //! a snapshot of the workspace, built off the UI thread and read on it.
 //!
 //! The catalogue comes from the workspace's index, the coverage table from

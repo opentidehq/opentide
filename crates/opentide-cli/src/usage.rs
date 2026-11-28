@@ -146,8 +146,8 @@ fn is_shown_as(arg: &clap::Arg, name: &str) -> bool {
 
 /// `--platform: choose from sentinel, …` for each missing required argument
 /// that takes one of a fixed set of values: clap names a missing argument and
-/// its usage but not its choices, which the oracle's missing-option error
-/// listed. A hidden value is not listed.
+/// its usage but not its choices, which the error lists so the fix is in the
+/// message. A hidden value is not listed.
 fn choice_hints(error: &clap::Error, command: &Command) -> Vec<String> {
     if error.kind() != ErrorKind::MissingRequiredArgument {
         return Vec::new();

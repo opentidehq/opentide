@@ -1,5 +1,4 @@
-//! The Catalogue tab's detail pane, as lines laid out at a width
-//! (`tui_app.py`'s `diagnostic_text`, `source_view`, `object_page`): the
+//! The Catalogue tab's detail pane, as lines laid out at a width: the
 //! counts of what the language server and the last validate run report, the
 //! object as a page read from its schema, or its file with line numbers,
 //! coloured by the engine, each finding in place under its line.

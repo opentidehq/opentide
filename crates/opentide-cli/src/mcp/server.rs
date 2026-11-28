@@ -21,8 +21,7 @@ use super::{resources, tools};
 use crate::app::Interrupt;
 use crate::env::Env;
 
-/// What the server says of itself: `data/mcp/manifest.json`, hand-edited (the
-/// Python generator is gone).
+/// What the server says of itself: `data/mcp/manifest.json`, edited by hand.
 const MANIFEST: &str = include_str!("../../data/mcp/manifest.json");
 
 /// The manifest's parts, as rmcp types.
@@ -37,7 +36,7 @@ impl Manifest {
     /// The compiled-in manifest, with the package's `version`.
     #[expect(
         clippy::expect_used,
-        reason = "the manifest is compiled in, and the_manifest_reads_into_every_part (and tests/test_mcp/test_bridge.py) reads every part of it"
+        reason = "the manifest is compiled in, and the_manifest_reads_into_every_part reads every part of it"
     )]
     fn load(version: &str) -> Manifest {
         let manifest: Value = serde_json::from_str(MANIFEST).expect("data/mcp/manifest.json");

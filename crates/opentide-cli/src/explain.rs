@@ -1,4 +1,4 @@
-//! The pages behind `opentide explain <code>` (`cli/services/explain.py`).
+//! The pages behind `opentide explain <code>`.
 //!
 //! One Markdown page per diagnostic code and per `failure.code` lives in
 //! `src/opentide/data/diagnostics/`, compiled in by `build.rs`. The analysis
@@ -463,7 +463,7 @@ pub fn reference_markdown() -> String {
 }
 
 /// `line` with each `<` that cannot open a tag written `&lt;`, code spans
-/// left alone (`_mdx_prose`). opentide.org renders the docs as MDX, which
+/// left alone. opentide.org renders the docs as MDX, which
 /// reads `<=>` in prose as a broken tag and refuses the page. The engine's
 /// sentences are plain text, so the reference escapes them, not the engine,
 /// and `opentide explain` prints them as they are.
@@ -503,7 +503,7 @@ fn backtick_run_end(chars: &[char], start: usize) -> usize {
 
 /// The end of the code span that opens at `start` (a run of backticks, at
 /// least one other character, then a run of backticks), or `None` when no
-/// backtick closes it: the regex `` `+(?:(?!`).)+?`+ `` of the oracle.
+/// backtick closes it. The same span as the regex `` `+(?:(?!`).)+?`+ ``.
 fn code_span_end(chars: &[char], start: usize) -> Option<usize> {
     let content = backtick_run_end(chars, start);
     let close = content + chars[content..].iter().position(|c| *c == '`')?;
