@@ -1,6 +1,5 @@
-//! `opentide setup` and its file-writing subcommands (`setup_app.py`,
-//! `services/setup/orchestrator.py`, `services/setup/plan.py`,
-//! `ui/setup.py`): the target, the confirmation, the steps run through a
+//! `opentide setup` and its file-writing subcommands: the target, the
+//! confirmation, the steps run through a
 //! [`Stage`], `--plan`, and what a person reads afterwards (the files
 //! written, the outcome line, the numbered next steps).
 
@@ -110,7 +109,7 @@ impl Step {
     }
 }
 
-/// The target the group and the subcommand agree on (`_group_path`), as
+/// The target the group and the subcommand agree on, as
 /// given (`.` by default), `--repo` standing in for `.`.
 pub(crate) fn target(
     cx: &Context<'_>,
@@ -260,8 +259,8 @@ fn wizard(command: &str, cx: &Context<'_>, flags: &str, kind: Wizard, shown: &Pa
 }
 
 /// The refusal of a wizard nobody can answer here, naming the flags that
-/// answer it: `json_flags` under `--json` (`_require_scripted_for_json`),
-/// `flags` elsewhere (`_refuse_wizard`).
+/// answer it: `json_flags` under `--json`,
+/// `flags` elsewhere.
 fn wizard_refusal(
     command: &str,
     cx: &Context<'_>,
@@ -1064,7 +1063,7 @@ fn summary(result: &StepResult) -> Vec<Text> {
     lines
 }
 
-/// A finished run's report (`_emit_setup`).
+/// A finished run's report.
 fn finish(
     command: &str,
     mut result: StepResult,
@@ -1180,7 +1179,7 @@ pub struct GroupArgs {
     pub yes: bool,
 }
 
-/// The CI flags given without a pipeline to write (`_ignored_ci_flag_warnings`).
+/// The CI flags given without a pipeline to write.
 fn ignored_ci_flags(args: &GroupArgs) -> Vec<String> {
     if args.ci.and_then(Ci::provider).is_some() {
         return Vec::new();

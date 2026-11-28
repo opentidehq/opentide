@@ -1,5 +1,5 @@
 //! The home screen: what a bare `opentide` shows a person at a terminal
-//! (`cli/ui/home.py`, #841 decision D3).
+//! (#841 decision D3).
 //!
 //! ```text
 //!   ████████   ▐ ≋ opentide ▌  0.23.0
@@ -18,10 +18,9 @@
 //!
 //! Only in `human` mode; every other mode gets the help. The facts are read
 //! from the files on disk (no workspace load, no network), so the screen
-//! costs what `--help` does. [`gather`] collects, [`render`] draws, cell for
-//! cell as the oracle's Rich layout: the icon and the facts side by side with
-//! three columns between them, every line indented by two and padded to the
-//! widest.
+//! costs what `--help` does. [`gather`] collects, [`render`] draws: the icon
+//! and the facts side by side with three columns between them, every line
+//! indented by two and padded to the widest.
 
 use std::path::{Path, PathBuf};
 
@@ -117,7 +116,7 @@ pub fn gather(version: &str, cwd: &Path, env: &crate::env::Env) -> Facts {
     // Only files directly in each folder are objects (#584).
     #[expect(
         clippy::case_sensitive_file_extension_comparisons,
-        reason = "the oracle's glob (`*.yaml`, `*.yml`) is case-sensitive, as the catalogue's"
+        reason = "an object file is `*.yaml` or `*.yml`, case-sensitive, as the catalogue reads it"
     )]
     let catalogue = KINDS
         .iter()

@@ -292,7 +292,7 @@ fn with_description(template: &str, value: Scalar) -> String {
 }
 
 /// A value for a key the template writes as a block scalar is the block's
-/// text, one block line per line, as `_fill_template` writes it: `new rule
+/// text, one block line per line: `new rule
 /// --platform google_secops` wrote `outcome: "$risk_score = 40"` over the
 /// template's `...` line, which no YAML reader accepts. The key and its text
 /// are commented in the template, as a platform block's are.

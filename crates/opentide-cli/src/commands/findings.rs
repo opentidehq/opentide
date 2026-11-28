@@ -1,4 +1,4 @@
-//! Where findings go besides the terminal (`cli/findings.py`): the
+//! Where findings go besides the terminal: the
 //! `--format` report, written to `--output` or as the whole of stdout, and
 //! the CI sinks (annotations and the job summary). `validate`, `validate
 //! query` and `lint` share them.

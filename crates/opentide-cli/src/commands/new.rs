@@ -1,6 +1,5 @@
-//! `opentide new threat|objective|rule` (`cli/commands/new.py`,
-//! `cli/services/new.py`): one object from the workspace's generated
-//! template.
+//! `opentide new threat|objective|rule`: one object from the workspace's
+//! generated template.
 //!
 //! The template (`.opentide/templates/<family>.<M>.<m>.template.yaml`) is the
 //! starting text, filled line by line ([`scaffold`]): the name, a fresh
@@ -207,7 +206,7 @@ pub struct Context<'a> {
     pub interrupt: Option<&'a crate::app::Interrupt>,
 }
 
-/// What the platform question says under itself (`_ask_platforms`).
+/// What the platform question says under itself.
 pub const PLATFORMS_HINT: &str = "(space selects, enter for none, arrows move)";
 
 /// The report of a question that was not answered: Ctrl-C stops the run,
@@ -528,7 +527,7 @@ fn for_kind<'c>(config: &'c FilenameConfig, kind: &str) -> &'c FilenameConfig {
 }
 
 /// Whether `folder` holds `stem.yaml` or `stem.yml`, whatever the case of
-/// the stem (`_stem_taken`).
+/// the stem.
 fn stem_taken(folder: &Path, stem: &str) -> bool {
     let wanted = stem.to_lowercase();
     let Ok(entries) = std::fs::read_dir(folder) else {
@@ -592,7 +591,7 @@ fn target_path(
 }
 
 /// A folder as the CLI shows it, relative to the working directory or the
-/// workspace, without a trailing `/` (`_relative`).
+/// workspace, without a trailing `/`.
 fn folder_shown(folder: &Path, cwd: &Path, root: &Path) -> String {
     let text = shown(folder, cwd, root);
     match text.trim_end_matches('/') {
@@ -668,7 +667,7 @@ fn new_error(
 /// `opentide new <family>`.
 #[expect(
     clippy::too_many_lines,
-    reason = "the command's steps in the oracle's order, kept in one place"
+    reason = "the command's steps in order, kept in one place"
 )]
 pub fn run(args: &NewArgs, cx: &Context<'_>) -> Report {
     let family = args.family.as_str();

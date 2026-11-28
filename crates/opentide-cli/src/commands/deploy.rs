@@ -1,6 +1,5 @@
 //! `opentide deploy --dry-run` (UC-3.1c, #896): the plan `opentide-compile`
-//! makes (`cli/commands/deploy.py`, `cli/services/deploy.py` with
-//! `dry_run`), as the envelope, the plan view, the compile failures' frames,
+//! makes, as the envelope, the plan view, the compile failures' frames,
 //! the CI job summary and the progress events.
 //!
 //! A deploy that sends (no `--dry-run`) is `deploy_send`'s (UC-4.6).

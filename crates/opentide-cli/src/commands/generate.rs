@@ -1,7 +1,6 @@
 //! `opentide generate exports [navigator|objects|revisions]`, `generate docs`,
-//! `generate explorer` and `generate inflight [prune]`
-//! (`cli/commands/generate.py`, `cli/services/export.py`,
-//! `cli/services/generation.py`) on `opentide-compile`'s `generate` module.
+//! `generate explorer` and `generate inflight [prune]`, on
+//! `opentide-compile`'s `generate` module.
 //!
 //! A phase runs as a checklist step that counts the files it wrote and
 //! removed, as it records them ([`Changes`]); the result is
@@ -620,9 +619,8 @@ pub fn docs(args: &DocsArgs, cx: &Context<'_>) -> Report {
     report
 }
 
-/// The folder a relative docs output is under: the repository root, as the
-/// oracle's `load_settings` joins it onto `get_repo_root()`, not the Tide
-/// workspace, which `OPENTIDE_TIDE_WORKSPACE` can place elsewhere (#931).
+/// The folder a relative docs output is under: the repository root, not the
+/// Tide workspace, which `OPENTIDE_TIDE_WORKSPACE` can place elsewhere (#931).
 /// Resolved as the workspace is, so the two compare when they are one folder.
 fn output_base(workspace: &Workspace) -> PathBuf {
     OsFs.resolve(&workspace.roots().repo)
@@ -1117,7 +1115,7 @@ fn changed_object_files(root: &Path, cx: &Context<'_>) -> Vec<PathBuf> {
 }
 
 /// The object files changed in the work tree against the default branch,
-/// untracked ones included (`_local_git_changed_paths`): the object files of
+/// untracked ones included: the object files of
 /// each `objects/<family>/` folder that differ from the default branch's
 /// baseline, sorted by path. Read with gix, as `generate docs --changed`
 /// reads it, so the `git` program is not needed (#1955).
@@ -1161,8 +1159,7 @@ fn work_tree_changes(root: &Path) -> Vec<PathBuf> {
     }
 }
 
-/// `path` from the workspace with `/`, or as given when it is outside it
-/// (`_normalise_source_path`).
+/// `path` from the workspace with `/`, or as given when it is outside it.
 fn source_path(root: &Path, path: &Path) -> String {
     let canonical =
         |path: &Path| std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());

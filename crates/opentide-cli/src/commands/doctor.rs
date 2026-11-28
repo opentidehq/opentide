@@ -1,5 +1,5 @@
-//! `opentide doctor` (`cli/commands/doctor.py`, `cli/services/doctor.py`;
-//! UC-3.5c, #928; its network checks UC-4.4, #834): one checklist for the
+//! `opentide doctor` (UC-3.5c, #928; its network checks UC-4.4, #834): one
+//! checklist for the
 //! installation, the workspace and its integrations.
 //!
 //! Every check has a stable `code` (`docs/cli/doctor.md`), a status (`pass`,
@@ -1787,8 +1787,8 @@ impl Doctor<'_> {
 
 /// Every `*.toml` file under `dir`, at any depth, none in a folder whose
 /// name starts with `.` or `__`. A link to a folder is entered, once: a link
-/// that points back up ends. `.toml` is matched case-sensitively, as the
-/// oracle's `rglob("*.toml")` matches it on Linux.
+/// that points back up ends. `.toml` is matched case-sensitively, on every
+/// system: `CONFIG.TOML` is not read.
 fn collect_toml(dir: &Path, out: &mut Vec<PathBuf>) {
     let hidden = |entry: &walkdir::DirEntry| {
         let name = entry.file_name().to_string_lossy();

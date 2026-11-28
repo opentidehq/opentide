@@ -1,5 +1,4 @@
-//! `opentide validate --watch` (`cli/commands/validate.py` `_watch`,
-//! `cli/ui/watch.py`'s views): `opentide-workspace`'s watcher, shown as a
+//! `opentide validate --watch`: `opentide-workspace`'s watcher, shown as a
 //! live view redrawn in place and cropped to the terminal (`human`), or as
 //! each pass's frames and one outcome line (`plain`). `validate::refuse`
 //! has already refused the other modes. Ctrl-C stops it with exit 0.

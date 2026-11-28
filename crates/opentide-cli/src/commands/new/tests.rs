@@ -378,7 +378,7 @@ fn written(report: &Report, dir: &Path) -> String {
     std::fs::read_to_string(dir.join(path)).unwrap()
 }
 
-/// At a terminal a missing name is asked for, as `_ask_name` asks.
+/// At a terminal a missing name is asked for.
 #[test]
 fn a_missing_name_is_asked_for_at_a_terminal() {
     let dir = prompted_workspace();

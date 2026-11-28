@@ -1,4 +1,4 @@
-//! A Tide object as sharing reads it (`sharing/document.py`): the file's
+//! A Tide object as sharing reads it: the file's
 //! text as it is (the `opentide-object` attribute and the ledger's content
 //! hash are its bytes) and the mapping it parses to, read for the event's
 //! envelope only.
@@ -112,8 +112,7 @@ fn read(path: Option<&Path>) -> TideDocument {
     }
 }
 
-/// Every object of the workspace, then every file that did not load
-/// (`_catalogue`).
+/// Every object of the workspace, then every file that did not load.
 pub fn catalogue(workspace: &Workspace) -> Vec<TideDocument> {
     let index = workspace.index();
     let mut documents = Vec::new();

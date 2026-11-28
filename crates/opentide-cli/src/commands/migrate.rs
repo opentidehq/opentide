@@ -1,5 +1,4 @@
-//! `opentide migrate vocab-scope` (`cli/commands/migrate.py`,
-//! `cli/services/migrate_vocab_scope.py`; UC-3.5c, #928): re-prefix the
+//! `opentide migrate vocab-scope` (UC-3.5c, #928): re-prefix the
 //! values of stage-scoped vocabulary fields across `objects/`.
 //!
 //! The decisions and the span edits are `opentide_schema::migration::vocab_scope`;
@@ -655,10 +654,9 @@ objective:
     }
 
     #[test]
-    fn a_repeated_key_is_migrated_as_the_oracle_does() {
-        // The oracle's `yaml.compose` accepts a mapping that repeats a key and
-        // rewrites the values under every copy; changing that would change the
-        // exit code, so the run reads such a file and rewrites both.
+    fn a_repeated_key_is_migrated_under_every_copy() {
+        // A mapping that repeats a key is read, not refused, and the values
+        // under every copy are rewritten: the run succeeds (exit 0).
         let text = "objective:\n  signals:\n    - entities: [Process]\n\
                     objective:\n  signals:\n    - entities: [host::Hostname]\n";
         let dir = workspace(&[("objects/o.yaml", text)]);

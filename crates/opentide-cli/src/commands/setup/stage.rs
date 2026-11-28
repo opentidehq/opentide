@@ -6,8 +6,7 @@
 //! instead (`create` for a file that did not exist before the step, `merge`
 //! for one it rewrote, `delete` for one it removed). So the plan is the run,
 //! minus the writing: it cannot drift from what setup does, and it needs no
-//! copy of the repository (the oracle's `plan.py` copied the work tree into a
-//! temporary folder and compared modification times).
+//! copy of the repository.
 
 use std::collections::BTreeSet;
 use std::io;

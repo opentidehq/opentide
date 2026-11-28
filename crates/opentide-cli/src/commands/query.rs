@@ -1,6 +1,5 @@
 //! `opentide query` on the connectors (UC-4.2c, #832): a read-only query on
-//! a platform's tenants, `cli/commands/query.py`, `cli/services/query.py` and
-//! `query/service.py` request for request.
+//! a platform's tenants.
 //!
 //! The query runs on the platforms with a Rust connector and a query runner
 //! ([`platforms`]: Carbon Black Cloud, CrowdStrike, Microsoft Defender,
@@ -233,7 +232,7 @@ pub fn no_runner(platform: &str) -> Report {
     )
 }
 
-/// A call that cannot run as given (`_usage`): exit 2, `usage_invalid_value`.
+/// A call that cannot run as given: exit 2, `usage_invalid_value`.
 fn usage(platform: &str, message: &str, argument: &str, choices: &[String]) -> Report {
     usage_with(platform, message, argument, None, choices)
 }
@@ -270,7 +269,7 @@ fn suggest(value: &str, choices: &[String]) -> Option<String> {
 }
 
 /// The query text: `QUERY`, stdin for `-`, or `--query-file`; a refusal
-/// when they cannot be read (`_query_text`).
+/// when they cannot be read.
 fn query_text(args: &Args, cx: &Context<'_>) -> Result<Option<String>, Box<Report>> {
     if args.query.is_some() && args.query_file.is_some() {
         return Err(Box::new(usage(
@@ -1039,7 +1038,7 @@ enum Source<'s> {
 }
 
 /// The queries of `rule` for `platform`, with an explicit `--language` or
-/// `--index` winning over the rule's own (`_queries`).
+/// `--index` winning over the rule's own.
 fn rule_queries(
     rule: &opentide_compile::rule::Rule,
     platform: &str,
@@ -1190,7 +1189,7 @@ fn payload(
     report
 }
 
-/// A cell as the table shows it (`_cell`): whitespace collapsed, cut at
+/// A cell as the table shows it: whitespace collapsed, cut at
 /// [`CELL_WIDTH`] characters with an ellipsis.
 fn cell(value: Option<&Json>) -> String {
     let text = match value {
@@ -1215,7 +1214,7 @@ fn compact(value: &Json) -> String {
         .to_owned()
 }
 
-/// A row with the tenant (and label) in front (`_labelled`).
+/// A row with the tenant (and label) in front.
 fn labelled(outcome: &TenantResult, row: &Json) -> Vec<(String, Json)> {
     let mut members = vec![("_tenant".to_owned(), Json::str(&outcome.tenant))];
     if let Some(label) = outcome.label.as_ref().filter(|label| !label.is_empty()) {
@@ -1241,7 +1240,7 @@ fn csv_field(text: &str) -> String {
     }
 }
 
-/// A CSV value (`_csv_value`).
+/// A CSV value.
 fn csv_value(value: Option<&Json>) -> String {
     match value {
         None | Some(Json::Null) => String::new(),
@@ -1330,7 +1329,7 @@ fn body(
     }
 }
 
-/// The tables of the text modes (`_print_tables`).
+/// The tables of the text modes.
 fn tables(args: &Args, outcomes: &[TenantResult], terminal: &Terminal) -> Vec<Block> {
     let wanted: Vec<String> = args
         .columns

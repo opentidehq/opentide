@@ -1,4 +1,4 @@
-//! `opentide explain [CODE]` (`cli/commands/explain.py`): what a diagnostic
+//! `opentide explain [CODE]`: what a diagnostic
 //! code means and how to fix it, or the list of every code.
 //!
 //! `human` mode renders the page's Markdown for the terminal (parsed by

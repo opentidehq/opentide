@@ -1,4 +1,4 @@
-//! `opentide lint` (`cli/commands/lint.py`): `opentide-workspace`'s lint,
+//! `opentide lint`: `opentide-workspace`'s lint,
 //! its queries check on the query engines
 //! ([`crate::queries::EngineLintQueries`]), `--changed` from the git diff
 //! `deploy` reads (`opentide_compile::git`), `--format`/`--output` reports

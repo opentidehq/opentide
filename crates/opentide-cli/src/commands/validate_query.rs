@@ -1,7 +1,5 @@
-//! `opentide validate query` offline (`cli/commands/validate.py`
-//! `validate_query_cmd`, `cli/services/validation.py`
-//! `validate_query_offline`): every query of the rule files directly in the
-//! rules folder (or those `--changed`, `--file` and `--uuid` select), and
+//! `opentide validate query` offline: every query of the rule files directly
+//! in the rules folder (or those `--changed`, `--file` and `--uuid` select), and
 //! the query files `--file` names, checked by the query engines
 //! ([`crate::queries`]). The engine's errors are the run's, as `validate`'s
 //! queries check reports them; its warnings and notes are `lint`'s.
@@ -320,7 +318,7 @@ fn refused(platform: Option<&str>, message: &str, exit_code: i32, failure_code: 
     report
 }
 
-/// A scope refusal (`_query_scope_refused`): exit 2 a usage error, exit 1
+/// A scope refusal: exit 2 a usage error, exit 1
 /// a run that could not read its scope.
 fn scope_refused(platform: Option<&str>, message: &str, exit_code: i32) -> Report {
     let failure_code = if exit_code == USAGE_EXIT_CODE {
@@ -469,8 +467,8 @@ pub const CHECK_TIMEOUT_ENV: &str = "OPENTIDE_QUERY_CHECK_TIMEOUT";
 
 /// What a `--live` run that names no `--platform` answers: a live check
 /// reads one platform's tenants, so the run is refused (exit 2,
-/// `usage_missing_option`), as `_validate_query_platform` refuses it. The
-/// result's own keys are the live check's, in the oracle's order.
+/// `usage_missing_option`). The result's own keys are the live check's, in
+/// the same order.
 pub fn live_without_platform() -> CommandResult {
     let mut result = CommandResult::failed(
         "--live checks one platform's tenants: pass --platform",
@@ -498,10 +496,10 @@ struct Check {
     query: CheckedQuery,
 }
 
-/// Logs the object files the workspace's index could not load, as the
-/// oracle's registry did when the rules folder was first read
+/// Logs the object files the workspace's index could not load
 /// (`malformed_object_yaml`, `unreadable_object_file`,
-/// `missing_identifier_from_model`).
+/// `missing_identifier_from_model`), when a run reads the rules folder and
+/// before it selects its rules.
 fn log_load_errors(ws: &Workspace, cwd: &Path) {
     let cwd = OsFs.resolve(cwd);
     for error in &ws.index().load_errors {
@@ -573,7 +571,7 @@ fn changed_scope(
 }
 
 /// Why a rule file has no query the engine could read: not readable, not
-/// UTF-8 or not YAML (`_unreadable`); `None` when it is YAML.
+/// UTF-8 or not YAML; `None` when it is YAML.
 fn unreadable_rule(
     bytes: Result<Vec<u8>, String>,
 ) -> Option<(String, Option<usize>, Option<usize>)> {
@@ -736,7 +734,7 @@ fn findings_outcome(
 /// a platform plugin).
 #[expect(
     clippy::too_many_lines,
-    reason = "the oracle's steps in order (validate_query_offline), read top to bottom"
+    reason = "the command's steps in order, read top to bottom"
 )]
 pub fn run(args: &Args, cx: &Context<'_>) -> Report {
     if let Some(report) = refuse(args) {

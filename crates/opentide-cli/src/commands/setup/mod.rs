@@ -1,7 +1,6 @@
-//! `opentide setup ci <provider>` (`cli/setup_app.py`,
-//! `cli/services/setup/ci.py`, `cli/services/setup/promotion.py`): writes
-//! the CI pipeline `opentide-compile`'s `ci` templates render for the
-//! platforms the repository enables, and the `[promotion]` override
+//! `opentide setup ci <provider>`: writes the CI pipeline
+//! `opentide-compile`'s `ci` templates render for the platforms the
+//! repository enables, and the `[promotion]` override
 //! `deploy` reads when `--promotion` or `--promotion-target` asks for one.
 //!
 //! `--plan` lists the files the step would write (`create` or `merge`)
@@ -190,7 +189,7 @@ pub(crate) fn real(path: &Path) -> PathBuf {
     soft_canonicalize::soft_canonicalize(path).unwrap_or_else(|_| path.to_path_buf())
 }
 
-/// The repository `setup ci` writes to (`_option_path`): the one path the
+/// The repository `setup ci` writes to: the one path the
 /// command and its group name, `.` by default, which an explicit `--repo`
 /// replaces.
 fn target(args: &CiArgs, cx: &Context<'_>) -> Result<PathBuf, Box<Report>> {
@@ -228,7 +227,7 @@ fn target(args: &CiArgs, cx: &Context<'_>) -> Result<PathBuf, Box<Report>> {
     Ok(setup_path(named.last().copied().unwrap_or(".")))
 }
 
-/// Asks a person to confirm the write, at the terminal (`_confirm_write`).
+/// Asks a person to confirm the write, at the terminal.
 /// `Ok(false)` when they decline.
 fn confirm(shown: &Path, absolute: &Path, cx: &Context<'_>) -> Result<bool, Box<Report>> {
     confirm_write(
@@ -240,8 +239,8 @@ fn confirm(shown: &Path, absolute: &Path, cx: &Context<'_>) -> Result<bool, Box<
     )
 }
 
-/// Asks a person to confirm a write to `absolute` with `question`
-/// (`_confirm_write`); refuses where nobody can answer.
+/// Asks a person to confirm a write to `absolute` with `question`;
+/// refuses where nobody can answer.
 pub(crate) fn confirm_write(
     command: &str,
     shown: &Path,
@@ -492,8 +491,8 @@ fn repository_dir(path: &Path) -> PathBuf {
         .map_or_else(|| path.to_path_buf(), Path::to_path_buf)
 }
 
-/// The branch GitHub and Azure jobs deploy from, and which setting named it
-/// (`_detect_default_branch`): `origin/HEAD`, the checked-out branch, then
+/// The branch GitHub and Azure jobs deploy from, and which setting named it:
+/// `origin/HEAD`, the checked-out branch, then
 /// `init.defaultBranch`, else `main`. The repository is read with gix, so
 /// git need not be installed; the configuration files are found through the
 /// run's environment, as git would find them.
@@ -526,8 +525,7 @@ fn detect_default_branch(env: &Env, path: &Path) -> (String, &'static str) {
     (FALLBACK_DEFAULT_BRANCH.to_owned(), "fallback")
 }
 
-/// A detected branch that is likely not the one that deploys
-/// (`_default_branch_warnings`).
+/// A detected branch that is likely not the one that deploys.
 fn default_branch_warnings(path: &Path, branch: &str, source: &str) -> Vec<String> {
     use opentide_compile::git;
     let dir = repository_dir(path);
@@ -587,9 +585,8 @@ fn rules_folder(root: &Path, cx: &Context<'_>) -> String {
 }
 
 /// The statuses `deployment.toml` defines in the workspace at `root`, read
-/// from the merged files without checking them, as the oracle's
-/// `resolve_configurations` reads them: a `paths.toml` its model refuses
-/// does not hide them (#957).
+/// from the merged files without checking them against their models: a
+/// `paths.toml` its model refuses does not hide them (#957).
 pub(crate) fn statuses(root: &Path, cx: &Context<'_>) -> Result<Vec<String>, String> {
     let fs = opentide_workspace::OsFs;
     let roots = opentide_workspace::root::resolve(&fs, &root_options(root, cx));

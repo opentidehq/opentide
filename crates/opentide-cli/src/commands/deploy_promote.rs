@@ -1,7 +1,6 @@
 //! The status promotion of `opentide deploy` (UC-4.6c, #979): a RELEASE run
 //! on a push in CI, without `--skip-promotion`, moves the platform blocks of
-//! the rule files the push changed to the promotion target before it plans
-//! (`cli/services/deploy.py` `_deploy`, `mutation/promotion.py`).
+//! the rule files the push changed to the promotion target before it plans.
 //!
 //! The run shows one step, `status promotion`, counting the changed rule
 //! files, as its own checklist. Every file is read and planned before any is
@@ -11,9 +10,9 @@
 //! edit is [`opentide_compile::promotion`].
 //!
 //! A target that is not a configured status (none set, or not a string) ends
-//! the run as the oracle's `sys.exit(1)` does; a promoted block whose key is
-//! not a string, and promoted text that does not read back, fail it with the
-//! exception the oracle raises.
+//! the run with exit 1 and no result document ([`BARE_EXIT`]); a promoted
+//! block whose key is not a string, and promoted text that does not read
+//! back, fail it with a message ([`Stop::Failed`]).
 
 use std::path::PathBuf;
 use std::time::Instant;
@@ -28,8 +27,8 @@ use crate::render::progress::{Step, StepStatus};
 
 /// The step's name.
 pub const STEP: &str = "status promotion";
-/// The result key of a run the oracle ends with `sys.exit`: no document, no
-/// outcome line, only its exit code.
+/// The result key of a run that ends with its exit code alone: no document,
+/// no outcome line.
 pub const BARE_EXIT: &str = "_bare_exit";
 
 /// What the promotion needs from the run.
@@ -37,7 +36,7 @@ pub const BARE_EXIT: &str = "_bare_exit";
 pub struct Promotion<'a> {
     /// `[promotion]` and the statuses.
     pub settings: &'a Settings,
-    /// The rule files the push changed (`modified_mdr_files`).
+    /// The rule files the push changed.
     pub changed: &'a [PathBuf],
     /// Every rule file directly in the rules folder (`local_rule_files`),
     /// promoted instead in debug mode.
@@ -263,13 +262,13 @@ mod signal_tests {
 /// How a promotion ended, when the run does not go on to plan.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Stop {
-    /// The run fails with this message (an exception `_deploy` reports).
+    /// The run fails with this message.
     Failed(String),
-    /// The oracle exits 1 without a result (an invalid target).
+    /// The run exits 1 without a result (an invalid target).
     Exit,
 }
 
-/// One thing the promotion logs, in the order the oracle logs it.
+/// One thing the promotion logs, in the order it happens.
 enum Event {
     Info(&'static str, Vec<(&'static str, String)>),
     NotPromoted { path: String, detail: String },
@@ -367,7 +366,7 @@ pub fn run(promotion: &Promotion<'_>, lines: &Lines) -> (Vec<Promoted>, Result<(
                 break;
             }
             held.push(written.clone());
-            // `_write_atomically`: through a temporary file beside it, the
+            // Through a temporary file beside it, the
             // rule's permission bits kept (#987).
             if let Err(error) = opentide_workspace::fs::write_atomically(path, bytes) {
                 held.pop();
@@ -437,8 +436,8 @@ type Before = (Vec<u8>, Option<String>);
 
 type Planned = (Vec<Event>, Vec<(PathBuf, Vec<u8>, Before)>, Option<Stop>);
 
-/// Every file read and planned (the Python promotion up to its writes): the
-/// events to log, the bytes to write, and how the run stops, if it does.
+/// Every file read and planned, nothing written yet: the events to log, the
+/// bytes to write, and how the run stops, if it does.
 #[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 fn plan(promotion: &Promotion<'_>) -> Planned {
     let settings = promotion.settings;
@@ -459,8 +458,8 @@ fn plan(promotion: &Promotion<'_>) -> Planned {
         ));
         return (events, Vec::new(), None);
     }
-    // `PROMOTION_TARGET not in VALID_STATUSES`: a target that is not set, or
-    // not a string, names no status either.
+    // A target must be a configured status: one that is not set, or not a
+    // string, names no status either.
     let Some(target) = settings.valid_target() else {
         events.push(Event::InvalidTarget {
             target: settings.target_value.clone(),
@@ -810,9 +809,8 @@ mod tests {
         }
     }
 
-    /// No target, or one that is not a string, names no status: the
-    /// oracle's `PROMOTION_TARGET not in VALID_STATUSES` exits 1 as an
-    /// invalid target does, nothing written.
+    /// No target, or one that is not a string, names no status: the run
+    /// exits 1 as for any invalid target, nothing written.
     #[test]
     fn a_target_unset_or_not_a_string_is_an_invalid_target() {
         for target in [Setting::Null, Setting::Int(1), Setting::Bool(true)] {

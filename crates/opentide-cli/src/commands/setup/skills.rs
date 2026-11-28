@@ -1,6 +1,5 @@
 //! Installing agent skills (UC-4.4d, #834): `opentide setup skills`,
-//! `setup --skills` and `--plugin` (`services/setup/skills.py`,
-//! `services/setup/plugin.py`).
+//! `setup --skills` and `--plugin`.
 //!
 //! A run downloads each skill tree from the opentidehq/skills repository
 //! (the packaged authoring skills come from the package, but for the
@@ -180,8 +179,8 @@ impl Error {
 }
 
 /// The opentidehq/skills repository as one run reads it: the catalogue and
-/// the repository's file list, each fetched once, on first use (the
-/// oracle's in-process manifest cache and `GithubTree`).
+/// the repository's file list, each fetched once, on first use, and kept for
+/// the rest of the run.
 pub struct Catalogue<'a> {
     network: Network<'a>,
     manifest: OnceCell<Result<Manifest, String>>,
@@ -256,7 +255,7 @@ fn is_bundled(slug: &str) -> bool {
     BUNDLED.iter().any(|(name, _)| *name == slug)
 }
 
-/// The message of a skill that could not be downloaded (`_download_error`).
+/// The message of a skill that could not be downloaded.
 fn download_error(slug: &str, git_ref: &str) -> Error {
     Error::Failed(format!(
         "Could not download skill '{slug}' from {}@{git_ref}. Check network access and that the skills repository is publicly reachable.",
@@ -264,7 +263,7 @@ fn download_error(slug: &str, git_ref: &str) -> Error {
     ))
 }
 
-/// The slugs a run installs (`_resolve_skill_slugs`).
+/// The slugs a run installs.
 fn resolve_slugs(options: &Options, catalogue: &Catalogue<'_>) -> Result<Vec<String>, Error> {
     let manifest = catalogue.manifest().map_err(Error::Failed)?;
     if options.all {
@@ -347,7 +346,7 @@ fn bundled_files(slug: &str) -> Option<Files> {
 }
 
 /// Every file under `skills/<slug>/` in the catalogue, by its path in the
-/// skill, or `None` when one is missing (`_fetch_skill_files`).
+/// skill, or `None` when one is missing.
 fn catalogue_files(slug: &str, git_ref: &str, catalogue: &Catalogue<'_>) -> Option<Files> {
     let folder = format!("skills/{slug}");
     let paths = catalogue
@@ -377,8 +376,7 @@ fn installed_files(stage: &Stage, dest: &Path) -> Files {
         .collect()
 }
 
-/// One skill's files, by their path in the skill, sorted
-/// (`_install_bundled_skill`, `_download_skill`). Every skill is the full
+/// One skill's files, by their path in the skill, sorted. Every skill is the full
 /// tree under `skills/<slug>/` in the catalogue; the packaged authoring
 /// skills install from the package, except a [`CATALOGUE_FIRST_SKILLS`]
 /// slug the catalogue lists (`catalogued`). When that copy cannot be
@@ -433,7 +431,7 @@ fn skill_files(
     Ok(Fetched::Write(packaged))
 }
 
-/// `relative` under `root`, refused when it would leave it (`_contained_file`).
+/// `relative` under `root`, refused when it would leave it.
 fn contained(root: &Path, relative: &str) -> Result<PathBuf, Error> {
     let refused = || Error::Failed(format!("Refusing skill path {}", super::repr(relative)));
     if relative.is_empty() || relative.starts_with(['/', '\\']) || relative.contains('\\') {
@@ -480,7 +478,7 @@ fn files_below(stage: &Stage, dir: &Path) -> Vec<String> {
 }
 
 /// Puts `files` at `dest`, the skill's own folder: what it held before goes,
-/// the files an older version shipped included (`_replace_tree`). Links in
+/// the files an older version shipped included. Links in
 /// it are removed, never written through.
 fn replace_tree(stage: &mut Stage, dest: &Path, files: &[(String, Vec<u8>)]) -> Result<(), Error> {
     let mut paths = Vec::with_capacity(files.len());
@@ -540,7 +538,7 @@ fn resolved(path: &Path) -> PathBuf {
     super::real(path)
 }
 
-/// The warning for the files a copy kept (`_kept_warning`).
+/// The warning for the files a copy kept.
 fn kept_warning(place: &str, kept: &[String]) -> String {
     format!(
         "Kept {} file(s) in {place} that the skill does not ship ({}); delete them by hand if they are left over from an older version.",
@@ -559,7 +557,7 @@ fn shown_some(items: &[String]) -> String {
 }
 
 /// Copies the skill at `src` (its `files`) over `dest`, keeping the files
-/// in `dest` it does not ship (`_copy_skill`). A link at a path the skill
+/// in `dest` it does not ship. A link at a path the skill
 /// ships is replaced by the skill's own file, with a warning; a `dest` that
 /// resolves outside `root` is left alone, with a warning.
 fn copy_skill(
@@ -712,7 +710,7 @@ fn register_plugin(stage: &mut Stage, root: &Path) -> Result<String, String> {
             Ok(None) => String::new(),
             Err(error) => return Err(format!("is not valid JSON ({error})")),
         };
-        // `null` is not an object to the oracle, as any other non-object.
+        // A `null` member is refused as any other non-object is.
         if let Ok(serde_json::Value::Object(members)) = jsonc::parse(&existing) {
             for key in ["extraKnownMarketplaces", "enabledPlugins"] {
                 if members.get(key).is_some_and(serde_json::Value::is_null) {
@@ -1386,7 +1384,8 @@ mod tests {
                     .into()
             ))
         );
-        // The plugin was registered first, as the oracle registers it.
+        // The plugin is registered before the slugs are checked: its
+        // settings file is staged although the run is refused.
         assert!(stage.is_file(&dir.path().join(CLAUDE_SETTINGS)));
         let failing = loaded(network, Err(catalogue::unavailable()));
         let mut stage = Stage::new();

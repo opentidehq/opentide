@@ -1,16 +1,14 @@
-//! `opentide generate extract sentinel` (UC-4.4e, #834;
-//! `extraction/sentinel_importer.py`): the analytics rules of each Sentinel
-//! tenant, listed through the connectors' ARM client
+//! `opentide generate extract sentinel` (UC-4.4e, #834): the analytics rules
+//! of each Sentinel tenant, listed through the connectors' ARM client
 //! ([`opentide_connectors::sentinel::Sentinel::list`]), and written as
 //! opentide rule files under `Imported/`.
 //!
-//! A listed rule is read as the oracle read it (`alert_rule_as_flat_dict`):
-//! its `properties` merged up and every key in snake case, the custom
-//! details' keys kept. Each file is the oracle's template filled in, byte for
-//! byte, but for its one-line scalars: the oracle quoted them with PyYAML
-//! (`_scalar`), and here serde-saphyr's emitter writes them, with the
-//! settings of Elastic's files ([`super::rule_yaml`]): a string that must be
-//! quoted is double-quoted (the approved differences of #834).
+//! A listed rule is read flat: its `properties` merged up and every key in
+//! snake case, the custom details' keys kept. Each file is a fixed template
+//! filled in, its commented-out lines included for the settings a rule does
+//! not use; its one-line scalars are written by serde-saphyr's emitter, with
+//! the settings of Elastic's files ([`super::rule_yaml`]): a string that
+//! must be quoted is double-quoted (#834).
 
 use std::time::Instant;
 
@@ -55,7 +53,7 @@ const BLOCK: &str = "\n  schema: platform::sentinel::1.0\n  status: {status}\n  
 /// keys are data and keep their case.
 const MAP_FIELDS: [&str; 2] = ["customDetails", "custom_details"];
 
-/// `_snake_case`: an underscore before each ASCII capital but the first
+/// An underscore before each ASCII capital but the first
 /// character, then the whole name lower-cased.
 fn snake_case(name: &str) -> String {
     let mut out = String::with_capacity(name.len() + 4);
@@ -68,7 +66,7 @@ fn snake_case(name: &str) -> String {
     out.to_lowercase()
 }
 
-/// `_snake_keys`: every key of every object in snake case, but those of a
+/// Every key of every object in snake case, but those of a
 /// map field's value. Two keys that meet keep the first one's place and the
 /// last one's value, as a dict built key by key does.
 fn snake_keys(value: &CJson) -> CJson {
@@ -173,10 +171,10 @@ fn convert_period(period: &str) -> String {
     period.to_lowercase()
 }
 
-/// `_scalar`: `value` as a one-line YAML scalar that reads back as the same
-/// text, written by serde-saphyr (#834): plain where that is safe, quoted
+/// `value` as a one-line YAML scalar that reads back as the same text,
+/// written by serde-saphyr (#834): plain where that is safe, quoted
 /// otherwise. A value of several lines is a JSON string, which YAML reads as
-/// a double-quoted scalar, as the oracle wrote it.
+/// a double-quoted scalar, so it stays on one line.
 pub(crate) fn scalar(value: &CJson) -> String {
     let text = CJson::to_text(value);
     if !text.contains('\n') {
@@ -226,8 +224,8 @@ fn literal(value: &CJson) -> String {
     }
 }
 
-/// A date as the importer writes it: `YYYY-MM-DD` bare, as the oracle wrote
-/// it; anything else as [`scalar`] writes it, so it cannot break the line.
+/// A date as the importer writes it: `YYYY-MM-DD` bare; anything else as
+/// [`scalar`] writes it, so it cannot break the line.
 pub(crate) fn date_scalar(text: &str) -> String {
     let bytes = text.as_bytes();
     let is_date = bytes.len() == 10
@@ -247,7 +245,7 @@ fn period(text: &str) -> String {
     scalar(&CJson::Str(convert_period(text)))
 }
 
-/// `_block_style`: `|`, or `|2` when the first non-blank line starts with a
+/// `|`, or `|2` when the first non-blank line starts with a
 /// space, which YAML would otherwise read as the block's indentation.
 fn block_style(text: &str) -> &'static str {
     let first = text
@@ -257,7 +255,7 @@ fn block_style(text: &str) -> &'static str {
     if first.starts_with(' ') { "|2" } else { "|" }
 }
 
-/// `_list_items`: a block sequence's lines, each on a new line at `indent`.
+/// A block sequence's lines, each on a new line at `indent`.
 fn list_items(values: &[CJson], indent: &str) -> String {
     let mut out = String::new();
     for value in values {
@@ -281,7 +279,7 @@ fn items(object: &Object, key: &str) -> Result<Vec<CJson>, FieldError> {
     }
 }
 
-/// `_alert_techniques`: each sub-technique in place of its parent, a parent
+/// Each sub-technique in place of its parent, a parent
 /// without one kept, an orphan sub-technique after them, each once.
 fn alert_techniques(techniques: &[CJson], sub_techniques: &[CJson]) -> Vec<CJson> {
     let text = |value: &CJson| CJson::to_text(value);
@@ -346,7 +344,7 @@ fn indent_lines(text: &str, indent: &str) -> String {
 /// scheduled and near-real-time rules are).
 #[expect(
     clippy::too_many_lines,
-    reason = "the oracle's loop body, block by block, in one place"
+    reason = "the file's template filled block by block, kept in one place"
 )]
 pub(crate) fn render(
     rule: &Object,
@@ -395,8 +393,8 @@ pub(crate) fn render(
         Some(details) => ("", key_columns(details, "custom_details")?),
         None => ("#", CUSTOM_DETAILS_TEMPLATE.to_owned()),
     };
-    // The oracle also marked this block commented or not here; every branch
-    // below sets the mark again, so only the lines carry over.
+    // Only the lines are chosen here: every branch below sets whether the
+    // block is commented out.
     let mut dynamic_properties = match given(rule, "dynamic_properties") {
         Some(properties) => key_columns(properties, "dynamic_properties")?,
         None => DYNAMIC_PROPERTIES_TEMPLATE.to_owned(),

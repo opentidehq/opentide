@@ -1,4 +1,4 @@
-//! `opentide setup hooks` (`services/setup/hooks.py`): a local
+//! `opentide setup hooks`: a local
 //! `opentide-validate` hook in `.pre-commit-config.yaml`, the versioned
 //! `.opentide/hooks/pre-commit` script, and that script installed as Git's
 //! `pre-commit` hook when the workspace is in a Git repository.
@@ -146,7 +146,7 @@ struct GitLayout {
     hooks_shared: bool,
 }
 
-/// Asks Git where the repository around `target` is (`_git_layout`).
+/// Asks Git where the repository around `target` is.
 fn git_layout(env: &Env, target: &Path) -> Option<GitLayout> {
     let probe = target
         .ancestors()
@@ -231,7 +231,7 @@ fn entry_line() -> regex::Regex {
     regex::Regex::new(r"^(?P<lead>\s*(?:-\s+)?entry:[ \t]*)(?P<value>.*?)[ \t]*$").expect("regex")
 }
 
-/// Points stale opentide `entry:` lines at `relative` (`_refresh_hook_entry`);
+/// Points stale opentide `entry:` lines at `relative`;
 /// the new text (`None` when nothing changed) and the other workspaces
 /// entries were left pinned to.
 fn refresh_hook_entry(
@@ -333,8 +333,8 @@ fn blank_or_comment(line: &str) -> bool {
     stripped.is_empty() || stripped.starts_with('#')
 }
 
-/// `text` with the opentide hook as the last `repos` entry
-/// (`_with_local_hook`); `None` when the layout is not one this extends. A
+/// `text` with the opentide hook as the last `repos` entry;
+/// `None` when the layout is not one this extends. A
 /// file whose every line ends in CRLF keeps CRLF, the added lines too.
 fn with_local_hook(text: &str, relative: &str) -> Option<String> {
     // A CRLF cut after its CR: complete it.

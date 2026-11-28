@@ -1,4 +1,4 @@
-//! `opentide rules unreviewed` (`cli/rules_app.py`, `cli/services/rules.py`).
+//! `opentide rules unreviewed`.
 
 use std::path::Path;
 

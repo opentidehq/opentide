@@ -1,12 +1,8 @@
 //! `opentide validate query --live` on the connectors (UC-4.6, #979): each
-//! rule's queries checked on the tenants a deploy sends it to,
-//! `cli/services/validation.py` (`_validate_query_platform`,
-//! `_run_live_validator`), `platforms/live_validation.py`
-//! (`LiveQueryValidator`) and `platforms/elastic/validator.py`
-//! (`ElasticValidator`) step by step.
+//! rule's queries checked on the tenants a deploy sends it to.
 //!
 //! The rules are the deploy plan's (`opentide_compile::plan::select`, with
-//! the warnings `make_deploy_plan` logs), each sent to the tenants the plan
+//! the warnings the plan logs), each sent to the tenants the plan
 //! resolves for it (`rule_tenants`), with the platform's `[[modifiers]]`
 //! applied for that tenant (`opentide_compile::modifiers`). Each query is
 //! checked through the platform's [`LiveValidator`](opentide_connectors::connector::LiveValidator); an Elastic rule is
@@ -15,9 +11,10 @@
 //! gets no answer in time fails itself, and three in a row (or a tenant that
 //! answers nothing) report the tenant unreachable.
 //!
-//! Nothing here writes to the workspace. The run's result is the oracle's
-//! dictionary ([`Live::result`]), keys in its order, read into the envelope
-//! as `CommandResult.from_payload` reads it ([`report_of`]).
+//! Nothing here writes to the workspace. The run's result is a list of
+//! fields ([`Live::result`]) in a fixed order, read into the envelope by
+//! [`report_of`]: `_`-keys (`_exit_code`, `_failure_code`) steer the
+//! envelope, the others are the payload.
 
 use std::path::Path;
 use std::time::{Duration, Instant};
@@ -65,7 +62,7 @@ pub const TENANT_UNREACHABLE: &str = "tenant_unreachable";
 pub const AUTHENTICATION_FAILED: &str = "authentication_failed";
 /// `OPENTIDE_QUERY_CHECK_TIMEOUT`.
 const CHECK_TIMEOUT_ENV: &str = super::validate_query::CHECK_TIMEOUT_ENV;
-/// What a run that sent no query advises (`_no_tenant_reached`).
+/// What a run that sent no query advises.
 const NO_TENANT_ADVICE: &str = "a tenant takes a rule only when its 'strategies' accept the run \
      strategy that deploys the rule's status; a 'manual' tenant only when the rule lists it under \
      tenants; and a rule's tenants list must name a tenant configured for this platform";
@@ -106,11 +103,10 @@ impl std::fmt::Debug for Context<'_> {
     }
 }
 
-/// A live run's outcome: the oracle's result dictionary and its checklist
-/// step.
+/// A live run's outcome: its result fields and its checklist step.
 #[derive(Clone, Debug)]
 pub struct Live {
-    /// The result, keys in the oracle's order, `_`-keys included.
+    /// The result, keys in a fixed order, `_`-keys included.
     pub result: Fields,
     /// The checklist's step, when the run reached the tenants.
     pub step: Option<Step>,
@@ -287,7 +283,7 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Live {
 /// The rule files a run reads (`None`: every one) and its scope's label.
 type RuleScope = (Option<Vec<std::path::PathBuf>>, Option<&'static str>);
 
-/// The rule scope `--changed`, `--file` and `--uuid` name (`_query_rule_scope`):
+/// The rule scope `--changed`, `--file` and `--uuid` name:
 /// the files and the scope's label, or the refusal.
 fn rule_scope(
     args: &Args,
@@ -366,7 +362,7 @@ fn rule_scope(
     Ok((Some(scope.files), Some("selected")))
 }
 
-/// `_scoped`: names the narrowed scope in *result*.
+/// Names the narrowed scope in *result*.
 fn scoped(mut live: Live, label: Option<&str>) -> Live {
     if let Some(label) = label {
         set(&mut live.result, "scope", Json::str(label));
@@ -496,10 +492,10 @@ fn promoted(
     }
 }
 
-/// A run's result as a list of fields (the oracle's result dict).
+/// A run's result as a list of fields, in order.
 type Fields = Vec<(String, Json)>;
 
-/// `_validate_query_platform` with a workspace: the strategies, the rules
+/// A platform's check with a workspace: the strategies, the rules
 /// selected, their tenants, then the check and its result.
 fn with_workspace(args: &Args, platform: &str, workspace: &Workspace, cx: &Context<'_>) -> Live {
     let owned = opentide_compile::Owned::new(
@@ -1319,7 +1315,7 @@ struct Unreachable {
 }
 
 impl Unreachable {
-    /// `_unreachable_tenant_result`.
+    /// The result of a run whose tenant did not answer, with the advice.
     fn result(&self, platform: &str) -> Fields {
         let mut advice = format!(
             "check the '{}' tenant in {} and the network path to {}; behind a proxy, pass \
@@ -1536,7 +1532,7 @@ fn tenant_host(platform: &str, tenant: &Configured) -> String {
         };
     }
     if platform == "google_secops" {
-        // The instance's endpoint, else its location's (`_tenant_host`).
+        // The instance's endpoint, else its location's.
         return text("endpoint")
             .filter(|endpoint| !endpoint.is_empty())
             .or_else(|| {
@@ -2475,7 +2471,7 @@ fn early(platform: &str, tenant: &str, host: &str, error: &ConnectorError) -> Ea
     }
 }
 
-/// Logs a refusal (`_log_rejected`).
+/// Logs a refusal.
 fn log_rejected(platform: &str, rule: &opentide_compile::Rule, tenant: &str, error: &str) {
     tracing::error!(
         detail = format!(
@@ -2489,7 +2485,7 @@ fn log_rejected(platform: &str, rule: &opentide_compile::Rule, tenant: &str, err
     );
 }
 
-/// A refused check (`_rejected`).
+/// A refused check.
 fn rejected(
     platform: &str,
     rule: &opentide_compile::Rule,
@@ -2545,7 +2541,7 @@ fn timed_out(
 
 // ---------------------------------------------------------------- Elastic
 
-/// One advisory's log line (`warn_advisory`, `_emit_rule_advisories`).
+/// One advisory's log line.
 #[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 fn log_advisory(code: &str, rule: &str, block: &CJson, tenant: &str, uuid: &str, severity: &str) {
     let scheduling = block.get("scheduling").filter(|s| s.is_filled());
@@ -3154,7 +3150,7 @@ mod tests {
     }
 
     #[test]
-    fn results_read_into_the_envelope_as_the_oracle_reads_them() {
+    fn results_read_into_the_envelope_with_their_underscore_keys() {
         let mut result = failed(Some("splunk"), "nope", 2);
         result.push(("_failure_code".into(), Json::str("usage_error")));
         result.push(("warnings".into(), Json::Array(vec![Json::str("w")])));

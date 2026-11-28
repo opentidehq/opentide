@@ -800,10 +800,9 @@ pub(crate) mod tests {
         }
     }
 
-    /// The questions, their defaults and their order are the oracle's
-    /// (`run_interactive_setup`).
+    /// The questions the wizard asks, their defaults and their order.
     #[test]
-    fn the_setup_wizard_asks_the_oracles_questions_in_its_order() {
+    fn the_setup_wizard_asks_its_questions_in_order() {
         let mut script = Script::new(vec![
             Reply::Text(None),
             Reply::Text(Some("SOC")),
