@@ -491,7 +491,7 @@ mod tests {
                 })
                 .collect();
             out.push(mixed);
-            out.push(name[1..].to_owned());
+            out.push(name.get(1..).unwrap().to_owned());
             out.push(format!("{name}x"));
             out.push(format!("_{name}"));
             out.push(name.replace('_', ""));
