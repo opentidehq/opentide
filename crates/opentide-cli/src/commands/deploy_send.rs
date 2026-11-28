@@ -2260,6 +2260,7 @@ impl Sender<'_, '_> {
         action: &Planned,
         result: &mut RuleResult,
     ) -> Result<(), Raised> {
+        use opentide_compile::compiler::{Compiler, SentinelOne};
         let compile_error = |error: opentide_compile::rule::CompileError| {
             Raised::new(format!("Rule {} ({}): {error}", rule.uuid, rule.name))
         };
@@ -2267,7 +2268,9 @@ impl Sender<'_, '_> {
             Some(PlatformId::SentinelOne) => {
                 let table =
                     resolved_table(table, context.tenant).map_err(|e| unset_variable(&e))?;
-                opentide_compile::sentinel_one::body(self.compile, rule, &table)
+                // The body the dry run shows in its create or update write.
+                SentinelOne::compile(self.compile, rule, &table)
+                    .map(|compiled| SentinelOne::body(&compiled))
             }
             _ => {
                 let table =
