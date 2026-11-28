@@ -19,7 +19,7 @@ use crate::json::Json;
 use crate::rule::{CompileError, Rule};
 use crate::strategy::StatusStrategy;
 use crate::{
-    Context, bitdefender, datadog, deploy, elastic, exabeam, google_secops, graylog,
+    Context, bitdefender, crowdstrike, datadog, deploy, elastic, exabeam, google_secops, graylog,
     microsoft_defender, preview, sentinel, sentinel_one, splunk, sysdig,
 };
 
@@ -389,6 +389,30 @@ impl Compiler for SentinelOne {
 
     fn compile(cx: &Context<'_>, rule: &Rule, tenant: &Json) -> Result<Json, CompileError> {
         sentinel_one::body(cx, rule, tenant)
+    }
+
+    fn body(compiled: &Json) -> Json {
+        compiled.clone()
+    }
+}
+
+/// CrowdStrike Falcon: the correlation rule's body for one tenant, whose
+/// `setup` gives its `customer_id`, with `null` values left out. The dry run
+/// shows it in the create write, and with the recorded `id` in the update
+/// ([`crowdstrike::compile`]).
+#[derive(Debug, Clone, Copy)]
+pub struct Crowdstrike;
+
+impl Compiler for Crowdstrike {
+    const PLATFORM: PlatformId = PlatformId::Crowdstrike;
+
+    /// The tenant's table, its variables resolved in a deploy.
+    type Target<'t> = &'t Json;
+
+    type Compiled = Json;
+
+    fn compile(cx: &Context<'_>, rule: &Rule, tenant: &Json) -> Result<Json, CompileError> {
+        crowdstrike::body(cx, rule, tenant)
     }
 
     fn body(compiled: &Json) -> Json {
