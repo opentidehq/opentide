@@ -413,7 +413,7 @@ fn diagnostics_of(payload: &Object) -> Vec<Json> {
 /// The same report again, as an MCP call and as the command line that keeps
 /// the selection and a `--queries` mode that is not the default.
 fn again_action(file: &str, uuid: &str, object_type: &str, queries: &str) -> Json {
-    let mut arguments = Vec::new();
+    let mut arguments = Object::new();
     let mut flags = String::new();
     for (key, flag, value) in [
         ("file", "file", file),
@@ -421,17 +421,17 @@ fn again_action(file: &str, uuid: &str, object_type: &str, queries: &str) -> Jso
         ("object_type", "type", object_type),
     ] {
         if !value.is_empty() {
-            arguments.push((key, Json::str(value)));
+            arguments.insert(key.to_owned(), Json::str(value));
             flags.push_str(&format!(" --{flag} {}", quote(value)));
         }
     }
     if queries != "error" {
         flags.push_str(&format!(" --queries {queries}"));
-        arguments.push(("queries", Json::str(queries)));
+        arguments.insert("queries".to_owned(), Json::str(queries));
     }
     next_action(
         "validation_report",
-        Json::object(arguments),
+        Json::Object(arguments),
         &format!("opentide --json validate{flags}"),
         "",
     )

@@ -384,7 +384,7 @@ fn templates(workspace: &Workspace) -> Object {
             }
         }
     }
-    let mut systems = Vec::new();
+    let mut systems = Object::new();
     if let Some(Value::Map(platforms)) = config.get("platforms").map(|node| &node.value) {
         for entry in platforms {
             let name = entry.key.value.to_string();
@@ -395,11 +395,11 @@ fn templates(workspace: &Workspace) -> Object {
                 continue;
             }
             if let Ok(Some(text)) = opentide_schema::generate::workspace::platform_template(&name) {
-                systems.push((name, Json::Str(text)));
+                systems.insert(name, Json::Str(text));
             }
         }
     }
-    out.insert("systems".to_owned(), Json::object(systems));
+    out.insert("systems".to_owned(), Json::Object(systems));
     out
 }
 
@@ -482,20 +482,20 @@ fn index_vocabulary(vocabulary: &Vocabulary) -> Json {
         .stages
         .iter()
         .map(|stage| {
-            let mut members = Vec::new();
+            let mut members = Object::new();
             for (key, value) in [
                 ("id", &stage.id),
                 ("name", &stage.name),
                 ("description", &stage.description),
             ] {
                 if let Some(value) = value {
-                    members.push((key.to_owned(), Json::str(value)));
+                    members.insert(key.to_owned(), Json::str(value));
                 }
             }
-            Json::object(members)
+            Json::Object(members)
         })
         .collect();
-    let mut meta = vec![
+    let mut meta = Object::from([
         ("name".to_owned(), Json::str(&metadata.name)),
         ("field".to_owned(), Json::str(&metadata.field)),
         ("description".to_owned(), Json::str(&metadata.description)),
@@ -503,20 +503,20 @@ fn index_vocabulary(vocabulary: &Vocabulary) -> Json {
         ("key".to_owned(), Json::str(if id { "id" } else { "name" })),
         ("model".to_owned(), Json::Bool(id)),
         ("stages".to_owned(), Json::Array(stages)),
-    ];
+    ]);
     for (key, value) in &metadata.extra {
-        meta.push((key.clone(), toml_json(value)));
+        meta.insert(key.clone(), toml_json(value));
     }
     let entries = vocabulary
         .entries
         .iter()
         .map(|(key, entry)| {
-            let mut members = vec![
+            let mut members = Object::from([
                 ("name".to_owned(), Json::str(&entry.name)),
                 ("version".to_owned(), Json::Str(entry.version.to_string())),
-            ];
+            ]);
             if let Some(removed) = entry.removed {
-                members.push(("removed".to_owned(), Json::Str(removed.to_string())));
+                members.insert("removed".to_owned(), Json::Str(removed.to_string()));
             }
             members.extend([
                 (
@@ -531,13 +531,13 @@ fn index_vocabulary(vocabulary: &Vocabulary) -> Json {
                 ),
             ]);
             for (name, value) in &entry.extra {
-                members.push((name.clone(), toml_json(value)));
+                members.insert(name.clone(), toml_json(value));
             }
-            (key.clone(), Json::object(members))
+            (key.clone(), Json::Object(members))
         })
         .collect();
     Json::object([
-        ("metadata", Json::object(meta)),
+        ("metadata", Json::Object(meta)),
         ("entries", Json::Object(entries)),
     ])
 }

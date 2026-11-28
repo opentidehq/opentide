@@ -493,43 +493,43 @@ pub fn run_query(run: &QueryRun, context: &Context<'_>) -> Result<Json, String> 
         ]));
     }
     let mut command: Vec<String> = vec!["query".into(), "--platform".into(), platform.into()];
-    let mut arguments = vec![
+    let mut arguments = Object::from([
         ("query".to_owned(), Json::str(&run.query)),
         ("platform".to_owned(), Json::str(platform)),
         ("live".to_owned(), Json::Bool(true)),
-    ];
+    ]);
     if !run.tenant.is_empty() {
-        arguments.push(("tenant".to_owned(), Json::str(&run.tenant)));
+        arguments.insert("tenant".to_owned(), Json::str(&run.tenant));
         for name in &tenants {
             command.extend(["--tenant".to_owned(), name.clone()]);
         }
     }
     if !run.rule.is_empty() {
-        arguments.push(("rule".to_owned(), Json::str(&run.rule)));
+        arguments.insert("rule".to_owned(), Json::str(&run.rule));
         command.extend(["--rule".to_owned(), run.rule.clone()]);
     }
     // The live call keeps every choice the agent made, so it runs what was
     // asked; a live run passes the limit, and the window when it has one.
     let since_named = !run.since.is_empty() && run.since != "24h";
     if since_named {
-        arguments.push(("since".to_owned(), Json::str(&run.since)));
+        arguments.insert("since".to_owned(), Json::str(&run.since));
     }
     if since_named || (run.live && !run.since.is_empty()) {
         command.extend(["--since".to_owned(), run.since.clone()]);
     }
     let limit_named = run.limit != MAX_QUERY_ROWS;
     if limit_named {
-        arguments.push(("limit".to_owned(), Json::Int(run.limit)));
+        arguments.insert("limit".to_owned(), Json::Int(run.limit));
     }
     if limit_named || run.live {
         command.extend(["--limit".to_owned(), run.limit.to_string()]);
     }
     if !run.language.is_empty() {
-        arguments.push(("language".to_owned(), Json::str(&run.language)));
+        arguments.insert("language".to_owned(), Json::str(&run.language));
         command.extend(["--language".to_owned(), run.language.clone()]);
     }
     if !run.index.is_empty() {
-        arguments.push(("index".to_owned(), Json::str(&run.index)));
+        arguments.insert("index".to_owned(), Json::str(&run.index));
         for name in &indices {
             command.extend(["--index".to_owned(), name.clone()]);
         }
@@ -564,7 +564,7 @@ pub fn run_query(run: &QueryRun, context: &Context<'_>) -> Result<Json, String> 
             "next_actions",
             Json::Array(vec![next_action(
                 "run_query",
-                Json::object(arguments),
+                Json::Object(arguments),
                 &shown,
                 &format!(
                     "run it on {platform}: this contacts the tenant with the configured \
