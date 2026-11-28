@@ -3,9 +3,9 @@
 //! the command's own.
 //!
 //! [`CommandResult::report`] is the one place a result becomes a [`Report`].
-//! The live check and `deploy` still build their result as keys in order,
-//! with `_exit_code`, `_failure_code` and the other `_`-keys among them:
-//! [`CommandResult::from_fields`] reads those, until each command builds a
+//! `deploy`'s final result is still built as keys in order, with
+//! `_exit_code`, `_summary` and the other `_`-keys among them:
+//! [`CommandResult::from_fields`] reads those, until it builds a
 //! [`CommandResult`] itself.
 
 use super::Report;
@@ -145,6 +145,11 @@ pub struct CommandResult {
     pub next_actions: Vec<NextAction>,
     /// The command's own keys, in order.
     pub data: Vec<(String, Json)>,
+    /// The outcome line the text modes print, when it is not the message.
+    pub outcome_line: Option<String>,
+    /// The run ends with its exit code alone: no document, no outcome line
+    /// (`deploy`'s invalid promotion target).
+    pub bare_exit: bool,
 }
 
 impl CommandResult {
@@ -163,6 +168,23 @@ impl CommandResult {
     pub fn with_code(mut self, code: impl Into<String>) -> CommandResult {
         self.failure.code = Some(code.into());
         self
+    }
+
+    /// The value of the command's own key `key`.
+    pub fn get(&self, key: &str) -> Option<&Json> {
+        self.data
+            .iter()
+            .find(|(name, _)| name == key)
+            .map(|(_, value)| value)
+    }
+
+    /// `value` set at the command's own key `key`, in place when the key is
+    /// there, else last.
+    pub fn set(&mut self, key: &str, value: Json) {
+        match self.data.iter_mut().find(|(name, _)| name == key) {
+            Some(entry) => entry.1 = value,
+            None => self.data.push((key.to_owned(), value)),
+        }
     }
 
     /// The result as one JSON object: the command's own keys, then
@@ -266,6 +288,7 @@ impl CommandResult {
             summary,
             next_actions,
             data,
+            ..CommandResult::default()
         }
     }
 
@@ -303,6 +326,8 @@ impl CommandResult {
             failure,
         };
         report.warnings = self.warnings;
+        report.outcome_line = self.outcome_line;
+        report.bare_exit = self.bare_exit;
         report
     }
 }
@@ -424,6 +449,7 @@ mod tests {
             summary: vec![("checked".to_owned(), Json::Int(3))],
             next_actions: vec![NextAction::new("opentide info", "why")],
             data: vec![("platform".to_owned(), Json::str("é😀"))],
+            ..CommandResult::default()
         };
         assert_eq!(CommandResult::from_fields(&fields), typed);
         let report = typed.report("validate query");
