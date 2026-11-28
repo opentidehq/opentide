@@ -17,8 +17,8 @@
 
 use super::Catalog;
 use super::scan::{
-    Order, base_search, closing_bracket, command_word, count_nested_scan, end_of_macro, end_quoted,
-    read_word, skip_comment, skip_hidden, skip_ws_and_comments, walk_pipelines,
+    Order, base_search, closing_bracket, command_word, count_nested_scan, cut, end_of_macro,
+    end_quoted, read_word, skip_comment, skip_hidden, skip_ws_and_comments, walk_pipelines,
 };
 use opentide_core::{ByteSpan, Diagnostic, LineIndex, Range, codes};
 use std::collections::HashSet;
@@ -130,7 +130,7 @@ fn scan_search(source: &str, start: usize, end: usize, out: &mut Sink<'_, '_>) {
     }
     for term in &terms {
         for (wild_start, wild_end) in wildcard_spans(source, term) {
-            let value = &source[wild_start..wild_end];
+            let value = cut(source, wild_start, wild_end);
             push(
                 out,
                 source,
@@ -166,19 +166,19 @@ fn leading_not_span(source: &str, start: usize, end: usize) -> Option<(usize, us
     }
     let (word_start, word_end) = read_word(source, i, end)?;
     let mut i = word_end;
-    if source[word_start..word_end].eq_ignore_ascii_case("search") {
+    if cut(source, word_start, word_end).eq_ignore_ascii_case("search") {
         i = skip_ws_and_comments(source, i, end);
         while i < end && bytes[i] == b'(' {
             i += 1;
             i = skip_ws_and_comments(source, i, end);
         }
         let (word_start, word_end) = read_word(source, i, end)?;
-        if source[word_start..word_end].eq_ignore_ascii_case("not") {
+        if cut(source, word_start, word_end).eq_ignore_ascii_case("not") {
             return Some((word_start, word_end));
         }
         return None;
     }
-    if source[word_start..word_end].eq_ignore_ascii_case("not") {
+    if cut(source, word_start, word_end).eq_ignore_ascii_case("not") {
         Some((word_start, word_end))
     } else {
         None
@@ -303,7 +303,7 @@ const INDEXED_FIELDS: &[&str] = &["index", "sourcetype", "source", "host"];
 /// with a leading wildcard narrow nothing.
 fn has_indexed_constraint(source: &str, terms: &[Term]) -> bool {
     terms.iter().enumerate().any(|(n, term)| {
-        let text = &source[term.start..term.end];
+        let text = cut(source, term.start, term.end);
         match term.kind {
             TermKind::Macro => true,
             TermKind::Quoted => false,
@@ -315,14 +315,14 @@ fn has_indexed_constraint(source: &str, terms: &[Term]) -> bool {
                     return indexed(field) && !value.is_empty() && !value.starts_with('*');
                 }
                 if (text.eq_ignore_ascii_case("TERM") || text.eq_ignore_ascii_case("PREFIX"))
-                    && source[term.end..].starts_with('(')
+                    && source.as_bytes().get(term.end) == Some(&b'(')
                 {
                     return true;
                 }
                 indexed(text)
                     && terms.get(n + 1).is_some_and(|next| {
                         next.kind == TermKind::Word
-                            && source[next.start..next.end].eq_ignore_ascii_case("IN")
+                            && cut(source, next.start, next.end).eq_ignore_ascii_case("IN")
                     })
             }
         }
@@ -332,23 +332,21 @@ fn has_indexed_constraint(source: &str, terms: &[Term]) -> bool {
 /// Wildcards in a term that cannot use the term index. `field=*` and
 /// `field="*"` are the existence check, not a scan of every event.
 fn wildcard_spans(source: &str, term: &Term) -> Vec<(usize, usize)> {
-    let text = &source[term.start..term.end];
+    let text = cut(source, term.start, term.end);
     let pieces: Vec<(&str, usize)> = match term.kind {
         TermKind::Macro => Vec::new(),
         TermKind::Quoted => {
             let (inner, rel) = strip_quotes(text);
             vec![(inner, rel)]
         }
-        TermKind::Word => match text.find('=') {
+        TermKind::Word => match text.split_once('=') {
             // `process=*fail` is a leading wildcard on the value, not a
             // mid-token wildcard on the whole field=value token.
-            Some(eq) => {
-                let (value, rel) = strip_quotes(&text[eq + 1..]);
+            Some((field, value)) => {
+                let (value, rel) = strip_quotes(value);
                 let value_piece =
-                    (!value.chars().all(|c| c == '*')).then_some((value, eq + 1 + rel));
-                std::iter::once((&text[..eq], 0))
-                    .chain(value_piece)
-                    .collect()
+                    (!value.chars().all(|c| c == '*')).then_some((value, field.len() + 1 + rel));
+                std::iter::once((field, 0)).chain(value_piece).collect()
             }
             None => vec![(text, 0)],
         },
@@ -361,14 +359,10 @@ fn wildcard_spans(source: &str, term: &Term) -> Vec<(usize, usize)> {
 }
 
 fn strip_quotes(term: &str) -> (&str, usize) {
-    let bytes = term.as_bytes();
-    if bytes.len() >= 2
-        && (bytes[0] == b'"' || bytes[0] == b'\'')
-        && bytes[bytes.len() - 1] == bytes[0]
-    {
-        (&term[1..term.len() - 1], 1)
-    } else {
-        (term, 0)
+    let mut chars = term.chars();
+    match (chars.next(), chars.next_back()) {
+        (Some(quote @ ('"' | '\'')), Some(last)) if last == quote => (chars.as_str(), 1),
+        _ => (term, 0),
     }
 }
 
@@ -379,8 +373,8 @@ fn is_inefficient_wildcard(value: &str) -> bool {
     if value.chars().all(|c| c == '*') || value.starts_with('*') {
         return true;
     }
-    match value.find('*') {
-        Some(idx) if value[idx..].chars().all(|c| c == '*') => false,
+    match value.split_once('*') {
+        Some((_, rest)) if rest.chars().all(|c| c == '*') => false,
         Some(_) => true,
         None => false,
     }
@@ -776,5 +770,27 @@ mod tests {
             "multiplication must stay an operator: {:?}",
             eval.diagnostics
         );
+    }
+
+    #[test]
+    fn quotes_and_wildcards_in_multi_byte_text() {
+        assert_eq!(strip_quotes("\"é😀\""), ("é😀", 1));
+        assert_eq!(strip_quotes("'😀'"), ("😀", 1));
+        assert_eq!(strip_quotes("\""), ("\"", 0));
+        assert_eq!(strip_quotes("'é\""), ("'é\"", 0));
+        assert!(!is_inefficient_wildcard("é😀*"));
+        assert!(!is_inefficient_wildcard("é**"));
+        assert!(is_inefficient_wildcard("*é"));
+        assert!(is_inefficient_wildcard("é*😀"));
+        let wildcards = |query: &str| {
+            analyze(query)
+                .diagnostics
+                .into_iter()
+                .filter(|d| d.code == codes::SPL_WILDCARD)
+                .count()
+        };
+        assert_eq!(wildcards("é😀=*é process=\"*😀\""), 2);
+        assert_eq!(wildcards("é😀=* process=\"*\" x=é*"), 0);
+        assert_eq!(wildcards("index=é é*😀"), 0);
     }
 }

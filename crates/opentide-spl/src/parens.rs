@@ -63,10 +63,10 @@ fn unbalanced(source: &str) -> Option<(ByteSpan, &'static str)> {
                 }
                 i += 1;
             }
-            b'`' if source[i..].starts_with("```") => {
+            b'`' if bytes[i..].starts_with(b"```") => {
                 let run = bytes[i..].iter().take_while(|&&b| b == b'`').count();
                 i += run;
-                i = match source[i..].find("```") {
+                i = match bytes[i..].windows(3).position(|run| run == b"```") {
                     Some(end) => {
                         let close = i + end;
                         close + bytes[close..].iter().take_while(|&&b| b == b'`').count()
@@ -75,8 +75,9 @@ fn unbalanced(source: &str) -> Option<(ByteSpan, &'static str)> {
                 };
             }
             b'`' => {
-                i = source[i + 1..]
-                    .find('`')
+                i = bytes[i + 1..]
+                    .iter()
+                    .position(|b| *b == b'`')
                     .map_or(bytes.len(), |end| i + 1 + end + 1);
             }
             b'"' => i = end_of_string(bytes, i, b'"'),
@@ -135,9 +136,9 @@ fn at_token_start(bytes: &[u8], i: usize) -> bool {
 
 /// `TERM(`, `CASE(` or `PREFIX(` right before the `(` at `paren`.
 fn directive_before(source: &str, paren: usize) -> bool {
-    let head = &source[..paren];
+    let head = &source.as_bytes()[..paren];
     ["TERM", "CASE", "PREFIX"].iter().any(|name| {
-        head.ends_with(name) && {
+        head.ends_with(name.as_bytes()) && {
             let before = head.len() - name.len();
             before == 0 || !is_word_byte(source.as_bytes()[before - 1])
         }
@@ -251,5 +252,20 @@ mod tests {
             errors.iter().all(|d| !d.message.contains("parentheses")),
             "{errors:?}"
         );
+    }
+
+    #[test]
+    fn parentheses_among_multi_byte_text() {
+        let reported = |query: &str| {
+            crate::analyze(query)
+                .diagnostics
+                .into_iter()
+                .any(|d| d.message.starts_with("unbalanced parentheses"))
+        };
+        assert!(!reported(
+            "index=é (😀 OR \"é(\") ```é ( 😀``` `é😀(` TERM(é😀"
+        ));
+        assert!(reported("index=é (😀 | stats count"));
+        assert!(reported("index=é 😀)"));
     }
 }

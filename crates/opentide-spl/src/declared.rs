@@ -17,7 +17,7 @@
 
 use super::Catalog;
 use super::scan::{
-    Order, base_search, command_word, end_of_brackets, end_of_macro, end_quoted, skip_comment,
+    Order, base_search, command_word, cut, end_of_brackets, end_of_macro, end_quoted, skip_comment,
     skip_hidden, skip_ws, walk_pipelines,
 };
 use opentide_core::datasets::{DatasetKind, DeclaredColumn, DeclaredDatasets, current};
@@ -33,7 +33,7 @@ struct Read {
 
 impl Read {
     fn name<'s>(&self, source: &'s str) -> &'s str {
-        &source[self.start..self.end]
+        cut(source, self.start, self.end)
     }
 
     fn covered_by(&self, source: &str, declared: &str) -> bool {
@@ -190,7 +190,7 @@ fn scan_terms(source: &str, start: usize, end: usize, out: &mut Vec<Read>) {
             negate_next = false;
             continue;
         }
-        let word = &source[word_start..i];
+        let word = cut(source, word_start, i);
         if word.eq_ignore_ascii_case("not") && i < end && !is_term_char(bytes[i]) {
             negate_next = true;
             continue;
@@ -302,7 +302,7 @@ fn value(bytes: &[u8], i: usize, end: usize) -> (Option<(usize, usize)>, usize) 
 }
 
 fn read_name(source: &str, start: usize, end: usize, out: &mut Vec<Read>) {
-    let name = &source[start..end];
+    let name = cut(source, start, end);
     // Dashboard tokens (`$st$`) and empty values are not names.
     if name.trim().is_empty() || name.contains('$') {
         return;
@@ -341,7 +341,9 @@ mod tests {
                 let r = d.range;
                 assert_eq!(r.start.line, r.end.line);
                 let line = src.lines().nth(r.start.line as usize).unwrap();
-                line[r.start.character as usize..r.end.character as usize].to_string()
+                line.get(r.start.character as usize..r.end.character as usize)
+                    .unwrap()
+                    .to_string()
             })
             .collect()
     }

@@ -20,7 +20,7 @@
 //! checked.
 
 use super::scan::{
-    Order, command_word, end_of_brackets, end_of_macro, end_quoted, skip_comment, skip_hidden,
+    Order, command_word, cut, end_of_brackets, end_of_macro, end_quoted, skip_comment, skip_hidden,
     skip_ws, split_segments, walk_pipelines,
 };
 use super::{Catalog, DatamodelRow};
@@ -251,7 +251,7 @@ fn stage<'c>(
         }
     }
     if word == "rename" {
-        let text = &source[seg_start..seg_end];
+        let text = cut(source, seg_start, seg_end);
         prefixes.retain(|p| !text.contains(&format!("{}.*", p.alias)));
     }
 }
@@ -276,8 +276,8 @@ fn refs_in_segment(source: &str, start: usize, end: usize, word: &str) -> Vec<Da
                         end: dataset.1,
                         text: format!(
                             "{}.{}",
-                            &source[model.0..model.1],
-                            &source[dataset.0..dataset.1]
+                            cut(source, model.0, model.1),
+                            cut(source, dataset.0, dataset.1)
                         ),
                         sep: ' ',
                     }]
@@ -285,7 +285,7 @@ fn refs_in_segment(source: &str, start: usize, end: usize, word: &str) -> Vec<Da
                 [_, model, ..] if is_name(source, *model) => vec![DatamodelRef {
                     start: model.0,
                     end: model.1,
-                    text: source[model.0..model.1].to_string(),
+                    text: cut(source, model.0, model.1).to_string(),
                     sep: ' ',
                 }],
                 _ => Vec::new(),
@@ -297,7 +297,7 @@ fn refs_in_segment(source: &str, start: usize, end: usize, word: &str) -> Vec<Da
 }
 
 fn is_name(source: &str, (start, end): (usize, usize)) -> bool {
-    let text = &source[start..end];
+    let text = cut(source, start, end);
     !text.is_empty()
         && text
             .bytes()
@@ -329,7 +329,7 @@ fn plain_words(source: &str, start: usize, end: usize, limit: usize) -> Vec<(usi
         if word_start == i {
             break;
         }
-        let word = &source[word_start..i];
+        let word = cut(source, word_start, i);
         if !word
             .bytes()
             .all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'.')
@@ -569,7 +569,7 @@ fn activate<'a>(r: &DatamodelRef, cim: &'a Cim, prefixes: &mut Vec<Prefix<'a>>) 
 
 /// `drop_dm_object_name(X)` alone in a segment strips the `X.` prefix.
 fn dropped_prefix(source: &str, start: usize, end: usize) -> Option<String> {
-    let text = source[start..end].trim();
+    let text = cut(source, start, end).trim();
     let inner = text.strip_prefix('`')?.strip_suffix('`')?;
     let args = inner
         .strip_prefix("drop_dm_object_name(")?
@@ -633,7 +633,7 @@ fn field_tokens(source: &str, start: usize, end: usize, word: &str) -> Vec<(usiz
         while i < end && is_tok(bytes[i]) {
             i += 1;
         }
-        let tok = &source[tok_start..i];
+        let tok = cut(source, tok_start, i);
         let adjacent = if tok_start > start {
             bytes[tok_start - 1]
         } else {
@@ -667,7 +667,7 @@ fn check_field(
     prefixes: &[Prefix],
     lines: &LineIndex<'_>,
 ) -> Option<Diagnostic> {
-    let token = &source[start..end];
+    let token = cut(source, start, end);
     let segments: Vec<&str> = token.split('.').collect();
     let prefix = prefixes.iter().find(|p| p.alias == segments[0])?;
     let model = prefix.model;
