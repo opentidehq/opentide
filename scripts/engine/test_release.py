@@ -1972,7 +1972,8 @@ class ReleaseWorkflowTest(unittest.TestCase):
         self.assertIn('npm dist-tag add "${name}@${VERSION}" next', moves)
         # next follows a published release only, never a candidate.
         self.assertLess(
-            moves.index("latest is ${latest:-unset}, not ${VERSION}"), moves.index("npm dist-tag add")
+            moves.index("latest is ${latest:-unset}, not ${VERSION}"),
+            moves.index("npm dist-tag add"),
         )
 
     def test_npm_names_lists_every_package_a_release_publishes(self) -> None:
