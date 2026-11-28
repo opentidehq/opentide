@@ -2972,6 +2972,157 @@ fn a_graylog_deploy_sends_the_body_its_dry_run_shows() {
     assert_eq!(request.get("body").unwrap().to_compact(), body);
 }
 
+/// The bodies of the requests `server` received with `verb` on `path`, as
+/// text.
+fn bodies_on(
+    rt: &tokio::runtime::Runtime,
+    server: &wiremock::MockServer,
+    verb: &wiremock::http::Method,
+    path: &str,
+) -> Vec<String> {
+    rt.block_on(server.received_requests())
+        .unwrap()
+        .iter()
+        .filter(|request| request.method == *verb && request.url.path() == path)
+        .map(|request| String::from_utf8(request.body.clone()).unwrap())
+        .collect()
+}
+
+/// The create body an Exabeam deploy sends is, byte for byte, the body of
+/// the `api_request` the dry run shows for that tenant (#1952: both compile
+/// through `compiler::Exabeam`): the tenant's `test_mode`, and the non-ASCII
+/// text of the rule.
+#[test]
+fn an_exabeam_deploy_sends_the_body_its_dry_run_shows() {
+    use wiremock::matchers::{method, path};
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let server = rt.block_on(wiremock::MockServer::start());
+    let (setup, env) = exabeam_stand(&server, &rt);
+    rt.block_on(async {
+        wiremock::Mock::given(method("GET"))
+            .and(path("/correlation-rules/v2/rules"))
+            .respond_with(wiremock::ResponseTemplate::new(200).set_body_string("[]"))
+            .mount(&server)
+            .await;
+        wiremock::Mock::given(method("POST"))
+            .and(path("/correlation-rules/v2/rules"))
+            .respond_with(wiremock::ResponseTemplate::new(200).set_body_string(
+                r#"{"id": "016dbc1d-a727-43df-a143-9546dcc81a5a", "name": "Ünïcode rule 😀"}"#,
+            ))
+            .expect(1)
+            .mount(&server)
+            .await;
+    });
+    let block = EXABEAM_BLOCK.replace(
+        "activity_type:\"process-create\"",
+        "activity_type:\"process-create\" AND user:\"é😀\"",
+    );
+    let text = rule(
+        "Ünïcode rule 😀",
+        "00000000-0000-4000-8099-000000000203",
+        "Dé😀.",
+        &block,
+    );
+    let ws = workspace(
+        "exabeam",
+        "lab",
+        &format!("{setup}test_mode = true\n"),
+        &[("a.yaml", text)],
+    );
+    let shown = dry_run_requests(ws.path(), "exabeam");
+    let (sent, err) = deploy(
+        ws.path(),
+        "exabeam",
+        &env,
+        &opentide_connectors::builtin(),
+        0,
+    );
+    rt.block_on(server.verify());
+    assert_eq!(rows(&sent), vec![("deployed".to_owned(), None)], "{err}");
+    let created = bodies_on(
+        &rt,
+        &server,
+        &wiremock::http::Method::POST,
+        "/correlation-rules/v2/rules",
+    );
+    assert_eq!(created.len(), 1, "{err}");
+    let body = &created[0];
+    assert!(
+        body.contains("é😀") && body.contains(r#""testMode":true"#),
+        "{body}"
+    );
+    assert_eq!(shown.len(), 1);
+    assert_eq!(shown[0].1.as_deref(), Some("lab"));
+    let request = Json::parse(&shown[0].0).unwrap();
+    assert_eq!(&request.get("body").unwrap().to_compact(), body);
+}
+
+/// The create body a Datadog deploy sends, and the validation that comes
+/// before it, are, byte for byte, the body of the `api_request` the dry run
+/// shows for that tenant (#1952: both compile through `compiler::Datadog`):
+/// the handle the tenant gives the case's notification alias, its tags, and
+/// the non-ASCII text of the rule.
+#[test]
+fn a_datadog_deploy_sends_the_body_its_dry_run_shows() {
+    use wiremock::matchers::{method, path};
+    const RULES: &str = "/api/v2/security_monitoring/rules";
+    const VALIDATION: &str = "/api/v2/security_monitoring/rules/validation";
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let server = rt.block_on(wiremock::MockServer::start());
+    let (setup, env) = datadog_stand(&server);
+    rt.block_on(async {
+        wiremock::Mock::given(method("POST"))
+            .and(path(VALIDATION))
+            .respond_with(wiremock::ResponseTemplate::new(204))
+            .expect(1)
+            .mount(&server)
+            .await;
+        wiremock::Mock::given(method("POST"))
+            .and(path(RULES))
+            .respond_with(
+                wiremock::ResponseTemplate::new(200)
+                    .set_body_string(r#"{"id": "abc-def-ghi", "version": 1}"#),
+            )
+            .expect(1)
+            .mount(&server)
+            .await;
+    });
+    let block = DATADOG_BLOCK.replace("@evt.outcome:FAILURE", "@usr.name:\"é😀\"");
+    let text = rule(
+        "Ünïcode rule 😀",
+        "00000000-0000-4000-8099-000000000204",
+        "Dé😀.",
+        &block,
+    );
+    let setup = setup.replace(
+        "[tenants.setup.notifications]",
+        "tags = [\"team:soc\"]\n[tenants.setup.notifications]",
+    );
+    let ws = workspace("datadog", "eu", &setup, &[("a.yaml", text)]);
+    let shown = dry_run_requests(ws.path(), "datadog");
+    let (sent, err) = deploy(
+        ws.path(),
+        "datadog",
+        &env,
+        &opentide_connectors::builtin(),
+        0,
+    );
+    rt.block_on(server.verify());
+    assert_eq!(rows(&sent), vec![("deployed".to_owned(), None)], "{err}");
+    let created = bodies_on(&rt, &server, &wiremock::http::Method::POST, RULES);
+    let validated = bodies_on(&rt, &server, &wiremock::http::Method::POST, VALIDATION);
+    assert_eq!((created.len(), validated.len()), (1, 1), "{err}");
+    let body = &created[0];
+    for part in ["@slack-soc", "team:soc", "é😀"] {
+        assert!(body.contains(part), "{part} not in {body}");
+    }
+    assert_eq!(&validated[0], body);
+    assert_eq!(shown.len(), 1);
+    assert_eq!(shown[0].1.as_deref(), Some("eu"));
+    let request = Json::parse(&shown[0].0).unwrap();
+    assert_eq!(&request.get("body").unwrap().to_compact(), body);
+}
+
 /// A definition the tenant lost while git ignores deployment state is not
 /// created again: the warning, then the state's refusal; and a tenant that
 /// refuses the token on a rule stops there.

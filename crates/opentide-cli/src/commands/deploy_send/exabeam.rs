@@ -151,14 +151,13 @@ impl Sender<'_, '_> {
             // A delete sends no body.
             Ok(None)
         } else {
-            opentide_compile::exabeam::compile_rule(
-                self.compile,
-                rule,
-                strategy,
-                Some(&batch.table),
-            )
-            .map(Some)
-            .map_err(|error| Raised::new(format!("Rule {} ({}): {error}", rule.uuid, rule.name)))
+            use opentide_compile::compiler::{Compiler, Exabeam};
+            // The dry run's compile ([`Compiler`]), so it shows this body.
+            Exabeam::compile(self.compile, rule, Some(&batch.table))
+                .map(|compiled| Some(Exabeam::body(&compiled)))
+                .map_err(|error| {
+                    Raised::new(format!("Rule {} ({}): {error}", rule.uuid, rule.name))
+                })
         };
         let compiled = match compiled {
             Ok(compiled) => compiled,
@@ -169,7 +168,7 @@ impl Sender<'_, '_> {
         };
         let recreate_refusal = self.recreate_refusal(&rule.uuid, platform, &tenant);
         let (operation, stored) = operation_of(action, strategy);
-        let body = compiled.map_or(CJson::Null, |compiled| compiled.body);
+        let body = compiled.unwrap_or(CJson::Null);
         let mut request = DeployRequest::new(
             stored.unwrap_or_default(),
             operation,

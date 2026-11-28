@@ -199,6 +199,41 @@ fn an_alias_the_tenant_lacks_fails_and_a_dry_run_shows_a_placeholder() {
     );
 }
 
+/// The one compile the dry run and the deploy share (#1952) compiles a rule
+/// to disable without the tenant, as the deploy always has: an alias the
+/// tenant lacks does not fail it, and the dry run shows the body the deploy
+/// compiles, with the alias's placeholder and no tenant tag.
+#[test]
+fn the_shared_compile_leaves_the_tenant_out_of_a_rule_to_disable() {
+    use opentide_compile::compiler::{Compiler, Datadog};
+    let disabled = block_rule(
+        "    queries:\n      - query: source:x @usr.name:\"é😀\"\n    cases:\n      - condition: \
+         a > 1\n        notify: [pager]\n",
+        "",
+    )
+    .replace("status: PRODUCTION", "status: DISABLED");
+    let (shared, alone) = with_rule(&disabled, |cx, rule| {
+        (
+            Datadog::body(&Datadog::compile(cx, rule, Some(&tenant())).unwrap()),
+            compile_rule(cx, rule, StatusStrategy::Disablement, None)
+                .unwrap()
+                .body,
+        )
+    });
+    assert_eq!(shared.to_compact(), alone.to_compact());
+    assert_eq!(
+        json(shared.get("cases").unwrap())[0]["notifications"],
+        serde_json::json!(["<tenant:notifications.pager>"])
+    );
+    assert!(!shared.to_compact().contains("managed-by:opentide"));
+    // Any other status is compiled for the tenant, whose aliases resolve.
+    let released = disabled.replace("status: DISABLED", "status: PRODUCTION");
+    let error = with_rule(&released, |cx, rule| {
+        Datadog::compile(cx, rule, Some(&tenant())).unwrap_err()
+    });
+    assert_eq!(error.code, "datadog_notification_alias");
+}
+
 #[test]
 fn a_block_tag_a_modifier_could_have_written_is_checked_as_sent() {
     let text = block_rule(

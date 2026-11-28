@@ -2,7 +2,6 @@
 //! rules of `--platform datadog`.
 
 use opentide_compile::Json as CJson;
-use opentide_compile::strategy::StatusStrategy;
 use opentide_connectors::connector::{
     DeployError, DeployFailure, DeployOutcome, DeployRequest, DeployScope, Deployer, TenantContext,
 };
@@ -110,12 +109,11 @@ impl Sender<'_, '_> {
         let compiled = if matches!(action, Planned::Delete(_)) {
             Ok(None)
         } else {
-            // A disable sends `isEnabled: false` alone (RFC §8.2): the body is
-            // compiled without the tenant, so an alias it lacks cannot keep
-            // the rule enabled.
-            let tenant = (strategy != StatusStrategy::Disablement).then_some(&batch.table);
-            opentide_compile::datadog::compile_rule(self.compile, rule, strategy, tenant)
-                .map(Some)
+            use opentide_compile::compiler::{Compiler, Datadog};
+            // The dry run's compile ([`Compiler`]), so it shows this body. A
+            // disable is compiled without the tenant there (RFC §8.2).
+            Datadog::compile(self.compile, rule, Some(&batch.table))
+                .map(|compiled| Some(Datadog::body(&compiled)))
                 .map_err(|error| {
                     Raised::new(format!("Rule {} ({}): {error}", rule.uuid, rule.name))
                 })
@@ -129,7 +127,7 @@ impl Sender<'_, '_> {
         };
         let recreate_refusal = self.recreate_refusal(&rule.uuid, platform, &tenant);
         let (operation, stored) = operation_of(action, strategy);
-        let body = compiled.map_or(CJson::Null, |compiled| compiled.body);
+        let body = compiled.unwrap_or(CJson::Null);
         let mut request = DeployRequest::new(
             stored.unwrap_or_default(),
             operation,
