@@ -50,6 +50,28 @@ pub enum Ci {
     Local,
 }
 
+/// The variables a CI platform names its checkout and triggering commit by.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct CiVariables {
+    /// The checkout's folder (`GITHUB_WORKSPACE`, `CI_PROJECT_DIR`,
+    /// `BUILD_SOURCESDIRECTORY`).
+    checkout: &'static str,
+    /// The commit that triggered the run (`TRIGGER_SHA_VARIABLES`).
+    trigger: &'static str,
+}
+
+/// The variables `ci` names its checkout and triggering commit by; `None`
+/// outside CI, which has neither.
+fn ci_variables(ci: Ci) -> Option<CiVariables> {
+    let (checkout, trigger) = match ci {
+        Ci::GitHub => ("GITHUB_WORKSPACE", "GITHUB_SHA"),
+        Ci::GitLab => ("CI_PROJECT_DIR", "CI_COMMIT_SHA"),
+        Ci::Azure => ("BUILD_SOURCESDIRECTORY", "BUILD_SOURCEVERSION"),
+        Ci::Local => return None,
+    };
+    Some(CiVariables { checkout, trigger })
+}
+
 /// The environment, as the baseline reads it.
 pub type Env<'a> = &'a dyn Fn(&str) -> Option<String>;
 
@@ -852,7 +874,12 @@ fn diff_range(
 ) -> Result<Option<Range>, GitError> {
     let platform = ci(env);
     let mut note = None;
-    if source == DiffSource::LastCommit || platform == Ci::Local {
+    let variables = if source == DiffSource::LastCommit {
+        None
+    } else {
+        ci_variables(platform)
+    };
+    let Some(variables) = variables else {
         if source == DiffSource::ChangeRequest {
             return Err(failed("A pull or merge request diff needs a CI run"));
         }
@@ -868,21 +895,13 @@ fn diff_range(
             head,
             note: None,
         }));
-    }
-    let variable = match platform {
-        Ci::GitHub => "GITHUB_WORKSPACE",
-        Ci::GitLab => "CI_PROJECT_DIR",
-        Ci::Azure => "BUILD_SOURCESDIRECTORY",
-        Ci::Local => "",
     };
-    let searched = set(env, variable).map_or_else(|| cwd.to_path_buf(), |dir| cwd.join(dir));
+    let searched =
+        set(env, variables.checkout).map_or_else(|| cwd.to_path_buf(), |dir| cwd.join(dir));
     let repo = open(&searched)?;
     let head = head_commit(&repo);
-    let (tip_name, mut latest) = match platform {
-        Ci::GitHub => ("GITHUB_SHA", set(env, "GITHUB_SHA")),
-        Ci::GitLab => ("CI_COMMIT_SHA", set(env, "CI_COMMIT_SHA")),
-        _ => ("BUILD_SOURCEVERSION", set(env, "BUILD_SOURCEVERSION")),
-    };
+    let tip_name = variables.trigger;
+    let mut latest = set(env, tip_name);
     // A push diffs from HEAD's first parent when its event names no base: a
     // checkout without a commit has none, which a CI run never is.
     let first_parent = || -> Result<Option<ObjectId>, GitError> {
@@ -1156,22 +1175,16 @@ fn since_commit(repo: &Repo, rev: &str) -> Result<ObjectId, GitError> {
     }
 }
 
-/// The variable naming the commit that triggered a CI run
-/// (`TRIGGER_SHA_VARIABLES`).
-fn trigger_variable(ci: Ci) -> &'static str {
-    match ci {
-        Ci::GitHub => "GITHUB_SHA",
-        Ci::GitLab => "CI_COMMIT_SHA",
-        Ci::Azure => "BUILD_SOURCEVERSION",
-        Ci::Local => "",
-    }
-}
-
 /// Where the triggering push's diff starts (`_push_baseline`): on GitLab
 /// `CI_COMMIT_BEFORE_SHA` unless it is unset or all zeros, else the
 /// triggering commit's first parent; `None` when that commit is the first.
-fn push_baseline(repo: &Repo, ci: Ci, env: Env<'_>) -> Result<Option<ObjectId>, GitError> {
-    let variable = trigger_variable(ci);
+/// `variable` names the triggering commit on `ci`.
+fn push_baseline(
+    repo: &Repo,
+    ci: Ci,
+    variable: &str,
+    env: Env<'_>,
+) -> Result<Option<ObjectId>, GitError> {
     let trigger = set(env, variable).ok_or_else(|| {
         failed(format!(
             "{variable} is required to compute the changed objects"
@@ -1212,27 +1225,22 @@ pub fn changed_through_head(
     since: Option<&str>,
 ) -> Result<Vec<String>, GitError> {
     let platform = ci(env);
-    let (repo, top) = if platform == Ci::Local {
+    let variables = ci_variables(platform);
+    let (repo, top) = if let Some(variables) = variables {
+        let searched =
+            set(env, variables.checkout).map_or_else(|| cwd.to_path_buf(), |dir| cwd.join(dir));
+        let top = discover(&searched)
+            .map(|(top, _)| top)
+            .ok_or_else(|| GitError::MissingCheckout(searched.clone()))?;
+        (open(&searched)?, top)
+    } else {
         if since.is_none() {
-            return Err(failed(
-                "Outside CI, --since must name the commit to diff from",
-            ));
+            return Err(outside_ci_without_since());
         }
         let top = discover(workspace)
             .map(|(top, _)| top)
             .ok_or_else(|| GitError::MissingCheckout(workspace.to_path_buf()))?;
         (open(workspace)?, top)
-    } else {
-        let variable = match platform {
-            Ci::GitHub => "GITHUB_WORKSPACE",
-            Ci::GitLab => "CI_PROJECT_DIR",
-            _ => "BUILD_SOURCESDIRECTORY",
-        };
-        let searched = set(env, variable).map_or_else(|| cwd.to_path_buf(), |dir| cwd.join(dir));
-        let top = discover(&searched)
-            .map(|(top, _)| top)
-            .ok_or_else(|| GitError::MissingCheckout(searched.clone()))?;
-        (open(&searched)?, top)
     };
     let head = head_commit(&repo).ok_or_else(|| {
         failed(format!(
@@ -1242,10 +1250,18 @@ pub fn changed_through_head(
     })?;
     let base = match since {
         Some(since) => Some(since_commit(&repo, since)?),
-        None => push_baseline(&repo, platform, env)?,
+        None => match variables {
+            Some(variables) => push_baseline(&repo, platform, variables.trigger, env)?,
+            None => return Err(outside_ci_without_since()),
+        },
     };
     // No base: HEAD is the repository's first commit, which added every file.
     changed_between(&repo, base, head)
+}
+
+/// A run outside CI has no push to diff from: `--since` must name the commit.
+fn outside_ci_without_since() -> GitError {
+    failed("Outside CI, --since must name the commit to diff from")
 }
 
 /// Splits changed paths into the rule files directly in `folder` (the rules
@@ -2186,6 +2202,19 @@ mod tests {
         assert_eq!(pushed_branch_variable(Ci::Azure), "BUILD_SOURCEBRANCH");
         // Bare `CI=true` is read as GitLab.
         assert_eq!(pushed_branch(Ci::GitLab, &lookup(&[("CI", "true")])), None);
+    }
+
+    #[test]
+    fn only_a_ci_platform_names_a_checkout_and_a_trigger_variable() {
+        let names = |ci| ci_variables(ci).map(|v| (v.checkout, v.trigger));
+        assert_eq!(names(Ci::GitHub), Some(("GITHUB_WORKSPACE", "GITHUB_SHA")));
+        assert_eq!(names(Ci::GitLab), Some(("CI_PROJECT_DIR", "CI_COMMIT_SHA")));
+        assert_eq!(
+            names(Ci::Azure),
+            Some(("BUILD_SOURCESDIRECTORY", "BUILD_SOURCEVERSION"))
+        );
+        // Outside CI there is no variable, not an empty name.
+        assert_eq!(names(Ci::Local), None);
     }
 
     #[test]
