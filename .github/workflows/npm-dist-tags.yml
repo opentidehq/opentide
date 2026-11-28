@@ -76,18 +76,21 @@ jobs:
             exit 1
           fi
           mapfile -t packages < <(python3 scripts/engine/release.py npm-names)
+          # Check every package before moving any: a package whose `latest` is
+          # not the release must not leave the others' `next` already moved.
           for name in "${packages[@]}"; do
-            tags="$(npm view "${name}" dist-tags --json)"
-            latest="$(node -p 'JSON.parse(process.argv[1]).latest' "${tags}")"
-            next="$(node -p 'JSON.parse(process.argv[1]).next' "${tags}")"
+            latest="$(npm view "${name}" dist-tags.latest)"
             if [ "${latest}" != "${VERSION}" ]; then
-              echo "::error::${name}: latest is ${latest}, not ${VERSION}; next follows a published release only." >&2
+              echo "::error::${name}: latest is ${latest:-unset}, not ${VERSION}; next follows a published release only." >&2
               exit 1
             fi
+          done
+          for name in "${packages[@]}"; do
+            next="$(npm view "${name}" dist-tags.next)"
             if [ "${next}" = "${VERSION}" ]; then
               echo "${name}: next is already ${VERSION}"
               continue
             fi
             npm dist-tag add "${name}@${VERSION}" next
-            echo "${name}: next ${next} -> ${VERSION}"
+            echo "${name}: next ${next:-unset} -> ${VERSION}"
           done
