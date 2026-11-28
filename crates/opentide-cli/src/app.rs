@@ -470,7 +470,7 @@ impl Run<'_> {
                     command: String::new(),
                     status: Status::Completed,
                     message: format!("Installed {shell} completion in {shown}"),
-                    data: Object::from_iter([
+                    data: Object::from([
                         ("shell".into(), crate::json::Json::Str(shell.to_owned())),
                         (
                             "path".into(),

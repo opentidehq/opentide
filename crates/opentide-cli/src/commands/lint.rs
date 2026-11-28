@@ -179,7 +179,7 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
         ws.lint(Some(&OsFs), &options)
     };
     // `payload()`'s order, with each finding's keys in its own order.
-    let data: Vec<(String, Json)> = lint
+    let data: Object = lint
         .payload()
         .into_iter()
         .map(|(key, value)| {

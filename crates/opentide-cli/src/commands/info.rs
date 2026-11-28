@@ -166,7 +166,7 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
     let load_errors = index.load_errors.len() + index.duplicates.len();
     // Without a section the document is the overview; with one it holds
     // only that section's keys (`info vocab --json | jq .vocabularies`).
-    let overview: Vec<(String, Json)> = vec![
+    let overview = Object::from([
         ("version".into(), Json::str(cx.version)),
         ("repo".into(), Json::str(&repo)),
         (
@@ -179,19 +179,19 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
         ),
         ("parse_error_count".into(), count_json(load_errors)),
         ("platforms".into(), json(&platforms)),
-    ];
-    let mut out: Vec<(String, Json)> = Vec::new();
-    let mut summary: Vec<(String, Json)> = vec![
+    ]);
+    let mut out = Object::new();
+    let mut summary = Object::from([
         ("rules".into(), count_json(count("rule"))),
         ("threats".into(), count_json(count("threat"))),
         ("objectives".into(), count_json(count("objective"))),
         ("load_errors".into(), count_json(load_errors)),
-    ];
+    ]);
     let mut body: Vec<Block> = Vec::new();
     match section {
         Some(family @ ("rules" | "threats" | "objectives")) => {
             let uuids = uuids(index, singular(family));
-            out.push((family.to_owned(), json(&uuids)));
+            out.insert(family.to_owned(), json(&uuids));
             body.push(if uuids.is_empty() {
                 Block::Lines(vec![Text::plain(&format!("No {family} found"))])
             } else {
@@ -200,16 +200,13 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
         }
         Some("catalog") => {
             let catalogue = catalogue::build(&workspace);
-            out.push(("objects".into(), json(&catalogue.objects)));
-            out.push(("edges".into(), json(&catalogue.edges)));
-            out.push(("signals".into(), json(&catalogue.signals)));
-            out.push(("attack".into(), json(&catalogue.attack)));
+            out.insert("objects".into(), json(&catalogue.objects));
+            out.insert("edges".into(), json(&catalogue.edges));
+            out.insert("signals".into(), json(&catalogue.signals));
+            out.insert("attack".into(), json(&catalogue.attack));
             if let Json::Object(members) = json(&catalogue.summary) {
                 for (key, value) in members {
-                    match summary.iter_mut().find(|(k, _)| *k == key) {
-                        Some(slot) => slot.1 = value,
-                        None => summary.push((key, value)),
-                    }
+                    summary.insert(key, value);
                 }
             }
             if cx.text {
@@ -220,7 +217,7 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
         Some("coverage") => {
             let technique = args.technique.clone().unwrap_or_default();
             let found = match_technique(&technique, &rule_technique_index(index));
-            out.push(("coverage".into(), json(&found)));
+            out.insert("coverage".into(), json(&found));
             let split = if found.count > 0 {
                 format!(
                     " ({} own, {} inherited)",
@@ -246,7 +243,7 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
                 None => {
                     let rows: Vec<data::VocabOverview> =
                         files.iter().map(|v| data::overview(v)).collect();
-                    out.push(("vocabularies".into(), json(&rows)));
+                    out.insert("vocabularies".into(), json(&rows));
                     body.push(Block::Table(vocab_list_table(&rows)));
                 }
                 Some(name) => {
@@ -265,7 +262,7 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
                         );
                     };
                     let detail = data::detail(vocabulary);
-                    out.push(("vocabulary".into(), json(&detail)));
+                    out.insert("vocabulary".into(), json(&detail));
                     body.extend(vocab_detail_tables(&detail).into_iter().map(Block::Table));
                 }
             }

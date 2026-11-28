@@ -130,7 +130,7 @@ fn rounded(seconds: f64) -> f64 {
 
 /// `Generated 3 files in 0.1s · exports`, the steps and the summary
 /// (`generation_result`), after the command's own keys.
-fn generated(command: &str, leading: Vec<(String, Json)>, steps: Vec<Step>) -> Report {
+fn generated(command: &str, leading: Object, steps: Vec<Step>) -> Report {
     let written: usize = steps
         .iter()
         .filter(|step| step.unit == "file")
@@ -161,13 +161,13 @@ fn generated(command: &str, leading: Vec<(String, Json)>, steps: Vec<Step>) -> R
         )
     };
     let mut data = leading;
-    data.push((
+    data.insert(
         "steps".into(),
         Json::Array(steps.iter().map(step_json).collect()),
-    ));
+    );
     let mut report = Report::completed(command, data);
     report.outcome.message = message;
-    report.outcome.summary = Object::from_iter([
+    report.outcome.summary = Object::from([
         ("files".into(), count_json(written)),
         ("removed".into(), count_json(removed)),
         ("phases".into(), count_json(steps.len())),
@@ -187,7 +187,7 @@ pub(crate) fn phase_failed(
     command: &str,
     phase: &str,
     detail: &str,
-    extra: Vec<(String, Json)>,
+    extra: Object,
     steps: Vec<Step>,
 ) -> Report {
     let message = format!("{phase}: {detail}");
@@ -196,9 +196,9 @@ pub(crate) fn phase_failed(
         ExitCode::Failure,
         Failure::new(COMMAND_FAILED, &message),
     );
-    let mut data = vec![("phase".to_owned(), Json::str(phase))];
+    let mut data = Object::from([("phase".to_owned(), Json::str(phase))]);
     data.extend(extra);
-    report.outcome.data = Object::from_iter(data);
+    report.outcome.data = data;
     report.steps = steps;
     report
 }
@@ -220,7 +220,7 @@ fn workspace_in_step(
     command: &str,
     step: &str,
     phase: &str,
-    extra: Vec<(String, Json)>,
+    extra: Object,
     cx: &Context<'_>,
 ) -> Result<Workspace, Box<Report>> {
     if let Some(refused) = super::no_workspace(command, cx.repo, cx.env, cx.cwd) {
@@ -374,7 +374,7 @@ pub fn exports(target: Option<Target>, cx: &Context<'_>) -> Report {
         None => {
             let leading = match target {
                 Some(_) => target_key(target).into_iter().collect(),
-                None => vec![("phase".to_owned(), Json::str("exports"))],
+                None => Object::from([("phase".to_owned(), Json::str("exports"))]),
             };
             generated(&command, leading, vec![phase.step])
         }
@@ -469,7 +469,7 @@ impl From<&crate::tree::GenerateExportsArgs> for Option<Target> {
 /// What a docs run did, for its result.
 #[derive(Default)]
 struct DocsRun {
-    data: Vec<(String, Json)>,
+    data: Object,
     message: Option<String>,
     /// `--changed` outside a checkout: the run's own failure.
     failure: Option<String>,
@@ -589,7 +589,7 @@ pub fn docs(args: &DocsArgs, cx: &Context<'_>) -> Report {
             &FLAVORS,
         );
     }
-    let workspace = match workspace_in_step(&command, "docs", "docs", Vec::new(), cx) {
+    let workspace = match workspace_in_step(&command, "docs", "docs", Object::new(), cx) {
         Ok(workspace) => workspace,
         Err(report) => return *report,
     };
@@ -602,7 +602,7 @@ pub fn docs(args: &DocsArgs, cx: &Context<'_>) -> Report {
     let mut warnings: Vec<String> = nested_warning(&workspace).into_iter().collect();
     warnings.append(&mut run.warnings);
     if let Some(detail) = phase.error {
-        let mut report = phase_failed(&command, "docs", &detail, Vec::new(), vec![phase.step]);
+        let mut report = phase_failed(&command, "docs", &detail, Object::new(), vec![phase.step]);
         report.warnings = warnings;
         return report;
     }
@@ -614,7 +614,7 @@ pub fn docs(args: &DocsArgs, cx: &Context<'_>) -> Report {
             ExitCode::Failure,
             Failure::new(COMMAND_FAILED, &message),
         );
-        report.outcome.data = Object::from_iter(run.data);
+        report.outcome.data = run.data;
         report.steps = vec![step];
         report.warnings = warnings;
         return report;
@@ -713,7 +713,7 @@ fn docs_phase(
                 &index_pages(&pages_of).map_err(|error| error.detail)?,
                 &[],
             )?;
-            run.data = vec![("output".into(), output_text)];
+            run.data = Object::from([("output".into(), output_text)]);
             run.message = Some("Index pages written".into());
         }
         Some(DocsScope::Objects(_)) if args.scope.is_none() && flagged.len() > 1 => {
@@ -734,10 +734,10 @@ fn docs_phase(
                 "Documentation scopes {} completed",
                 names.join(", ")
             ));
-            run.data = vec![
+            run.data = Object::from([
                 ("scopes".into(), strings_json(&names)),
                 ("counts".into(), counts_json(counts)),
-            ];
+            ]);
         }
         Some(DocsScope::Objects(scope)) => {
             let (outputs, counts) =
@@ -745,10 +745,10 @@ fn docs_phase(
             let stale = stale_pages(&pages_of, &[scope]);
             publish(changes, &outputs, &stale)?;
             run.message = Some(format!("Documentation scope {} completed", scope.folder()));
-            run.data = vec![
+            run.data = Object::from([
                 ("counts".into(), counts_json(counts)),
                 ("removed".into(), count_json(stale.len())),
-            ];
+            ]);
         }
         None => {
             let (outputs, counts) =
@@ -761,11 +761,11 @@ fn docs_phase(
                 &[],
             )?;
             run.message = Some("Full documentation pipeline completed".into());
-            run.data = vec![
+            run.data = Object::from([
                 ("counts".into(), counts_json(counts)),
                 ("removed".into(), count_json(stale.len())),
                 ("output".into(), output_text),
-            ];
+            ]);
         }
     }
     Ok(())
@@ -793,24 +793,24 @@ fn changed_phase(
             run.failure = Some(format!(
                 "--changed could not read the git baseline: {detail}"
             ));
-            run.data = vec![
+            run.data = Object::from([
                 ("changed_paths".into(), Json::Array(Vec::new())),
                 ("changed_uuids".into(), Json::Array(Vec::new())),
                 ("counts".into(), counts_json(Counts::default())),
                 ("output".into(), output_text),
-            ];
+            ]);
             return Ok(());
         }
     };
     let changes = changed::changes(pages_of.catalog, &files);
     if changes.paths.is_empty() {
         run.message = Some("No changed object documentation detected".into());
-        run.data = vec![
+        run.data = Object::from([
             ("changed_paths".into(), Json::Array(Vec::new())),
             ("changed_uuids".into(), Json::Array(Vec::new())),
             ("counts".into(), counts_json(Counts::default())),
             ("output".into(), output_text),
-        ];
+        ]);
         return Ok(());
     }
     let (outputs, counts) =
@@ -835,7 +835,7 @@ fn changed_phase(
     scopes.sort();
     scopes.dedup();
     run.message = Some("Changed documentation pipeline completed".into());
-    run.data = vec![
+    run.data = Object::from([
         ("counts".into(), counts_json(counts)),
         ("removed".into(), count_json(stale.len())),
         ("changed_paths".into(), strings_json(&changes.paths)),
@@ -843,7 +843,7 @@ fn changed_phase(
         ("targets".into(), strings_json(&changes.targets)),
         ("scopes".into(), strings_json(&scopes)),
         ("output".into(), output_text),
-    ];
+    ]);
     Ok(())
 }
 
@@ -1014,7 +1014,7 @@ pub fn explorer(options: &ExplorerOptions, cx: &Context<'_>) -> Report {
             &explorer::TLP_CHOICES,
         );
     }
-    let workspace = match workspace_in_step(COMMAND, "explorer", "explorer", Vec::new(), cx) {
+    let workspace = match workspace_in_step(COMMAND, "explorer", "explorer", Object::new(), cx) {
         Ok(workspace) => workspace,
         Err(report) => return *report,
     };
@@ -1036,10 +1036,16 @@ pub fn explorer(options: &ExplorerOptions, cx: &Context<'_>) -> Report {
         with_logged(raised, &workspace)
     });
     let mut report = match phase.error {
-        Some(detail) => phase_failed(COMMAND, "explorer", &detail, Vec::new(), vec![phase.step]),
+        Some(detail) => phase_failed(
+            COMMAND,
+            "explorer",
+            &detail,
+            Object::new(),
+            vec![phase.step],
+        ),
         None => generated(
             COMMAND,
-            vec![("phase".to_owned(), Json::str("explorer"))],
+            Object::from([("phase".to_owned(), Json::str("explorer"))]),
             vec![phase.step],
         ),
     };
@@ -1182,7 +1188,7 @@ fn source_path(root: &Path, path: &Path) -> String {
 /// change set touches, under `.opentide/inflight/`.
 pub fn inflight_shards(cx: &Context<'_>) -> Report {
     const COMMAND: &str = "generate inflight";
-    let workspace = match workspace_in_step(COMMAND, "inflight", "inflight", Vec::new(), cx) {
+    let workspace = match workspace_in_step(COMMAND, "inflight", "inflight", Object::new(), cx) {
         Ok(workspace) => workspace,
         Err(report) => return *report,
     };
@@ -1257,10 +1263,16 @@ pub fn inflight_shards(cx: &Context<'_>) -> Report {
         write(changes, &shards.into_values().collect::<Vec<_>>())
     });
     match phase.error {
-        Some(detail) => phase_failed(COMMAND, "inflight", &detail, Vec::new(), vec![phase.step]),
+        Some(detail) => phase_failed(
+            COMMAND,
+            "inflight",
+            &detail,
+            Object::new(),
+            vec![phase.step],
+        ),
         None => generated(
             COMMAND,
-            vec![("phase".to_owned(), Json::str("inflight"))],
+            Object::from([("phase".to_owned(), Json::str("inflight"))]),
             vec![phase.step],
         ),
     }
@@ -1270,11 +1282,16 @@ pub fn inflight_shards(cx: &Context<'_>) -> Report {
 /// branch has caught up with.
 pub fn inflight_prune(cx: &Context<'_>) -> Report {
     const COMMAND: &str = "generate inflight prune";
-    let workspace =
-        match workspace_in_step(COMMAND, "inflight prune", "inflight-prune", Vec::new(), cx) {
-            Ok(workspace) => workspace,
-            Err(report) => return *report,
-        };
+    let workspace = match workspace_in_step(
+        COMMAND,
+        "inflight prune",
+        "inflight-prune",
+        Object::new(),
+        cx,
+    ) {
+        Ok(workspace) => workspace,
+        Err(report) => return *report,
+    };
     let root = workspace.root().to_path_buf();
     let dir = root.join(".opentide").join("inflight");
     let phase = run_phase("inflight prune", cx.cwd, &root, |changes| {
@@ -1291,12 +1308,12 @@ pub fn inflight_prune(cx: &Context<'_>) -> Report {
             COMMAND,
             "inflight-prune",
             &detail,
-            Vec::new(),
+            Object::new(),
             vec![phase.step],
         ),
         None => generated(
             COMMAND,
-            vec![("phase".to_owned(), Json::str("inflight-prune"))],
+            Object::from([("phase".to_owned(), Json::str("inflight-prune"))]),
             vec![phase.step],
         ),
     }
@@ -1445,13 +1462,13 @@ pub const PIPELINE: [&str; 6] = [
 fn pipeline(cx: &Context<'_>, version: &str) -> Report {
     let command = "generate";
     let leading = || {
-        vec![(
+        Object::from([(
             "phases".to_owned(),
             Json::Array(PIPELINE.iter().map(|phase| Json::str(*phase)).collect()),
-        )]
+        )])
     };
     // The configuration is read inside the first phase.
-    let workspace = match workspace_in_step(command, "docs", "docs", Vec::new(), cx) {
+    let workspace = match workspace_in_step(command, "docs", "docs", Object::new(), cx) {
         Ok(workspace) => workspace,
         Err(report) => return *report,
     };
@@ -1465,7 +1482,7 @@ fn pipeline(cx: &Context<'_>, version: &str) -> Report {
     steps.push(docs.step);
     let warnings = run.warnings;
     if let Some(detail) = docs.error {
-        let mut report = phase_failed(command, "docs", &detail, Vec::new(), steps);
+        let mut report = phase_failed(command, "docs", &detail, Object::new(), steps);
         report.warnings = warnings;
         return report;
     }
@@ -1477,7 +1494,7 @@ fn pipeline(cx: &Context<'_>, version: &str) -> Report {
     });
     steps.push(exports.step);
     if let Some(detail) = exports.error {
-        return phase_failed(command, "exports", &detail, Vec::new(), steps);
+        return phase_failed(command, "exports", &detail, Object::new(), steps);
     }
     let named: Vec<String> = PIPELINE[2..]
         .iter()
@@ -1486,7 +1503,7 @@ fn pipeline(cx: &Context<'_>, version: &str) -> Report {
     let run = run_phases(&named, &workspace, cx.cwd, version, true);
     steps.extend(run.steps);
     if let Some((phase, detail)) = run.failed {
-        return phase_failed(command, &phase, &detail, Vec::new(), steps);
+        return phase_failed(command, &phase, &detail, Object::new(), steps);
     }
     let mut report = generated(command, leading(), steps);
     report.warnings = warnings;
@@ -1551,11 +1568,11 @@ fn named_phases(names: &[String], cx: &Context<'_>, version: &str) -> Report {
     };
     let run = run_phases(names, &workspace, cx.cwd, version, true);
     if let Some((phase, detail)) = run.failed {
-        return phase_failed(command, &phase, &detail, Vec::new(), run.steps);
+        return phase_failed(command, &phase, &detail, Object::new(), run.steps);
     }
     generated(
         command,
-        vec![("phases".to_owned(), strings_json(names))],
+        Object::from([("phases".to_owned(), strings_json(names))]),
         run.steps,
     )
 }
@@ -1739,7 +1756,7 @@ mod tests {
         step.status = StepStatus::Ok;
         step.count = Some(3);
         step.seconds = 0.12345;
-        let report = generated("generate exports", vec![], vec![step]);
+        let report = generated("generate exports", Object::new(), vec![step]);
         assert!(
             report
                 .outcome
@@ -1755,7 +1772,7 @@ mod tests {
         let mut other = Step::new("x");
         other.status = StepStatus::Ok;
         other.count = Some(0);
-        let report = generated("generate", vec![], vec![removed, other]);
+        let report = generated("generate", Object::new(), vec![removed, other]);
         assert!(report.outcome.message.starts_with("Removed 2 files in "));
         assert!(report.outcome.message.ends_with(" · 2 phases"));
     }
@@ -1780,7 +1797,7 @@ mod tests {
         assert_eq!(phase.step.unit, "file removed");
         assert_eq!(phase.step.detail, "removed");
         assert_eq!(phase.step.place.as_deref(), Some("docs/"));
-        let report = generated("generate", vec![], vec![phase.step]);
+        let report = generated("generate", Object::new(), vec![phase.step]);
         assert!(report.outcome.message.starts_with("Removed 2 files in "));
 
         std::fs::write(folder.join("c.md"), "x").unwrap();
@@ -1824,7 +1841,7 @@ mod tests {
         assert_eq!(phase.step.count, Some(3));
         assert_eq!(phase.step.unit, "file");
         assert_eq!(phase.step.place.as_deref(), Some("exports/"));
-        let report = generated("generate exports", vec![], vec![phase.step]);
+        let report = generated("generate exports", Object::new(), vec![phase.step]);
         assert!(report.outcome.message.starts_with("Generated 3 files in "));
     }
 
@@ -1873,7 +1890,7 @@ mod tests {
             "generate exports objects",
             "exports",
             "missing key `version` while rendering x",
-            vec![("target".into(), Json::str("objects"))],
+            Object::from([("target".into(), Json::str("objects"))]),
             vec![],
         );
         assert_eq!(report.outcome.exit_code, ExitCode::Failure);

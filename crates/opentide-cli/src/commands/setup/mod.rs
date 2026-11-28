@@ -1303,7 +1303,7 @@ fn plan(root: &Path, run: &Run) -> Report {
     report.outcome.message = format!(
         "Plan: {writes} {noun} to write ({created} new, {merged} changed) · nothing written"
     );
-    report.outcome.summary = Object::from_iter([
+    report.outcome.summary = Object::from([
         ("create".into(), Json::Int(created)),
         ("merge".into(), Json::Int(merged)),
         ("skip".into(), Json::Int(skipped)),

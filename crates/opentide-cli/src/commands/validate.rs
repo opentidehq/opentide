@@ -499,14 +499,14 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
     } else {
         "Validation passed".to_owned()
     };
-    let mut data: Vec<(String, Json)> = vec![
+    let mut data = Object::from([
         ("checks".into(), checks_json(validation)),
         ("report".into(), super::json(&validation.report)),
-    ];
+    ]);
     if let Some(name) = check_name {
-        data.push(("check".into(), Json::str(name)));
+        data.insert("check".into(), Json::str(name));
     }
-    data.push(("workspace".into(), Json::str(root.to_string_lossy())));
+    data.insert("workspace".into(), Json::str(root.to_string_lossy()));
     let mut warnings = Vec::new();
     if validation.warned {
         warnings.push("Validation reported warnings".to_owned());
@@ -572,11 +572,11 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
     if let Some(fix) = &fix_run {
         let changes = Json::Array(fix.changes.iter().map(change_json).collect());
         if args.dry_run {
-            data.push(("would_fix".into(), changes));
-            data.push((
+            data.insert("would_fix".into(), changes);
+            data.insert(
                 "diff".into(),
                 Json::str(fix.diff.clone().unwrap_or_default()),
-            ));
+            );
             if !fix.changes.is_empty() {
                 next = vec![NextAction::new(
                     rerun_fix.clone(),
@@ -591,7 +591,7 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
                 unwritten_lines.push(warning);
             }
             summary_json.insert("fixed".into(), Json::from(fix.changes.len()));
-            data.push(("fixed".into(), changes));
+            data.insert("fixed".into(), changes);
         }
         if !fix.changes.is_empty() || fix.unwritten_fixes > 0 || failed {
             fix_phrase_text = Some(fix_phrase(

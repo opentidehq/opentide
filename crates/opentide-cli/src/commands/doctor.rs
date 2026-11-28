@@ -2022,7 +2022,7 @@ fn report(checks: &[Check], text: bool) -> Report {
     let mut report = Report::completed(COMMAND, data);
     report.outcome.status = status;
     report.outcome.message.clone_from(&message);
-    report.outcome.summary = Object::from_iter([
+    report.outcome.summary = Object::from([
         ("checks".to_owned(), int(checks.len())),
         ("passed".to_owned(), int(passed)),
         ("warnings".to_owned(), int(warned)),

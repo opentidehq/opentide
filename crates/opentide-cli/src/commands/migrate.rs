@@ -382,7 +382,7 @@ fn report(migration: &Migration, args: &Args) -> Report {
     };
     let files = super::counted(changed.len(), "file");
     report.outcome.message = format!("{verb} {files} · {} scanned", migration.scanned);
-    report.outcome.summary = Object::from_iter([
+    report.outcome.summary = Object::from([
         ("files".to_owned(), int(changed.len())),
         ("scanned".to_owned(), int(migration.scanned)),
     ]);

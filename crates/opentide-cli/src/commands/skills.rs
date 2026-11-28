@@ -480,7 +480,7 @@ pub fn discover(args: &DiscoverArgs, network: Network<'_>, width: usize) -> Repo
             ("count".into(), count(kept.len())),
         ],
     );
-    report.outcome.summary = Object::from_iter([
+    report.outcome.summary = Object::from([
         ("skills".into(), count(kept.len())),
         ("installed".into(), count(installed_count)),
     ]);
@@ -549,7 +549,7 @@ pub fn show(name: &str, repo: &Path, refresh: bool, network: Network<'_>, json: 
         let mut report = Report::error(command, message.clone());
         if json {
             // The document carries the catalogue's keys after the error.
-            report.outcome.data = Object::from_iter([
+            report.outcome.data = Object::from([
                 ("error".into(), Json::str(&message)),
                 ("source".into(), Json::str(&source)),
                 ("manifest_source".into(), Json::str("remote")),

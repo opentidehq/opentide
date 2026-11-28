@@ -251,7 +251,7 @@ pub fn report(cwd: &Path, env: &Env, state_commit: &str) -> Report {
                 ],
             );
             let count = |count: usize| Json::Int(i64::try_from(count).unwrap_or(i64::MAX));
-            report.outcome.summary = Object::from_iter([
+            report.outcome.summary = Object::from([
                 ("written".to_owned(), count(result.written.len())),
                 ("removed".to_owned(), count(result.removed.len())),
                 ("conflicts".to_owned(), count(result.conflicts.len())),
