@@ -8,6 +8,7 @@
 #![cfg(feature = "terminal")]
 #![cfg(unix)]
 #![expect(
+    clippy::string_slice,
     clippy::unwrap_used,
     reason = "test helpers: a terminal that does not open is a failure"
 )]

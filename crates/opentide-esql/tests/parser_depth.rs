@@ -4,6 +4,11 @@
 //! (1,000 nesting levels, a 10,000-term chain) must parse without a
 //! diagnostic, and deeper nesting is one diagnostic, never an overflow.
 
+#![expect(
+    clippy::string_slice,
+    reason = "a test: a slice off a char boundary panics, and a panic is a failed test"
+)]
+
 use opentide_esql::parser;
 
 /// The stack the depth checks run on: the browser WASM module's 1 MB.

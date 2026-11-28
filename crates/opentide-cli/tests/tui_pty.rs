@@ -7,6 +7,7 @@
 #![cfg(feature = "terminal")]
 #![cfg(unix)]
 #![expect(
+    clippy::string_slice,
     clippy::unwrap_used,
     clippy::expect_used,
     reason = "test helpers: every workspace here is written to a fresh folder"

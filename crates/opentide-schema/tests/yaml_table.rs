@@ -13,6 +13,7 @@
 //! rewrites it after an intended change.
 
 #![expect(
+    clippy::string_slice,
     clippy::unwrap_used,
     reason = "helpers of the tests: a fixture that does not parse fails them"
 )]

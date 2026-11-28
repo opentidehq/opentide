@@ -6,6 +6,7 @@
 
 #![cfg(unix)]
 #![expect(
+    clippy::string_slice,
     clippy::unwrap_used,
     reason = "a test helper: a broken fixture is a failure"
 )]

@@ -3,6 +3,7 @@
 //! only in a workspace with Splunk log sources.
 
 #![expect(
+    clippy::string_slice,
     clippy::unwrap_used,
     reason = "test helpers outside #[test] functions: a panic fails the test"
 )]

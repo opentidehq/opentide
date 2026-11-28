@@ -6,6 +6,11 @@
 //! (`OPENTIDE_DIFF_SEEDS` picks the seeds); a sample of one seed by default,
 //! well under CI's limit.
 
+#![expect(
+    clippy::string_slice,
+    reason = "a test: a slice off a char boundary panics, and a panic is a failed test"
+)]
+
 use opentide_yaral::parse_facts::{lex_spans, parse_is_lossless};
 use std::path::{Path, PathBuf};
 

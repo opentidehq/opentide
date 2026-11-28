@@ -4,6 +4,7 @@
 //! writes and the way it ends checked.
 
 #![expect(
+    clippy::string_slice,
     clippy::unwrap_used,
     clippy::expect_used,
     reason = "a test: a session that does not go as scripted is a failure"

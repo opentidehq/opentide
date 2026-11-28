@@ -4,6 +4,7 @@
 //! sends, for the six platforms whose body is built from the tenant), and
 //! the dry run's payload entry, byte for byte.
 #![expect(
+    clippy::string_slice,
     clippy::unwrap_used,
     reason = "test helpers: the corpus and the record are in the repository"
 )]

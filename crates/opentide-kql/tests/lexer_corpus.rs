@@ -1,5 +1,10 @@
 //! The lexer over every `.kql` of `crates/testdata`: lossless.
 
+#![expect(
+    clippy::string_slice,
+    reason = "a test: a slice off a char boundary panics, and a panic is a failed test"
+)]
+
 use opentide_kql::inspect::lex_spans;
 mod common;
 use common::corpus;

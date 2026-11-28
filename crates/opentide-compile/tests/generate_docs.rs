@@ -20,7 +20,11 @@
 //! `tests/docs_0_28/<flavor>`.
 
 #![cfg(unix)]
-#![expect(clippy::unwrap_used, reason = "a test: a broken fixture is a failure")]
+#![expect(
+    clippy::string_slice,
+    clippy::unwrap_used,
+    reason = "a test: a broken fixture is a failure"
+)]
 
 #[path = "common/golden.rs"]
 mod golden;

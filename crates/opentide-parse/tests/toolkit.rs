@@ -2,6 +2,7 @@
 //! words, lexed with logos.
 
 #![expect(
+    clippy::string_slice,
     clippy::unwrap_used,
     reason = "test helpers outside #[test] functions: a panic fails the test"
 )]

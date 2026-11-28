@@ -6,6 +6,7 @@
 //! sat on its first character.
 
 #![expect(
+    clippy::string_slice,
     clippy::unwrap_used,
     reason = "test helpers outside #[test] functions: a panic fails the test"
 )]

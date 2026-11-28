@@ -6,6 +6,11 @@
 //! the engine reports an error on a query Kibana accepts, and prints how
 //! many rejected queries it misses. Without the variable it does nothing.
 
+#![expect(
+    clippy::string_slice,
+    reason = "a test: a slice off a char boundary panics, and a panic is a failed test"
+)]
+
 use opentide_core::Severity;
 
 /// A JSON string literal (`"..."` with `\"`, `\\`, `\n`, `\t`, `\r`, `\uXXXX`).

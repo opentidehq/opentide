@@ -9,6 +9,7 @@
 //! where each one is; this test says which ones a change forgot.
 
 #![expect(
+    clippy::string_slice,
     clippy::expect_used,
     reason = "test helpers: a panic naming the missing file or table is how the test fails"
 )]

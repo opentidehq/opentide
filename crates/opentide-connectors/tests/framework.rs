@@ -3,6 +3,7 @@
 //! redaction, the fan-out, cancellation and progress.
 
 #![expect(
+    clippy::string_slice,
     clippy::unwrap_used,
     clippy::expect_used,
     reason = "a test: a failed set-up is a failure"

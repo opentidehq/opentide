@@ -1,6 +1,11 @@
 //! SPL forms from deployed detections that the grammar must accept, and the
 //! faults next to them it must still reject (opentidehq/language-server#117).
 
+#![expect(
+    clippy::string_slice,
+    reason = "a test: a slice off a char boundary panics, and a panic is a failed test"
+)]
+
 use opentide_core::codes;
 use opentide_spl::analyze;
 

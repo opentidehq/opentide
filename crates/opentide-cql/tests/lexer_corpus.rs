@@ -1,6 +1,11 @@
 //! The lexer over every CQL file of the corpora: it tiles them, and a valid one has no
 //! error token.
 
+#![expect(
+    clippy::string_slice,
+    reason = "a test: a slice off a char boundary panics, and a panic is a failed test"
+)]
+
 use opentide_cql::{lexer, syntax};
 
 use std::path::{Path, PathBuf};

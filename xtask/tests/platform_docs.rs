@@ -8,6 +8,7 @@
 //! column that disagrees.
 
 #![expect(
+    clippy::string_slice,
     clippy::expect_used,
     reason = "test helpers: a panic naming the missing page or section is how the test fails"
 )]

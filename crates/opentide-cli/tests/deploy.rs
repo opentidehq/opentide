@@ -4,6 +4,7 @@
 //! warnings, the closing note, the JSON document's keys and their order,
 //! the progress events, the CI summary, and the refusals.
 #![expect(
+    clippy::string_slice,
     clippy::unwrap_used,
     reason = "test helpers: every workspace here is written to a fresh folder"
 )]

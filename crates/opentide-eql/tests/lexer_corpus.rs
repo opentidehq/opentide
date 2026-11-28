@@ -2,6 +2,11 @@
 //! cases of each token's regex: the five string forms, numbers, indexes, quoted names and the
 //! nested block comments.
 
+#![expect(
+    clippy::string_slice,
+    reason = "a test: a slice off a char boundary panics, and a panic is a failed test"
+)]
+
 use opentide_eql::{lexer, lexical, syntax};
 
 use std::path::{Path, PathBuf};

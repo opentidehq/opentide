@@ -12,10 +12,6 @@
     missing_docs,
     reason = "imported from language-server with public items undocumented: crates/AGENTS.md, Lints"
 )]
-// Slicing a `str` by byte index panics off a char boundary, and this crate
-// analyses user documents: every slice is checked or says why it is safe
-// (#1946; the lint moves to `[workspace.lints]` once every crate is clean).
-#![warn(clippy::string_slice)]
 
 pub use opentide_core::datasets::{
     DatasetKind, Declaration, DeclaredColumn, DeclaredDatasets, DeclaredSource,

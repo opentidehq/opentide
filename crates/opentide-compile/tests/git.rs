@@ -1,6 +1,7 @@
 //! The git baseline on repositories the `git` program builds: each CI diff
 //! source, and the failures a run reports.
 #![expect(
+    clippy::string_slice,
     clippy::unwrap_used,
     clippy::expect_used,
     reason = "test helpers: git builds every repository here"

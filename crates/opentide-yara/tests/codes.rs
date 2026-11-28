@@ -3,6 +3,7 @@
 //! check that starts firing elsewhere fails here too.
 
 #![expect(
+    clippy::string_slice,
     clippy::cast_possible_truncation,
     reason = "positions and counts in test documents of a few lines"
 )]

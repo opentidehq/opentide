@@ -2,6 +2,11 @@
 //! word of the table lexes as one name, every punctuation token as one token
 //! of its own.
 
+#![expect(
+    clippy::string_slice,
+    reason = "a test: a slice off a char boundary panics, and a panic is a failed test"
+)]
+
 use opentide_core::LanguageId;
 use opentide_spl::syntax::{SyntaxKind, lex};
 

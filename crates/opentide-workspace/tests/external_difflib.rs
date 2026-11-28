@@ -16,6 +16,7 @@
 //! (`uv sync --group dev`). The fast nextest profile leaves `external_*`
 //! binaries out.
 #![expect(
+    clippy::string_slice,
     clippy::expect_used,
     clippy::unwrap_used,
     reason = "a test: a failure is the report"

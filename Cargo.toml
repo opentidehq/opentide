@@ -283,6 +283,13 @@ undocumented_unsafe_blocks = "deny"
 # One unsafe operation per block, so each SAFETY comment answers for one
 # operation (docs/internal/unsafe.md lists every block).
 multiple_unsafe_ops_per_block = "deny"
+# Slicing a `str` by byte index panics off a char boundary, and the engines
+# read user documents and queries: a slice reads through `get`,
+# `split_once`, a crate's debug-asserting `cut`, or says why its index is a
+# char boundary in a narrow `#[expect(clippy::string_slice, reason = "...")]`
+# (#1946). Integration tests (`tests/`) state the lint in their file-level
+# `#![expect]` with unwrap and expect: a panic there is a failed test.
+string_slice = "warn"
 # The pedantic lints the workspace does not follow, each with its reason; the
 # rest of `pedantic` is enforced. The engine crates are published for the
 # facade's sake (plan D-5): their signatures do not change to satisfy a style

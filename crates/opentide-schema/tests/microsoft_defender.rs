@@ -6,6 +6,7 @@
 //! modelled with a reason the snapshot agrees with, and the bundled template
 //! carries every key and validates once filled in.
 #![expect(
+    clippy::string_slice,
     clippy::unwrap_used,
     reason = "test helpers outside #[test]: a fixture that cannot be read fails the test"
 )]

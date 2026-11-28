@@ -7,6 +7,7 @@
 // The terminal UI is the `terminal` feature (off in the WASI build).
 #![cfg(feature = "terminal")]
 #![expect(
+    clippy::string_slice,
     clippy::unwrap_used,
     reason = "test helpers: every workspace here is written to a fresh folder"
 )]

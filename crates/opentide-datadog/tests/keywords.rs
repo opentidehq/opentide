@@ -5,6 +5,7 @@
 //! TextMate grammar's `tm_extras:logical` rule, as Lucene's are.
 
 #![expect(
+    clippy::string_slice,
     clippy::expect_used,
     reason = "test helpers outside #[test] functions: a panic fails the test"
 )]

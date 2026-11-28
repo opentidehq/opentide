@@ -3,6 +3,11 @@
 //! the table's tokens (and words, `or`/`and`/`not`, fields and values) is
 //! highlighted as an operator, a bracket or a keyword.
 
+#![expect(
+    clippy::string_slice,
+    reason = "a test: a slice off a char boundary panics, and a panic is a failed test"
+)]
+
 use opentide_core::LanguageId;
 use opentide_highlight::keywords;
 

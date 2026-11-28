@@ -4,6 +4,7 @@
 //! (`testdata/conformance/specifications-yara/`).
 
 #![expect(
+    clippy::string_slice,
     clippy::cast_possible_truncation,
     reason = "a char is one or two UTF-16 units"
 )]

@@ -2,6 +2,7 @@
 //! sources (#113).
 
 #![expect(
+    clippy::string_slice,
     clippy::expect_used,
     clippy::unwrap_used,
     reason = "test helpers outside #[test] functions: a panic fails the test"

@@ -4,7 +4,11 @@
 //! signature forms report what opentide 0.28.1 reports, finding for finding:
 //! the code, the file, the field path and the line.
 
-#![expect(clippy::unwrap_used, reason = "a test: a failed set-up is a failure")]
+#![expect(
+    clippy::string_slice,
+    clippy::unwrap_used,
+    reason = "a test: a failed set-up is a failure"
+)]
 
 use std::collections::BTreeSet;
 use std::path::Path;
