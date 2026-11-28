@@ -111,6 +111,32 @@ impl opentide_highlight::QueryEngine for Engine {
             tokens: r.tokens,
         }
     }
+
+    #[expect(
+        clippy::expect_used,
+        reason = "loads the HighlightSpec compiled in (highlights/spec.toml): a bad spec fails the tests, never a user's document"
+    )]
+    fn highlight(&self, source: &str) -> Vec<HighlightToken> {
+        highlight(HighlightSpec::shared().expect("highlight spec"), source)
+    }
+
+    fn hover(
+        &self,
+        source: &str,
+        offset: usize,
+        _setting: &opentide_highlight::Setting<'_>,
+    ) -> Option<String> {
+        hover(source, offset)
+    }
+
+    fn completions(
+        &self,
+        source: &str,
+        offset: usize,
+        _setting: &opentide_highlight::Setting<'_>,
+    ) -> Vec<opentide_core::CompletionItem> {
+        completions(source, offset)
+    }
 }
 
 /// Analyze a query where `ctx` says it runs.

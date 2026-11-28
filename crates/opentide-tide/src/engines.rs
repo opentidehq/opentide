@@ -378,4 +378,121 @@ mod tests {
             }
         }
     }
+
+    /// Queries that parse and that do not, in every query language, with
+    /// non-ASCII text.
+    const EDITOR_SAMPLES: &[&str] = &[
+        "",
+        "é 😀",
+        "SecurityEvent | where Account == 'é😀' | summarize count() by bin(",
+        "index=main user=\"é😀\" | stats count by (",
+        "FROM logs-* | WHERE user.name == \"é😀\" | EVAL x = CONCAT(",
+        "process where process.name : \"é😀\" and (",
+        "process.name: \"é😀\" and (a OR",
+        "#event_simpleName=ProcessRollup2 user=\"é😀\" | count(",
+        "spawned_process and proc.name = \"é😀\" and (",
+        "rule r { strings: $a = \"é😀\" condition: uint16(0) == 0x5a4d and $a }",
+        "rule r { events: $e.principal.user.userid = \"é😀\" condition: $e }",
+        "activity_type:\"é😀\" AND (",
+        "@usr.name:\"é😀\" AND (service:web OR",
+    ];
+
+    /// An engine's `highlight` gives the tokens its analysis gives, whether
+    /// it overrides the default (YARA, YARA-L, Exabeam, Datadog) or not.
+    #[test]
+    fn highlight_is_the_analysis_tokens() {
+        for registered in ENGINES {
+            for source in EDITOR_SAMPLES {
+                assert_eq!(
+                    registered.highlight(source),
+                    registered.analyze(source).tokens,
+                    "{:?}: {source:?}",
+                    registered.language()
+                );
+            }
+        }
+    }
+
+    /// The editor hooks call what the language's crate offers, under the
+    /// dialect the setting's platform names, as `opentide_analysis`'s
+    /// matches did before they went through the trait (#1953).
+    #[test]
+    fn editor_hooks_answer_as_the_crate_does() {
+        fn at(source: &str) -> impl Iterator<Item = usize> + use<'_> {
+            (0..=source.len()).filter(move |&i| source.is_char_boundary(i))
+        }
+        for platform in ["", "sentinel", "microsoft_defender"] {
+            let hooks = engine(LanguageId::Kql);
+            let setting = setting(platform, Profile::File);
+            let dialect = opentide_kql::Dialect::for_platform(platform);
+            for source in EDITOR_SAMPLES {
+                for offset in at(source) {
+                    let e = hooks.map(|e| {
+                        (
+                            e.hover(source, offset, &setting),
+                            e.completions(source, offset, &setting),
+                            e.signature_help(source, offset, &setting),
+                        )
+                    });
+                    let direct = (
+                        opentide_kql::hover(source, offset, dialect),
+                        opentide_kql::completions(source, offset, dialect),
+                        opentide_kql::signature_help(source, offset, dialect),
+                    );
+                    assert_eq!(e, Some(direct), "kql {platform}: {source:?} at {offset}");
+                }
+            }
+        }
+        for platform in ["", "elastic", "carbon_black_cloud", "graylog"] {
+            let setting = setting(platform, Profile::File);
+            let dialect = opentide_lucene::Dialect::for_platform(platform);
+            for source in EDITOR_SAMPLES {
+                for offset in at(source) {
+                    let e = engine(LanguageId::Lucene).map(|e| {
+                        (
+                            e.hover(source, offset, &setting),
+                            e.completions(source, offset, &setting),
+                            e.signature_help(source, offset, &setting),
+                        )
+                    });
+                    let direct = (
+                        opentide_lucene::hover_dialect(source, offset, dialect),
+                        opentide_lucene::completions_dialect(source, offset, dialect),
+                        None,
+                    );
+                    assert_eq!(e, Some(direct), "lucene {platform}: {source:?} at {offset}");
+                }
+            }
+        }
+        let none = Setting::default();
+        let ctx = opentide_falco::Context::default();
+        for source in EDITOR_SAMPLES {
+            for offset in at(source) {
+                let e = engine(LanguageId::Falco).map(|e| {
+                    (
+                        e.hover(source, offset, &none),
+                        e.completions(source, offset, &none),
+                    )
+                });
+                let direct = (
+                    opentide_falco::hover(source, offset, &ctx),
+                    opentide_falco::completions(source, offset, &ctx),
+                );
+                assert_eq!(e, Some(direct), "falco: {source:?} at {offset}");
+                let e = engine(LanguageId::Yara).map(|e| {
+                    (
+                        e.hover(source, offset, &none),
+                        e.completions(source, offset, &none),
+                        e.signature_help(source, offset, &none),
+                    )
+                });
+                let direct = (
+                    opentide_yara::editor::hover(source, offset),
+                    opentide_yara::editor::completions(source, offset),
+                    opentide_yara::editor::signature_help(source, offset),
+                );
+                assert_eq!(e, Some(direct), "yara: {source:?} at {offset}");
+            }
+        }
+    }
 }

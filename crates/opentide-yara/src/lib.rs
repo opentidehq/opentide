@@ -220,6 +220,37 @@ impl opentide_highlight::QueryEngine for Engine {
             tokens: r.tokens,
         }
     }
+
+    fn highlight(&self, source: &str) -> Vec<HighlightToken> {
+        highlight(source)
+    }
+
+    fn hover(
+        &self,
+        source: &str,
+        offset: usize,
+        _setting: &opentide_highlight::Setting<'_>,
+    ) -> Option<String> {
+        editor::hover(source, offset)
+    }
+
+    fn completions(
+        &self,
+        source: &str,
+        offset: usize,
+        _setting: &opentide_highlight::Setting<'_>,
+    ) -> Vec<opentide_core::CompletionItem> {
+        editor::completions(source, offset)
+    }
+
+    fn signature_help(
+        &self,
+        source: &str,
+        offset: usize,
+        _setting: &opentide_highlight::Setting<'_>,
+    ) -> Option<opentide_core::SignatureHelp> {
+        editor::signature_help(source, offset)
+    }
 }
 
 /// Analyze a YARA signature where `ctx` says it runs.

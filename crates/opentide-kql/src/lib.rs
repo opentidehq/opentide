@@ -1222,6 +1222,33 @@ impl opentide_highlight::QueryEngine for Engine {
             tokens: r.tokens,
         }
     }
+
+    fn hover(
+        &self,
+        source: &str,
+        offset: usize,
+        setting: &opentide_highlight::Setting<'_>,
+    ) -> Option<String> {
+        hover(source, offset, Dialect::for_platform(setting.platform))
+    }
+
+    fn completions(
+        &self,
+        source: &str,
+        offset: usize,
+        setting: &opentide_highlight::Setting<'_>,
+    ) -> Vec<opentide_core::CompletionItem> {
+        completions(source, offset, Dialect::for_platform(setting.platform))
+    }
+
+    fn signature_help(
+        &self,
+        source: &str,
+        offset: usize,
+        setting: &opentide_highlight::Setting<'_>,
+    ) -> Option<opentide_core::SignatureHelp> {
+        signature_help(source, offset, Dialect::for_platform(setting.platform))
+    }
 }
 
 /// The columns at every operator of a query, with the references and
