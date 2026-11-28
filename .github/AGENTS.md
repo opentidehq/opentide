@@ -199,8 +199,8 @@ restore. The families: `build` (the tests' build), `native` (the extension), `st
 from a push to each base branch and from Run workflow (a pull request reads its base branch's
 caches and `development`'s), and from a pull request only when it restored no copy of the family
 at all (`cache-matched-key` empty: its base has none yet, after a new family or a toolchain bump),
-so its next push is warm; `wasm` (the `wasm` job's wasm32 compiles) under the same rule; `full-set-Linux` (`conformance` saves it, by the nightly; `node`,
-the five `facade-*` jobs and the nightly's Linux Rust jobs restore it). The release pipeline restores none: it
+so its next push is warm; `wasm` (the `wasm` job's wasm32 compiles) under the same rule; `facade-semver-Linux` and `facade-reexports-Linux` (the two jobs that build rustdoc JSON: `cargo rustdoc --all-features` builds each package's dependencies as metadata, 5 of the 9-11 minutes, and the jobs print the statistics so that a miss shows; `SCCACHE_BASEDIRS` names the change's and the baseline's directories); `full-set-Linux` (`conformance` saves it, by the nightly; `node`,
+the other `facade-*` jobs and the nightly's Linux Rust jobs restore it). The release pipeline restores none: it
 builds as a release does, and its critical path is macOS and Windows anyway. **Linux only**: macOS and Windows build cold (their
 caches crowded the Linux families out of the 10 GB GitHub keeps). **A pull request saves no
 cache** but that bootstrap copy. The one rust-cache left: `fuzz` (engine-fuzz.yml, saved by one cell of the scheduled run), plus coverage.yml's and

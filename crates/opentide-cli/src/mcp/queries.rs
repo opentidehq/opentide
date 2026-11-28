@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 
 use super::tools::{Context, next_action, quote};
 use crate::commands::validate_query::{live_query_platforms, offline_languages};
-use crate::json::Json;
+use crate::json::{Json, Object};
 use crate::queries::Profiles;
 
 /// `run_query`'s default row limit (`MAX_QUERY_ROWS`).
@@ -293,15 +293,15 @@ fn offline(check: &QueryCheck, context: &Context<'_>) -> Json {
              the configured credentials, so ask a person first"
         ),
     );
-    let mut payload = vec![
+    let mut payload = Object::from([
         ("supported".to_owned(), Json::Bool(true)),
         ("mode".to_owned(), Json::str("offline")),
         ("platform".to_owned(), Json::str(platform)),
-    ];
-    let failed = |mut payload: Vec<(String, Json)>, message: String| {
-        payload.push(("valid".to_owned(), Json::Null));
-        payload.push(("status".to_owned(), Json::str("failed")));
-        payload.push(("message".to_owned(), Json::Str(message)));
+    ]);
+    let failed = |mut payload: Object, message: String| {
+        payload.insert("valid".to_owned(), Json::Null);
+        payload.insert("status".to_owned(), Json::str("failed"));
+        payload.insert("message".to_owned(), Json::Str(message));
         payload
     };
     let Some(languages) = offline_languages(platform) else {
@@ -312,12 +312,12 @@ fn offline(check: &QueryCheck, context: &Context<'_>) -> Json {
                  them. Pass live: true."
             ),
         );
-        payload.push(("query_preview".to_owned(), Json::Str(preview(query))));
-        payload.push(("next_actions".to_owned(), Json::Array(vec![live_step])));
-        return Json::object(payload);
+        payload.insert("query_preview".to_owned(), Json::Str(preview(query)));
+        payload.insert("next_actions".to_owned(), Json::Array(vec![live_step]));
+        return Json::Object(payload);
     };
     if query.trim().is_empty() {
-        return Json::object(failed(
+        return Json::Object(failed(
             payload,
             "query is empty: pass the query text to check".to_owned(),
         ));
@@ -325,7 +325,7 @@ fn offline(check: &QueryCheck, context: &Context<'_>) -> Json {
     // validate_query refused any other value before calling this.
     let position = opentide_analysis::QueryPosition::parse(position.trim()).unwrap_or_default();
     if !stack.trim().is_empty() && !known_stack(stack) {
-        return Json::object(failed(
+        return Json::Object(failed(
             payload,
             format!(
                 "stack is an Elastic stack version, MAJOR.MINOR (such as 8.19 or 9.5), or \
@@ -342,7 +342,7 @@ fn offline(check: &QueryCheck, context: &Context<'_>) -> Json {
         .then(|| opentide_analysis::LanguageId::from_extension(&chosen))
         .flatten()
     else {
-        return Json::object(failed(
+        return Json::Object(failed(
             payload,
             format!(
                 "{platform} queries are in {}, not {chosen:?}; pass one of those as language",
@@ -358,7 +358,7 @@ fn offline(check: &QueryCheck, context: &Context<'_>) -> Json {
         match super::catalog::open(context) {
             Ok(workspace) => Some(workspace.root().to_path_buf()),
             Err(error @ super::catalog::OpenError::ConfigParse(_)) => {
-                return Json::object(failed(payload, error.to_string()));
+                return Json::Object(failed(payload, error.to_string()));
             }
             Err(super::catalog::OpenError::Other { .. }) => None,
         }
@@ -462,7 +462,7 @@ fn offline(check: &QueryCheck, context: &Context<'_>) -> Json {
         ("query_preview".to_owned(), Json::Str(preview(query))),
         ("next_actions".to_owned(), Json::Array(actions)),
     ]);
-    Json::object(payload)
+    Json::Object(payload)
 }
 
 /// `run_query`: refused without `live`, with the call that runs it; with
