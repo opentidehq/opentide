@@ -14,9 +14,9 @@
 //! ids CrowdStrike, Microsoft Defender, SentinelOne and Sysdig give a
 //! rule are kept in deployment state ([`super::deploy_state`]).
 //!
-//! The run's result is a list of keys in the order the run adds them (the
-//! `--json` contract the `deploy` snapshot cases hold), `_`-keys included,
-//! read into the envelope by [`super::validate_live::report_of`].
+//! The run's result is a [`CommandResult`]: its data keys in the order `--json`
+//! prints them (the contract the `deploy` snapshot cases hold), and the status,
+//! exit code, failure, summary and outcome line as its fields.
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -39,10 +39,11 @@ use tokio_util::sync::CancellationToken;
 use super::deploy_retire;
 use super::deploy_state::{self, ExternalId, StateError};
 use super::query::{Configured, log_unset};
+use super::result::{CommandResult, ExitCode, Status};
 use super::validate_live::{Batch, batches};
 use super::{Report, placement};
 use crate::env::Env;
-use crate::envelope::code;
+use crate::envelope::{NextAction, code};
 use crate::json::{Json, Object};
 use crate::logging::Sink;
 use crate::render::glyphs;
@@ -61,6 +62,8 @@ mod exabeam;
 mod google_secops;
 mod graylog;
 mod plugin;
+#[cfg(test)]
+mod results;
 mod retire;
 mod sentinel_one;
 mod sysdig;
@@ -255,42 +258,23 @@ impl std::fmt::Debug for Context<'_> {
     }
 }
 
-/// A run's result, keys in the order `--json` prints them, `_`-keys included.
+/// A run's result.
 #[derive(Clone, Debug)]
 pub struct Sent {
     /// The result.
-    pub result: Vec<(String, Json)>,
+    pub result: CommandResult,
 }
 
 impl Sent {
     /// The result as one JSON object (the CI job summary reads it).
     pub fn result_json(&self) -> Json {
-        Json::Object(
-            self.result
-                .iter()
-                .filter(|(key, _)| !key.starts_with('_'))
-                .cloned()
-                .collect(),
-        )
+        self.result.to_json()
     }
 
     /// The report the command prints.
     pub fn report(&self) -> Report {
-        let mut report = super::validate_live::report_of(COMMAND, &self.result);
-        report.outcome_line = text_of(&self.result, "_outcome");
-        report.bare_exit = has(&self.result, super::deploy_promote::BARE_EXIT);
-        report
+        self.result.clone().report(COMMAND)
     }
-}
-
-fn text_of(result: &[(String, Json)], key: &str) -> Option<String> {
-    result
-        .iter()
-        .find(|(name, _)| name == key)
-        .and_then(|(_, value)| match value {
-            Json::Str(text) => Some(text.clone()),
-            _ => None,
-        })
 }
 
 /// `value` set on `result`, in place when the key is there, else last.
@@ -301,10 +285,6 @@ fn set(result: &mut Vec<(String, Json)>, key: &str, value: Json) {
     }
 }
 
-fn has(result: &[(String, Json)], key: &str) -> bool {
-    result.iter().any(|(name, _)| name == key)
-}
-
 fn convert(value: &CJson) -> Json {
     super::deploy::convert(value)
 }
@@ -313,25 +293,99 @@ fn names(runs: &[StatusStrategy]) -> Json {
     Json::Array(runs.iter().map(|run| Json::str(run.name())).collect())
 }
 
-fn usage(message: &str, failure_code: &str, argument: Option<&str>) -> Vec<(String, Json)> {
-    let mut result = vec![
-        ("status".to_owned(), Json::str("failed")),
-        ("message".to_owned(), Json::str(message)),
-        ("_exit_code".to_owned(), Json::Int(2)),
-        ("_failure_code".to_owned(), Json::str(failure_code)),
-    ];
-    if let Some(argument) = argument {
-        result.push(("_failure_argument".to_owned(), Json::str(argument)));
-    }
+/// A usage refusal: failed, exit 2, `failure.code` `failure_code` and the
+/// argument at fault.
+fn usage(message: &str, failure_code: &str, argument: Option<&str>) -> CommandResult {
+    let mut result = CommandResult::failed(message, ExitCode::Usage).with_code(failure_code);
+    result.failure.argument = argument.map(str::to_owned);
     result
 }
 
-fn failed(message: &str) -> Vec<(String, Json)> {
-    vec![
-        ("status".to_owned(), Json::str("failed")),
-        ("message".to_owned(), Json::str(message)),
-        ("_exit_code".to_owned(), Json::Int(1)),
-    ]
+/// A failed run, exit 1.
+fn failed(message: &str) -> CommandResult {
+    CommandResult::failed(message, ExitCode::Failure)
+}
+
+/// A workspace that would not open: failed, exit 1, with its code, and the
+/// diagnostics of a TOML file that does not parse (`config_parse`).
+fn refusal(code: String, message: &str, diagnostics: Option<Json>) -> CommandResult {
+    let mut result = failed(message).with_code(code);
+    result
+        .data
+        .extend(diagnostics.map(|found| ("diagnostics".to_owned(), found)));
+    result
+}
+
+/// `--uuid` or `--file` named rules no file in `folder` holds: failed,
+/// exit 1.
+fn unmatched_files(folder: &str, unmatched: &[String]) -> CommandResult {
+    let mut result = failed(&format!(
+        "No rule file directly in {folder} matched: {}",
+        unmatched.join(", ")
+    ));
+    result.data = vec![
+        ("scope".into(), Json::str("selected")),
+        (
+            "unmatched".into(),
+            Json::Array(unmatched.iter().map(Json::str).collect()),
+        ),
+        ("dry_run".into(), Json::Bool(false)),
+    ];
+    result
+}
+
+/// What a run whose platforms have no tenants does.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Tenantless {
+    /// `--skip-unconfigured`, every platform tenantless and no rule
+    /// refused: skipped, exit 0.
+    Skipped,
+    /// Planning refused rules as well: failed, exit 1.
+    Refused,
+    /// Failed, exit 1.
+    Failed,
+}
+
+/// The result of a run that planned rules for platforms with no tenants:
+/// `detail` says which, `advice` how to add one, `missing` maps each to its
+/// file.
+fn no_tenants(
+    kind: Tenantless,
+    detail: &str,
+    advice: &str,
+    missing: Json,
+    plan: Json,
+) -> CommandResult {
+    let (status, message, exit) = match kind {
+        Tenantless::Skipped => (
+            Status::Skipped,
+            format!("Skipped deploy: {detail}"),
+            ExitCode::Success,
+        ),
+        Tenantless::Refused => (
+            Status::Failed,
+            format!("Planning refused rules; {detail}"),
+            ExitCode::Failure,
+        ),
+        Tenantless::Failed => (
+            Status::Failed,
+            format!("Cannot deploy: {detail}"),
+            ExitCode::Failure,
+        ),
+    };
+    CommandResult {
+        status,
+        message: Some(message),
+        exit,
+        data: vec![
+            ("advice".into(), Json::str(advice)),
+            ("missing_tenants".into(), missing),
+            ("deployed".into(), Json::Array(Vec::new())),
+            ("dry_run".into(), Json::Bool(false)),
+            ("plan".into(), plan),
+        ],
+        ..CommandResult::default()
+    }
 }
 
 /// Runs `deploy` without `--dry-run` on the process's runtime: here, or on
@@ -349,19 +403,14 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Sent {
 
 /// The run: the plan and the sends, then the warnings and the blocks
 /// a status kept out.
-fn run_deploy(args: &Args, cx: &Context<'_>) -> Vec<(String, Json)> {
+fn run_deploy(args: &Args, cx: &Context<'_>) -> CommandResult {
     let (_, options) = placement(cx.repo, cx.env, cx.cwd);
     let workspace = match super::open_for(COMMAND, options) {
         Ok(workspace) => workspace,
         Err(refused) => {
             // A TOML file that does not parse keeps `config_parse`.
             let (code, message, diagnostics) = super::refusal_parts(&refused);
-            let mut result = failed(&message);
-            result.push(("_failure_code".to_owned(), Json::Str(code)));
-            if let Some(diagnostics) = diagnostics {
-                result.insert(2, ("diagnostics".to_owned(), diagnostics));
-            }
-            return result;
+            return refusal(code, &message, diagnostics);
         }
     };
     let mut warnings: Vec<String> = Vec::new();
@@ -380,10 +429,10 @@ fn run_deploy(args: &Args, cx: &Context<'_>) -> Vec<(String, Json)> {
     promoted.finish().apply(&mut result, &mut warnings);
     // What `--prune` would retire, sent nowhere (#1713).
     if let Some(retirable) = retirable {
-        result.push(("retirable".into(), retirable));
+        result.data.push(("retirable".into(), retirable));
     }
-    if (!args.uuids.is_empty() || !args.files.is_empty()) && !has(&result, "scope") {
-        result.push(("scope".into(), Json::str("selected")));
+    if (!args.uuids.is_empty() || !args.files.is_empty()) && result.get("scope").is_none() {
+        result.data.push(("scope".into(), Json::str("selected")));
     }
     let unread = opentide_compile::dry_run::unread_files(&workspace, cx.cwd);
     if !unread.is_empty() {
@@ -393,27 +442,21 @@ fn run_deploy(args: &Args, cx: &Context<'_>) -> Vec<(String, Json)> {
             unread.join(", ")
         ));
     }
+    // The run's warnings, then the result's own.
     if !warnings.is_empty() {
-        let mut all: Vec<Json> = warnings.iter().map(Json::str).collect();
-        if let Some((_, Json::Array(own))) = result.iter().find(|(key, _)| key == "warnings") {
-            all.extend(own.iter().cloned());
-        }
-        set(&mut result, "warnings", Json::Array(all));
+        warnings.append(&mut result.warnings);
+        result.warnings = warnings;
     }
     if !skipped.is_empty() {
         report_skipped(&mut result, &skipped, &workspace, &args.strategies);
     }
-    let skipped_run = text_of(&result, "status").as_deref() == Some("skipped");
-    if skipped_run
-        && !has(&result, "_next_actions")
+    if result.status == Status::Skipped
+        && result.next_actions.is_empty()
         && !root::is_workspace_root(&OsFs, workspace.root())
     {
-        result.push((
-            "_next_actions".into(),
-            Json::Array(vec![Json::object([
-                ("command", Json::str("opentide setup")),
-                ("reason", Json::str("no workspace here: create one")),
-            ])]),
+        result.next_actions.push(NextAction::new(
+            "opentide setup",
+            "no workspace here: create one",
         ));
     }
     crate::app::release(workspace);
@@ -473,7 +516,7 @@ fn run_strategies(result: &[(String, Json)]) -> Vec<StatusStrategy> {
 
 /// Counts the blocks a status kept out of the plan (`_report_skipped`).
 fn report_skipped(
-    result: &mut Vec<(String, Json)>,
+    result: &mut CommandResult,
     skipped: &[plan::Skipped],
     workspace: &Workspace,
     strategies: &[String],
@@ -485,7 +528,7 @@ fn report_skipped(
     );
     // The result's `strategies`, else `--strategy`'s: a run that planned
     // nothing for its `--platform` names the platform instead (#1662, D11).
-    let mut runs = run_strategies(result);
+    let mut runs = run_strategies(&result.data);
     if runs.is_empty() {
         runs = strategy::parse_strategies(strategies, &owned.statuses, "--strategy")
             .unwrap_or_default();
@@ -498,7 +541,7 @@ fn report_skipped(
             .collect::<Vec<_>>()
             .join(" or ")
     };
-    result.push((
+    result.data.push((
         "skipped".into(),
         Json::Array(
             skipped
@@ -507,27 +550,22 @@ fn report_skipped(
                 .collect(),
         ),
     ));
-    let mut summary = match result.iter().find(|(key, _)| key == "_summary") {
-        Some((_, Json::Object(members))) => members.clone(),
-        _ => Object::new(),
-    };
     // The rows the run skipped (a rule no tenant takes, an `INERT` block),
     // and the rules a status left out that have no such row: a rule is
     // never counted twice.
-    let rows = match summary.get("skipped") {
-        Some(Json::Int(rows)) => usize::try_from(*rows).unwrap_or(0),
+    let rows = match result.summary.iter().find(|(key, _)| key == "skipped") {
+        Some((_, Json::Int(rows))) => usize::try_from(*rows).unwrap_or(0),
         _ => 0,
     };
-    let skipped_rows: std::collections::HashSet<String> =
-        match result.iter().find(|(key, _)| key == "results") {
-            Some((_, Json::Array(rows))) => rows
-                .iter()
-                .filter(|row| row.get("status").and_then(Json::as_str) == Some("skipped"))
-                .filter_map(|row| row.get("id").and_then(Json::as_str))
-                .map(opentide_compile::rule::canonical_uuid)
-                .collect(),
-            _ => std::collections::HashSet::new(),
-        };
+    let skipped_rows: std::collections::HashSet<String> = match result.get("results") {
+        Some(Json::Array(rows)) => rows
+            .iter()
+            .filter(|row| row.get("status").and_then(Json::as_str) == Some("skipped"))
+            .filter_map(|row| row.get("id").and_then(Json::as_str))
+            .map(opentide_compile::rule::canonical_uuid)
+            .collect(),
+        _ => std::collections::HashSet::new(),
+    };
     let mut left: Vec<String> = skipped
         .iter()
         .map(|entry| opentide_compile::rule::canonical_uuid(&entry.uuid))
@@ -535,8 +573,11 @@ fn report_skipped(
         .collect();
     left.sort_unstable();
     left.dedup();
-    summary.insert("skipped".into(), Json::from(rows + left.len()));
-    set(result, "_summary", Json::Object(summary));
+    set(
+        &mut result.summary,
+        "skipped",
+        Json::from(rows + left.len()),
+    );
     let deployable = if runs.is_empty() {
         Vec::new()
     } else {
@@ -553,53 +594,49 @@ fn report_skipped(
         format!("set a platform block's status to {listed} for {run_names} to deploy it")
     };
     let planned = matches!(
-        result.iter().find(|(key, _)| key == "plan"),
-        Some((_, Json::Object(members))) if !members.is_empty()
+        result.get("plan"),
+        Some(Json::Object(members)) if !members.is_empty()
     );
-    if text_of(result, "status").as_deref() == Some("skipped") && !planned {
-        result.push((
-            "_outcome".into(),
-            Json::str(format!(
-                "No rule has a status {run_names} deploys {} {in_status}",
-                glyphs::SEPARATOR
-            )),
+    if result.status == Status::Skipped && !planned {
+        result.outcome_line = Some(format!(
+            "No rule has a status {run_names} deploys {} {in_status}",
+            glyphs::SEPARATOR
         ));
-        if !has(result, "advice") {
-            result.push(("advice".into(), Json::str(advice)));
+        if result.get("advice").is_none() {
+            result.data.push(("advice".into(), Json::str(advice)));
         }
-    } else if !has(result, "detail") {
-        result.push((
+    } else if result.get("detail").is_none() {
+        result.data.push((
             "detail".into(),
             Json::str(format!("not in the plan: {in_status}; {advice}")),
         ));
     }
 }
 
-/// A skipped deploy, in the same envelope as one that planned rules; a run
-/// whose planning refused a rule failed.
-fn nothing(message: &str, refused: bool, field: (&str, Json)) -> Vec<(String, Json)> {
-    let mut result = vec![
-        (field.0.to_owned(), field.1),
+/// A skipped deploy, in the same envelope as one that planned rules
+/// (`_nothing_to_deploy`); a run whose planning refused a rule failed.
+fn nothing(message: &str, refused: bool, field: (&str, Json)) -> CommandResult {
+    let (status, message, exit) = if refused {
         (
-            "status".into(),
-            Json::str(if refused { "failed" } else { "skipped" }),
-        ),
-        (
-            "message".into(),
-            Json::str(if refused {
-                format!("{message}; planning reported rule errors")
-            } else {
-                message.to_owned()
-            }),
-        ),
-        ("deployed".into(), Json::Array(Vec::new())),
-        ("dry_run".into(), Json::Bool(false)),
-        ("plan".into(), Json::Object(Object::new())),
-    ];
-    if refused {
-        result.push(("_exit_code".into(), Json::Int(1)));
+            Status::Failed,
+            format!("{message}; planning reported rule errors"),
+            ExitCode::Failure,
+        )
+    } else {
+        (Status::Skipped, message.to_owned(), ExitCode::Success)
+    };
+    CommandResult {
+        status,
+        message: Some(message),
+        exit,
+        data: vec![
+            (field.0.to_owned(), field.1),
+            ("deployed".into(), Json::Array(Vec::new())),
+            ("dry_run".into(), Json::Bool(false)),
+            ("plan".into(), Json::Object(Object::new())),
+        ],
+        ..CommandResult::default()
     }
-    result
 }
 
 /// Whether the run would promote statuses (`StatusStrategy.RELEASE in run`
@@ -680,7 +717,7 @@ fn deploy(
     plan_skipped: &mut Vec<plan::Skipped>,
     promoted: &mut Unpromote,
     retirable: &mut Option<Json>,
-) -> Vec<(String, Json)> {
+) -> CommandResult {
     if let Some(value) = cx
         .env
         .get(strategy::REMOVED_PLAN_ENV)
@@ -708,11 +745,8 @@ fn deploy(
             Ok(runs) => runs,
             Err(message) => {
                 let mut result = usage(&message, code::USAGE_INVALID_CHOICE, Some("--strategy"));
-                if let Some(suggestion) =
-                    opentide_compile::dry_run::strategy_suggestion(&args.strategies)
-                {
-                    result.push(("_failure_suggestion".into(), Json::str(suggestion)));
-                }
+                result.failure.suggestion =
+                    opentide_compile::dry_run::strategy_suggestion(&args.strategies);
                 return result;
             }
         };
@@ -739,21 +773,7 @@ fn deploy(
         let (scope, unmatched) =
             opentide_compile::dry_run::selected_scope(fs, workspace, &local, &request, cx.cwd);
         if !unmatched.is_empty() {
-            let mut result = failed(&format!(
-                "No rule file directly in {folder} matched: {}",
-                unmatched.join(", ")
-            ));
-            let at = result.len() - 1;
-            result.insert(at, ("scope".into(), Json::str("selected")));
-            result.insert(
-                at + 1,
-                (
-                    "unmatched".into(),
-                    Json::Array(unmatched.iter().map(Json::str).collect()),
-                ),
-            );
-            result.insert(at + 2, ("dry_run".into(), Json::Bool(false)));
-            return result;
+            return unmatched_files(&folder, &unmatched);
         }
         scope
     } else if args.all {
@@ -970,31 +990,19 @@ fn deploy(
         );
         let detail = detail.join("; ");
         let skip = args.skip_unconfigured && tenantless.len() == deployment.len() && !refused;
-        let mut result = vec![
-            (
-                "status".to_owned(),
-                Json::str(if skip { "skipped" } else { "failed" }),
-            ),
-            (
-                "message".into(),
-                Json::str(if skip {
-                    format!("Skipped deploy: {detail}")
-                } else if refused {
-                    format!("Planning refused rules; {detail}")
-                } else {
-                    format!("Cannot deploy: {detail}")
-                }),
-            ),
-            ("advice".into(), Json::str(advice.join("; "))),
-            ("missing_tenants".into(), missing),
-            ("deployed".into(), Json::Array(Vec::new())),
-            ("dry_run".into(), Json::Bool(false)),
-            ("plan".into(), plan_payload),
-        ];
-        if !skip {
-            result.push(("_exit_code".into(), Json::Int(1)));
-        }
-        return result;
+        return no_tenants(
+            if skip {
+                Tenantless::Skipped
+            } else if refused {
+                Tenantless::Refused
+            } else {
+                Tenantless::Failed
+            },
+            &detail,
+            &advice.join("; "),
+            missing,
+            plan_payload,
+        );
     }
     // Each platform's tenants, resolved before anything is sent.
     let mut targets: IndexMap<String, IndexMap<String, Vec<String>>> = IndexMap::new();
@@ -1343,7 +1351,7 @@ fn deploy(
             "failures".into(),
             Json::Array(failures.into_iter().map(|(_, failure)| failure).collect()),
         ));
-        return result;
+        return CommandResult::from_fields(&result);
     }
     let outcome_failed = sender.failed || refused;
     let any_failed = results.iter().any(|result| result.status == "failed");
@@ -1397,7 +1405,7 @@ fn deploy(
         ));
     }
     result.push(("strategies".into(), names(&runs)));
-    result
+    CommandResult::from_fields(&result)
 }
 
 /// The files a status promotion rewrote: put back as they were before the
@@ -1508,7 +1516,7 @@ impl Settled {
     /// warnings, and a file that could not be put back as a failure: the
     /// run fails (exit 1), since a commit would carry a status no tenant
     /// received.
-    fn apply(self, result: &mut Vec<(String, Json)>, warnings: &mut Vec<String>) {
+    fn apply(self, result: &mut CommandResult, warnings: &mut Vec<String>) {
         warnings.extend(self.warnings);
         if self.failures.is_empty() {
             return;
@@ -1526,18 +1534,18 @@ impl Settled {
         let entries = self.failures.iter().zip(&lines).map(|((path, _), line)| {
             Json::object([("path", Json::str(path)), ("error", Json::str(line))])
         });
-        let mut all = match result.iter().find(|(key, _)| key == "failures") {
-            Some((_, Json::Array(own))) => own.clone(),
+        let mut all = match result.get("failures") {
+            Some(Json::Array(own)) => own.clone(),
             _ => Vec::new(),
         };
         all.extend(entries);
-        set(result, "failures", Json::Array(all));
-        if text_of(result, "status").as_deref() != Some("failed") {
-            set(result, "status", Json::str("failed"));
-            set(result, "message", Json::str(&lines[0]));
-            set(result, "error", Json::str(&lines[0]));
+        result.set("failures", Json::Array(all));
+        if result.status != Status::Failed {
+            result.status = Status::Failed;
+            result.message = Some(lines[0].clone());
+            result.set("error", Json::str(&lines[0]));
         }
-        set(result, "_exit_code", Json::Int(1));
+        result.exit = ExitCode::Failure;
     }
 }
 

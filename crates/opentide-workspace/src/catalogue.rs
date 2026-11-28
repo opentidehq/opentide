@@ -285,9 +285,9 @@ fn patterns() -> &'static [Regex; 4] {
 
 /// The 1-based line of the root `name:` key, or 1.
 pub fn name_line(text: &str) -> usize {
-    patterns()[0]
-        .find(text)
-        .map_or(1, |found| text[..found.start()].matches('\n').count() + 1)
+    patterns()[0].find(text).map_or(1, |found| {
+        crate::cut(text, 0, found.start()).matches('\n').count() + 1
+    })
 }
 
 /// A plain or quoted YAML scalar written on one line, without its comment.
@@ -329,7 +329,8 @@ fn scalar(raw: Option<&str>) -> Option<String> {
             break;
         }
     }
-    let value = raw[..cut].trim();
+    // `cut` is the length, or the blank before a `#`: an ASCII byte.
+    let value = crate::cut(raw, 0, cut).trim();
     (!value.is_empty()).then(|| value.to_owned())
 }
 
@@ -351,7 +352,10 @@ pub fn text_fields(text: &str) -> HashMap<&'static str, String> {
         let found = key_line.captures(line);
         let indent = match &found {
             Some(found) => found.get(1).map_or("", |m| m.as_str()).to_owned(),
-            None => line[..line.len() - line.trim_start().len()].to_owned(),
+            None => line
+                .strip_suffix(line.trim_start())
+                .unwrap_or_default()
+                .to_owned(),
         };
         let key = found.as_ref().and_then(|f| f.get(2)).map(|m| m.as_str());
         let value = found.as_ref().and_then(|f| f.get(3)).map(|m| m.as_str());
@@ -949,5 +953,19 @@ mod tests {
         let fields = text_fields("name: a\u{2028}b\n");
         assert_eq!(fields["name"], "a\u{2028}b");
         assert!(text_fields("").is_empty());
+    }
+
+    #[test]
+    fn text_fields_and_the_name_line_read_multi_byte_text() {
+        let text = "# é😀\nuuid: é😀 #c\nname: é😀 # 😀\ndescription: é#😀\nmeta:\n  é: 😀\n";
+        assert_eq!(name_line(text), 3);
+        assert_eq!(scalar(Some("é😀 # 😀")).as_deref(), Some("é😀"));
+        assert_eq!(scalar(Some("é#😀")).as_deref(), Some("é#😀"));
+        assert_eq!(scalar(Some("😀\t#")).as_deref(), Some("😀"));
+        let _ = text_fields(text);
+        for (at, _) in text.char_indices() {
+            let _ = text_fields(text.get(..at).unwrap());
+            let _ = name_line(text.get(at..).unwrap());
+        }
     }
 }

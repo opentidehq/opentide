@@ -78,7 +78,8 @@ pub fn completions(source: &str, offset: usize) -> Vec<CompletionItem> {
         return Vec::new();
     };
     let start = opentide_core::word_start(before, path_char);
-    let word = &before[start..];
+    // `word_start` starts on a char.
+    let word = before.split_at_checked(start).map_or("", |(_, word)| word);
     let catalog = Catalog::cached();
     if word.starts_with('@') {
         return catalog

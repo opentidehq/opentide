@@ -27,8 +27,10 @@ impl Checker<'_> {
                 NodeOrToken::Token(t) => match t.kind() {
                     K::STRING => self.escapes(&t),
                     K::REGEX_LIT => {
+                        // The lexer closes a regex literal: `/` at both ends.
                         let text = t.text();
-                        let pattern = &text[1..text.len().saturating_sub(1).max(1)];
+                        let pattern = text.strip_prefix('/').unwrap_or(text);
+                        let pattern = pattern.strip_suffix('/').unwrap_or(pattern);
                         self.pattern(pattern, at_token(&t));
                     }
                     _ => {}
@@ -59,7 +61,7 @@ impl Checker<'_> {
             K::QUANTIFIED_FIELD => self.quantified(n),
             K::VARIABLE => {
                 let text = self.text(n);
-                let bare = &text[1..];
+                let bare = text.strip_prefix('$').unwrap_or(text);
                 if matches!(
                     bare.to_ascii_lowercase().as_str(),
                     "window_start" | "window_end"
@@ -256,7 +258,11 @@ impl Checker<'_> {
         let mut i = 1;
         while i + 1 < bytes.len() {
             if bytes[i] == b'\\' {
-                let next = text[i + 1..].chars().next().unwrap_or(' ');
+                // `i` is a `\\` byte, so `i + 1` starts a character.
+                let next = crate::cut(text, i + 1, text.len())
+                    .chars()
+                    .next()
+                    .unwrap_or(' ');
                 if !matches!(next, '\\' | '"' | 'n' | 'r' | 't') {
                     let start = start_of_token + i;
                     self.push(
@@ -266,7 +272,7 @@ impl Checker<'_> {
                         (start, start + 1 + next.len_utf8()),
                     );
                 }
-                i += 1 + text[i + 1..].chars().next().map_or(1, char::len_utf8);
+                i += 1 + next.len_utf8();
                 continue;
             }
             i += 1;

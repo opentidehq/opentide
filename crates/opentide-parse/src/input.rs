@@ -51,7 +51,11 @@ where
     let mut out = Vec::new();
     let mut base = 0;
     'restart: while base < source.len() {
-        let mut lexer = T::lexer(&source[base..]);
+        // `base` is 0 or an error's end, which `ceil_char_boundary` puts on a
+        // char boundary; one that is not fails here and lexes nothing more.
+        let rest = source.get(base..);
+        debug_assert!(rest.is_some(), "{base} in {} bytes", source.len());
+        let mut lexer = T::lexer(rest.unwrap_or_default());
         while let Some(token) = lexer.next() {
             let span = lexer.span();
             let start = base + span.start;

@@ -489,7 +489,13 @@ fn touches_previous(p: &Parser<'_>) -> bool {
     // The token before has no trivia after it when the byte before this one is not whitespace.
     // A byte-order mark is whitespace only at the start of the text (the lexer's rule).
     let bom = at == '\u{feff}'.len_utf8() && p.source().starts_with('\u{feff}');
-    at > 0 && !bom && !p.source()[..at].ends_with([' ', '\t', '\r', '\n'])
+    // The byte before a token's start, read as a byte: the blanks are ASCII.
+    at > 0
+        && !bom
+        && !matches!(
+            p.source().as_bytes().get(at - 1),
+            Some(b' ' | b'\t' | b'\r' | b'\n')
+        )
 }
 
 // ---- Values --------------------------------------------------------------------------------

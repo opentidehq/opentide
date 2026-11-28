@@ -39,8 +39,9 @@ impl Window {
     /// [`WINDOW_SHAPE`] or [`WINDOW_POSITIVE`].
     pub fn parse(text: &str) -> Result<Self, &'static str> {
         let text = text.trim();
-        let (digits, unit) = match text.chars().last() {
-            Some(unit @ ('d' | 'h' | 'm')) => (&text[..text.len() - 1], unit),
+        let mut chars = text.chars();
+        let (digits, unit) = match chars.next_back() {
+            Some(unit @ ('d' | 'h' | 'm')) => (chars.as_str(), unit),
             _ => (text, 'd'),
         };
         if digits.is_empty() || !digits.bytes().all(|b| b.is_ascii_digit()) {
@@ -85,8 +86,9 @@ impl Window {
 /// `090 days`.
 pub fn window_text(older_than: &str) -> String {
     let text = older_than.trim();
-    let (number, unit) = match text.chars().last() {
-        Some(unit @ ('d' | 'h' | 'm')) => (&text[..text.len() - 1], unit),
+    let mut chars = text.chars();
+    let (number, unit) = match chars.next_back() {
+        Some(unit @ ('d' | 'h' | 'm')) => (chars.as_str(), unit),
         _ => (text, 'd'),
     };
     let word = match unit {
@@ -383,5 +385,14 @@ mod tests {
             .unwrap()
             .any_rule_files
         );
+    }
+
+    #[test]
+    fn a_window_with_multi_byte_text_is_refused() {
+        assert!(Window::parse("é").is_err());
+        assert!(Window::parse("9😀").is_err());
+        assert!(Window::parse("😀d").is_err());
+        assert_eq!(window_text("é"), "é days");
+        assert_eq!(window_text("😀h"), "😀 hours");
     }
 }

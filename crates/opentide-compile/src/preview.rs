@@ -11,7 +11,7 @@ use serde::Serialize;
 use serde::de::DeserializeOwned;
 
 use crate::compiler::{
-    Compiler, Datadog, Exabeam, GoogleSecops, Graylog, GraylogTarget, Sentinel, Sysdig,
+    Bitdefender, Compiler, Datadog, Exabeam, GoogleSecops, Graylog, GraylogTarget, Sentinel, Sysdig,
 };
 use crate::json::{Json, Object};
 use crate::rule::{CompileError, Rule};
@@ -111,11 +111,10 @@ fn bitdefender_request(
     rule: &Rule,
     tenant: Option<&Json>,
 ) -> Result<Json, CompileError> {
-    let strategy = bitdefender::strategy(cx, rule)?;
-    let compiled = bitdefender::compile_rule(cx, rule, strategy, tenant)?;
+    let compiled = Bitdefender::compile(cx, rule, tenant)?;
     Ok(bitdefender::request_body(
         bitdefender::CREATE,
-        bitdefender::create_params(&compiled),
+        Bitdefender::body(&compiled),
     ))
 }
 
