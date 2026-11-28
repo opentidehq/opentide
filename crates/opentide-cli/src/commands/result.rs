@@ -158,6 +158,31 @@ impl CommandResult {
         }
     }
 
+    /// The result with `failure.code` set to `code`.
+    #[must_use]
+    pub fn with_code(mut self, code: impl Into<String>) -> CommandResult {
+        self.failure.code = Some(code.into());
+        self
+    }
+
+    /// The result as one JSON object: the command's own keys, then
+    /// `status`, the message and the warnings when there are any (the CI
+    /// job summary reads it). The envelope's other fields are not in it.
+    pub fn to_json(&self) -> Json {
+        let mut members = self.data.clone();
+        members.push(("status".to_owned(), Json::str(self.status.as_str())));
+        if let Some(message) = &self.message {
+            members.push(("message".to_owned(), Json::str(message)));
+        }
+        if !self.warnings.is_empty() {
+            members.push((
+                "warnings".to_owned(),
+                Json::Array(self.warnings.iter().map(Json::str).collect()),
+            ));
+        }
+        Json::object(members)
+    }
+
     /// A result built as keys in order (`CommandResult.from_payload`):
     /// `message`, `status` and `warnings` leave the data, as do
     /// `_exit_code`, `_summary`, `_next_actions`, `_failure_code`,

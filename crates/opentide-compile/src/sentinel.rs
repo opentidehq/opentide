@@ -3,15 +3,11 @@
 //! `compile_deployment`): `kind` and camelCase `properties`, unset fields left
 //! out, in the oracle's key order.
 
-use std::sync::Arc;
-
-use opentide_schema::node::{Entry, Mark, Node, Value};
 use opentide_schema::objects::platform::SentinelConfig;
 use opentide_schema::objects::platform::sentinel::{
     SentinelAlert, SentinelAlertGrouping, SentinelEntityMapping, Suppression,
 };
 use opentide_schema::vocab::sentinel::SentinelAttack;
-use opentide_schema::{ErrorKind, FromNode, SchemaError};
 
 use crate::Context;
 use crate::deploy;
@@ -20,6 +16,7 @@ use crate::json::{Json, Object};
 use crate::kql;
 use crate::rule::{CompileError, Rule, codes};
 use crate::strategy::StatusStrategy;
+use crate::typed;
 
 /// The platform's display name, in messages.
 pub const DISPLAY: &str = "Sentinel";
@@ -167,23 +164,16 @@ fn v18_techniques(
 }
 
 /// The rule's Sentinel block, read by the model `opentide validate` checks it
-/// with (`SentinelConfig`, #1951), through the same conversion
-/// (`FromNode`), so a refusal reads as `validate`'s `schema` finding does:
-/// the field path the rule wrote and the model's reason
-/// (`configurations.sentinel.alert: Field required`), every one the block
-/// earns, at the first one's field.
+/// with (`SentinelConfig`, #1951; [`typed::read_block`]): a block the model
+/// refuses fails with the field path the rule wrote and the model's reason
+/// (`configurations.sentinel.alert: Field required`).
 ///
-/// Only the block's shape is refused here (a missing field, an unknown key,
-/// a wrong type). A block whose only faults are values a field's or the
-/// block's own check refuses (a duration it cannot read, a technique newer
-/// than ATT&CK v18, a schedule outside Sentinel's bounds: `sentinel_frequency`,
-/// `sentinel_lookback`) is read as before (serde, which runs no check) and
-/// the compile deals with those values as it always has (`compile_invalid_rule`
-/// for an unreadable duration, the v18 mapping and its warning for the
-/// technique, the schedule sent as written); `validate` reports them.
-///
-/// The block is the one the deploy sends (`modifiers::rule_for_tenant` may
-/// have changed it), so it is read from the rule's JSON, not its node.
+/// A block whose only faults are values a field's or the block's own check
+/// refuses (a duration it cannot read, a technique newer than ATT&CK v18, a
+/// schedule outside Sentinel's bounds: `sentinel_frequency`,
+/// `sentinel_lookback`) is compiled as before (`compile_invalid_rule` for an
+/// unreadable duration, the v18 mapping and its warning for the technique,
+/// the schedule sent as written); `validate` reports them.
 fn block_of(rule: &Rule) -> Result<SentinelConfig, CompileError> {
     let Some(block) = rule.block("sentinel").filter(|block| block.is_filled()) else {
         return Err(CompileError::invalid_rule(format!(
@@ -191,41 +181,7 @@ fn block_of(rule: &Rule) -> Result<SentinelConfig, CompileError> {
             rule.uuid, rule.name
         )));
     };
-    let node = json_node(block);
-    let mut cx = opentide_schema::from_node::Context::new();
-    let config = cx.at_key("configurations", |cx| {
-        cx.at_key("sentinel", |cx| SentinelConfig::from_node(&node, cx))
-    });
-    let errors = cx.into_errors();
-    if let (Some(config), true) = (config, errors.is_empty()) {
-        return Ok(config);
-    }
-    if !errors.is_empty() && errors.iter().all(is_field_check) {
-        // Through the block's text, not `serde_json::Value`, so the order of
-        // an exclusion's `let` bindings is kept.
-        return serde_json::from_str(&block.to_compact())
-            .map_err(|error| CompileError::failed(DISPLAY, &error.to_string()));
-    }
-    let field = errors
-        .first()
-        .map(SchemaError::field_path)
-        .unwrap_or_default();
-    let field: Vec<&str> = field.iter().map(String::as_str).collect();
-    let reasons: Vec<String> = errors.iter().map(ToString::to_string).collect();
-    let mut error = CompileError::failed(DISPLAY, &reasons.join("; "));
-    error.hint = Some(REFUSED_HINT.to_owned());
-    Err(error.at(&field))
-}
-
-/// Whether the model refused a value a field's or the block's own check
-/// reads (a duration, an ATT&CK id, the schedule's bounds), not the block's
-/// shape: a missing or unknown key, a type, a value outside a closed set.
-fn is_field_check(error: &SchemaError) -> bool {
-    match error.kind {
-        ErrorKind::InvalidValue(kind) => kind != "literal_error" && kind != "enum",
-        ErrorKind::Constraint(_) => true,
-        _ => false,
-    }
+    typed::read_block(block, "sentinel", DISPLAY)
 }
 
 /// The block's exclusions as written (`[{query, tenant, let}]`), which
@@ -236,46 +192,6 @@ fn is_field_check(error: &SchemaError) -> bool {
 fn exclusions<'a>(rule: &'a Rule, block: &SentinelConfig) -> Option<&'a Json> {
     block.exclusions.as_ref()?;
     rule.block("sentinel")?.get("exclusions")
-}
-
-/// What to do about a block the model refuses.
-const REFUSED_HINT: &str =
-    "run `opentide validate` and fix what its schema check reports on this block";
-
-/// A JSON value as a node without positions, for the model's conversion. A
-/// rule's JSON comes from its YAML, whose loader refuses an integer past
-/// `i64`, so a `UInt` does not occur; it would read as a float.
-fn json_node(value: &Json) -> Node {
-    let value = match value {
-        Json::Null => Value::Null,
-        Json::Bool(flag) => Value::Bool(*flag),
-        Json::Int(integer) => Value::Int(*integer),
-        #[expect(
-            clippy::cast_precision_loss,
-            reason = "a rule read from YAML holds no integer past i64; a node has no wider integer"
-        )]
-        Json::UInt(integer) => Value::Float(*integer as f64),
-        Json::Float(float) => Value::Float(*float),
-        Json::Str(text) => Value::Str(text.as_str().into()),
-        Json::Array(items) => {
-            Value::Seq(items.iter().map(|item| Arc::new(json_node(item))).collect())
-        }
-        Json::Object(members) => Value::Map(
-            members
-                .iter()
-                .map(|(key, item)| Entry {
-                    key: Arc::new(json_node(&Json::Str(key.clone()))),
-                    value: Arc::new(json_node(item)),
-                })
-                .collect(),
-        ),
-    };
-    Node {
-        value,
-        start: Mark::default(),
-        end: Mark::default(),
-        text: None,
-    }
 }
 
 /// [`compile`], with the warnings the body earned.
@@ -624,7 +540,7 @@ mod tests {
     fn refusal(block: &str) -> CompileError {
         let error = block_of(&rule_of(block)).unwrap_err();
         assert_eq!(error.code, codes::COMPILE_FAILED, "{error}");
-        assert_eq!(error.hint.as_deref(), Some(REFUSED_HINT));
+        assert_eq!(error.hint.as_deref(), Some(typed::REFUSED_HINT));
         // Nothing of an intermediate text or of serde's enum handling.
         assert!(!error.reason.contains("line 1"), "{error}");
         assert!(!error.reason.contains("untagged"), "{error}");
