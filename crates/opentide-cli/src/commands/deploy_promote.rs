@@ -218,8 +218,8 @@ pub fn guard_termination() {
 fn default_action(signal: i32) -> Option<bool> {
     let status = std::fs::read_to_string("/proc/self/status").ok()?;
     let mask = |name: &str| -> Option<u64> {
-        let line = status.lines().find(|line| line.starts_with(name))?;
-        u64::from_str_radix(line[name.len()..].trim(), 16).ok()
+        let value = status.lines().find_map(|line| line.strip_prefix(name))?;
+        u64::from_str_radix(value.trim(), 16).ok()
     };
     let bit = 1_u64 << (signal - 1);
     Some(mask("SigIgn:")? & bit == 0 && mask("SigCgt:")? & bit == 0)

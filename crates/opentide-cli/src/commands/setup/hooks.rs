@@ -235,6 +235,10 @@ fn refresh_hook_entry(
     let mut kept = Vec::new();
     for line in &mut lines {
         let body = line.trim_end_matches(['\r', '\n']).to_owned();
+        #[expect(
+            clippy::string_slice,
+            reason = "`body` is `line` with whole characters trimmed off its end"
+        )]
         let ending = line[body.len()..].to_owned();
         let Some(found) = pattern.captures(&body) else {
             continue;
@@ -292,19 +296,22 @@ fn same(a: &Node, b: &Node) -> bool {
     }
 }
 
-/// The code-point offset `index` of `text` as a byte offset.
-fn byte_offset(text: &str, index: usize) -> usize {
-    text.char_indices()
-        .nth(index)
-        .map_or(text.len(), |(at, _)| at)
+/// `text` before and from code point `index` (all of `text` before, when it
+/// is shorter).
+fn split_at_char(text: &str, index: usize) -> (&str, &str) {
+    match text.char_indices().nth(index) {
+        Some((at, _)) =>
+        {
+            #[expect(clippy::string_slice, reason = "`char_indices` yields char boundaries")]
+            (&text[..at], &text[at..])
+        }
+        None => (text, ""),
+    }
 }
 
 /// Whether the node at `index` opens a flow collection.
 fn is_flow(text: &str, node: &Node) -> bool {
-    matches!(
-        text[byte_offset(text, node.start.index())..].chars().next(),
-        Some('{' | '[')
-    )
+    matches!(text.chars().nth(node.start.index()), Some('{' | '['))
 }
 
 fn indented_hook(relative: &str, indent: usize) -> String {
@@ -403,15 +410,11 @@ fn with_local_hook_lf(text: &str, relative: &str) -> Option<String> {
     if !empty {
         return None;
     }
-    let start = byte_offset(&text, repos.start.index());
-    let end = byte_offset(&text, repos.end.index());
-    let head = text[..start].trim_end_matches([' ', '\t']);
+    let (head, _) = split_at_char(&text, repos.start.index());
+    let (_, tail) = split_at_char(&text, repos.end.index());
+    let head = head.trim_end_matches([' ', '\t']);
     let block = indented_hook(relative, entry.key.start.column() - 1 + 2);
-    Some(format!(
-        "{head}\n{}{}",
-        block.trim_end_matches('\n'),
-        &text[end..]
-    ))
+    Some(format!("{head}\n{}{tail}", block.trim_end_matches('\n')))
 }
 
 /// `text` as YAML: `Ok(None)` for a document of comments only.
@@ -872,6 +875,18 @@ mod tests {
         let added = with_local_hook("repos: []\n", "").unwrap();
         assert!(added.starts_with("repos:\n  - repo: local\n"), "{added}");
         assert_eq!(with_local_hook("{repos: []}\n", ""), None);
+        // #1946: the empty sequence is found by code point among
+        // multi-byte text, before and after it.
+        let added = with_local_hook("# é😀\nrepos: []\nci:\n  skip: [é]\n", "").unwrap();
+        assert!(
+            added.starts_with("# é😀\nrepos:\n  - repo: local\n"),
+            "{added}"
+        );
+        assert!(
+            added.ends_with("always_run: true\nci:\n  skip: [é]\n"),
+            "{added}"
+        );
+        assert_eq!(with_local_hook("# é😀\n{repos: []}\n", ""), None);
     }
 
     #[test]
@@ -882,6 +897,14 @@ mod tests {
         assert!(kept.is_empty());
         assert!(
             refreshed.contains(&format!("entry: {}\r\n", hook_entry(""))),
+            "{refreshed}"
+        );
+        // #1946: the line ending is kept after multi-byte text.
+        let text = "# é😀\r\nrepos:\n  - repo: local\n    hooks:\n      - id: opentide-validate # é\n        entry: opentide validate --strict\r\n";
+        let refreshed = refresh_hook_entry(text, "", None).0.unwrap();
+        assert!(
+            refreshed.starts_with("# é😀\r\n")
+                && refreshed.ends_with(&format!("entry: {}\r\n", hook_entry(""))),
             "{refreshed}"
         );
     }

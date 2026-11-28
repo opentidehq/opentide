@@ -362,18 +362,22 @@ mod tests {
             .zip(after.bytes())
             .take_while(|(a, b)| a == b)
             .count();
+        let (before, after) = (before.as_bytes(), after.as_bytes());
         let common_end = before[common_start..]
-            .bytes()
+            .iter()
             .rev()
-            .zip(after[common_start..].bytes().rev())
+            .zip(after[common_start..].iter().rev())
             .take_while(|(a, b)| a == b)
             .count();
         assert_eq!(
             common_start + common_end,
             before.len(),
-            "bytes of the original changed:\n{before}\n---\n{after}"
+            "bytes of the original changed:\n{}\n---\n{}",
+            String::from_utf8_lossy(before),
+            String::from_utf8_lossy(after)
         );
-        after[common_start..after.len() - common_end].to_owned()
+        String::from_utf8(after[common_start..after.len() - common_end].to_vec())
+            .expect("the inserted text is whole characters")
     }
 
     #[test]

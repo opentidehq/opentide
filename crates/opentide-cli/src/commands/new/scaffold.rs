@@ -422,6 +422,17 @@ fn block_text(entries: &[Line], at: usize) -> Vec<(usize, usize)> {
         .collect()
 }
 
+/// `raw` cut at `at`, a [`Line`]'s `indent` or `column` (or the `#` after
+/// its indent): those count the spaces, `#` and `- ` that [`line_pattern`]
+/// matched at the line's start, all ASCII.
+fn cut_at(raw: &str, at: usize) -> (&str, &str) {
+    #[expect(
+        clippy::string_slice,
+        reason = "`at` is within the ASCII prefix `line_pattern` matched: a char boundary"
+    )]
+    (&raw[..at], &raw[at..])
+}
+
 /// Each non-blank line of `lines` with its YAML path (`index_template`).
 /// Template comments hug the key (`  #author:`), so a commented line has the
 /// indentation it would have uncommented.
@@ -560,7 +571,9 @@ pub fn fill_template(template: &str, fill: &Fill<'_>) -> Scaffold {
     let uncomment = |lines: &mut Vec<String>, entry: &mut Line| {
         if entry.commented {
             let raw = &lines[entry.index];
-            let text = format!("{}{}", &raw[..entry.indent], &raw[entry.indent + 1..]);
+            // Without the `#` after the indent.
+            let ((head, _), (_, tail)) = (cut_at(raw, entry.indent), cut_at(raw, entry.indent + 1));
+            let text = format!("{head}{tail}");
             lines[entry.index] = text;
             entry.commented = false;
             entry.column -= 1;
@@ -612,8 +625,8 @@ pub fn fill_template(template: &str, fill: &Fill<'_>) -> Scaffold {
         for position in block {
             let other = &mut entries[position];
             if !other.commented {
-                let raw = &lines[other.index];
-                lines[other.index] = format!("{}#{}", &raw[..other.indent], &raw[other.indent..]);
+                let (head, tail) = cut_at(&lines[other.index], other.indent);
+                lines[other.index] = format!("{head}#{tail}");
                 other.commented = true;
                 other.column += 1;
             }
@@ -660,7 +673,7 @@ pub fn fill_template(template: &str, fill: &Fill<'_>) -> Scaffold {
                      at: usize,
                      value: &Scalar| {
         let entry = &entries[at];
-        let head = &lines[entry.index][..entry.column];
+        let (head, _) = cut_at(&lines[entry.index], entry.column);
         if entry.role == Role::Key {
             let leaf = entry.path.last().map_or("", String::as_str);
             replacements.insert(entry.index, format!("{head}{leaf}: {}", scalar_text(value)));
@@ -841,7 +854,7 @@ pub fn fill_template(template: &str, fill: &Fill<'_>) -> Scaffold {
                 let text = block_text(&entries, at);
                 let head = text.first().map_or_else(
                     || " ".repeat(entries[at].column + 2),
-                    |(index, column)| lines[*index][..*column].to_owned(),
+                    |(index, column)| cut_at(&lines[*index], *column).0.to_owned(),
                 );
                 let rendered = body
                     .lines()

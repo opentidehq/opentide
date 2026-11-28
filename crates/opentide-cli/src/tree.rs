@@ -23,6 +23,108 @@
 
 use clap::{Args, Parser, Subcommand, ValueEnum};
 
+pub mod toggle;
+
+pub use toggle::Toggle;
+
+// The `--x` / `--no-x` pairs: one `Toggle` field each (#1967).
+
+toggle::pair! {
+    /// `--staging` / `--no-staging`.
+    Staging {
+        on: ("staging", "staging", "Deploy to staging tenants from pull requests"),
+        off: ("no_staging", "no-staging", "Turn --staging off"),
+    }
+}
+
+toggle::pair! {
+    /// `--inflight` / `--no-inflight`.
+    Inflight {
+        on: ("inflight", "inflight", "Update .opentide/inflight/ preview shards on pull requests"),
+        off: ("no_inflight", "no-inflight", "Turn --inflight off"),
+    }
+}
+
+toggle::pair! {
+    /// `--sharing` / `--no-sharing`.
+    Sharing {
+        on: ("sharing", "sharing", "Share changed objects on the default branch (off unless selected)"),
+        off: ("no_sharing", "no-sharing", "Turn --sharing off"),
+    }
+}
+
+toggle::pair! {
+    /// `--lint-changed` / `--lint-all`.
+    LintChanged {
+        on: ("lint_changed", "lint-changed", "Gate lint on the object files each run changes, so a catalogue with inherited findings can adopt it (validate still checks every file)"),
+        off: ("lint_all", "lint-all", "Turn --lint-changed off"),
+    }
+}
+
+toggle::pair! {
+    /// `--promotion` / `--no-promotion`.
+    Promotion {
+        on: ("promotion", "promotion", "Write [promotion] enabled in deployment.toml. Omit to keep the repository's setting."),
+        off: ("no_promotion", "no-promotion", "Turn --promotion off"),
+    }
+}
+
+toggle::pair! {
+    /// `--explorer-pages` / `--no-explorer-pages`.
+    ExplorerPages {
+        on: ("explorer_pages", "explorer-pages", "Include GitHub Pages explorer build and deploy jobs"),
+        off: ("no_explorer_pages", "no-explorer-pages", "Turn --explorer-pages off"),
+    }
+}
+
+toggle::pair! {
+    /// `--app-token` / `--no-app-token`.
+    AppToken {
+        on: ("app_token", "app-token", "GitHub Actions: the jobs that push to the default branch check out and push with a GitHub App token (variable OPENTIDE_APP_CLIENT_ID, secret OPENTIDE_APP_PRIVATE_KEY) instead of GITHUB_TOKEN; omit to keep what the existing pipeline has (ignored with a warning for gitlab and azure)"),
+        off: ("no_app_token", "no-app-token", "Turn --app-token off, including one the existing pipeline records"),
+    }
+}
+
+toggle::pair! {
+    /// `--prune` / `--no-prune`.
+    Prune {
+        on: ("prune", "prune", "The production job's RELEASE deploy retires the rules whose file the push deleted (deploy --prune); the default, unless the existing pipeline records --no-prune"),
+        off: ("no_prune", "no-prune", "The production job only warns about rules whose file the push deleted; recorded in the pipeline's header, so a regenerate keeps it until --prune"),
+    }
+}
+
+toggle::pair! {
+    /// `--install` / `--no-install`.
+    Install {
+        on: ("install", "install", "Install .git/hooks/pre-commit when this path is a Git repository"),
+        off: ("no_install", "no-install", "Turn --install off"),
+    }
+}
+
+toggle::pair! {
+    /// `--publish` / `--no-publish`.
+    Publish {
+        on: ("publish", "publish", "Override the block publish flag."),
+        off: ("no_publish", "no-publish", "Turn --publish off"),
+    }
+}
+
+toggle::pair! {
+    /// `--keep-deprecated` / `--drop-deprecated`.
+    KeepDeprecated {
+        on: ("keep_deprecated", "keep-deprecated", "Include rules whose status maps to DISABLEMENT or DELETION, so a RELEASE run disables or deletes them. Default: on, off with --all"),
+        off: ("drop_deprecated", "drop-deprecated", "Turn --keep-deprecated off"),
+    }
+}
+
+toggle::pair! {
+    /// `--include-prebuilt` / `--custom-only`.
+    IncludePrebuilt {
+        on: ("include_prebuilt", "include-prebuilt", "Include prebuilt rules converted to custom rules with derived UUIDs"),
+        off: ("custom_only", "custom-only", "Turn --include-prebuilt off"),
+    }
+}
+
 /// The word the command line spells `value` with (`microsoft_defender`).
 pub fn spelled<T: ValueEnum>(value: &T) -> String {
     value
@@ -602,66 +704,16 @@ pub struct SetupRepoFields {
 /// The CI/CD pipeline's options, taken by `setup` and `setup ci`.
 #[derive(Debug, Args)]
 pub struct SetupPipelineFields {
-    #[arg(
-        long = "staging",
-        help = "Deploy to staging tenants from pull requests",
-        overrides_with = "no_staging"
-    )]
-    pub staging: bool,
-    #[arg(
-        long = "no-staging",
-        overrides_with = "staging",
-        help = "Turn --staging off"
-    )]
-    pub no_staging: bool,
-    #[arg(
-        long = "inflight",
-        help = "Update .opentide/inflight/ preview shards on pull requests",
-        overrides_with = "no_inflight"
-    )]
-    pub inflight: bool,
-    #[arg(
-        long = "no-inflight",
-        overrides_with = "inflight",
-        help = "Turn --inflight off"
-    )]
-    pub no_inflight: bool,
-    #[arg(
-        long = "sharing",
-        help = "Share changed objects on the default branch (off unless selected)",
-        overrides_with = "no_sharing"
-    )]
-    pub sharing: bool,
-    #[arg(
-        long = "no-sharing",
-        overrides_with = "sharing",
-        help = "Turn --sharing off"
-    )]
-    pub no_sharing: bool,
-    #[arg(
-        long = "lint-changed",
-        help = "Gate lint on the object files each run changes, so a catalogue with inherited findings can adopt it (validate still checks every file)",
-        overrides_with = "lint_all"
-    )]
-    pub lint_changed: bool,
-    #[arg(
-        long = "lint-all",
-        overrides_with = "lint_changed",
-        help = "Turn --lint-changed off"
-    )]
-    pub lint_all: bool,
-    #[arg(
-        long = "promotion",
-        help = "Write [promotion] enabled in deployment.toml. Omit to keep the repository's setting.",
-        overrides_with = "no_promotion"
-    )]
-    pub promotion: bool,
-    #[arg(
-        long = "no-promotion",
-        overrides_with = "promotion",
-        help = "Turn --promotion off"
-    )]
-    pub no_promotion: bool,
+    #[command(flatten)]
+    pub staging: Toggle<Staging>,
+    #[command(flatten)]
+    pub inflight: Toggle<Inflight>,
+    #[command(flatten)]
+    pub sharing: Toggle<Sharing>,
+    #[command(flatten)]
+    pub lint_changed: Toggle<LintChanged>,
+    #[command(flatten)]
+    pub promotion: Toggle<Promotion>,
     #[arg(
         long = "promotion-target",
         help = "Status deploy promotes rules to. Omit to keep the repository's setting."
@@ -673,12 +725,8 @@ pub struct SetupPipelineFields {
         default_value = "3.12"
     )]
     pub python_version: String,
-    #[arg(
-        long = "explorer-pages",
-        help = "Include GitHub Pages explorer build and deploy jobs",
-        overrides_with = "no_explorer_pages"
-    )]
-    pub explorer_pages: bool,
+    #[command(flatten)]
+    pub explorer_pages: Toggle<ExplorerPages>,
     #[arg(
         long = "variable-group",
         help = "Azure Pipelines: link this Library variable group in variables: (repeatable; ignored with a warning for github and gitlab)",
@@ -686,36 +734,10 @@ pub struct SetupPipelineFields {
         value_name = "NAME"
     )]
     pub variable_group: Vec<String>,
-    #[arg(
-        long = "app-token",
-        help = "GitHub Actions: the jobs that push to the default branch check out and push with a GitHub App token (variable OPENTIDE_APP_CLIENT_ID, secret OPENTIDE_APP_PRIVATE_KEY) instead of GITHUB_TOKEN; omit to keep what the existing pipeline has (ignored with a warning for gitlab and azure)",
-        overrides_with = "no_app_token"
-    )]
-    pub app_token: bool,
-    #[arg(
-        long = "no-app-token",
-        overrides_with = "app_token",
-        help = "Turn --app-token off, including one the existing pipeline records"
-    )]
-    pub no_app_token: bool,
-    #[arg(
-        long = "prune",
-        help = "The production job's RELEASE deploy retires the rules whose file the push deleted (deploy --prune); the default, unless the existing pipeline records --no-prune",
-        overrides_with = "no_prune"
-    )]
-    pub prune: bool,
-    #[arg(
-        long = "no-prune",
-        overrides_with = "prune",
-        help = "The production job only warns about rules whose file the push deleted; recorded in the pipeline's header, so a regenerate keeps it until --prune"
-    )]
-    pub no_prune: bool,
-    #[arg(
-        long = "no-explorer-pages",
-        overrides_with = "explorer_pages",
-        help = "Turn --explorer-pages off"
-    )]
-    pub no_explorer_pages: bool,
+    #[command(flatten)]
+    pub app_token: Toggle<AppToken>,
+    #[command(flatten)]
+    pub prune: Toggle<Prune>,
     #[arg(
         long = "default-branch",
         help = "Branch that deploys and receives inflight shards (default: origin/HEAD, then the checked-out branch, then init.defaultBranch, then main; GitLab uses $CI_DEFAULT_BRANCH)"
@@ -928,18 +950,8 @@ pub struct SetupMcpArgs {
 pub struct SetupHooksArgs {
     #[command(flatten)]
     pub target: SetupTarget,
-    #[arg(
-        long = "install",
-        help = "Install .git/hooks/pre-commit when this path is a Git repository",
-        overrides_with = "no_install"
-    )]
-    pub install: bool,
-    #[arg(
-        long = "no-install",
-        overrides_with = "install",
-        help = "Turn --install off"
-    )]
-    pub no_install: bool,
+    #[command(flatten)]
+    pub install: Toggle<Install>,
     #[command(flatten)]
     pub confirm: SetupConfirm,
 }
@@ -1111,18 +1123,8 @@ pub struct SharePushArgs {
         help = "Resolve the run locally and make no request."
     )]
     pub dry_run: bool,
-    #[arg(
-        long = "publish",
-        help = "Override the block publish flag.",
-        overrides_with = "no_publish"
-    )]
-    pub publish: bool,
-    #[arg(
-        long = "no-publish",
-        overrides_with = "publish",
-        help = "Turn --publish off"
-    )]
-    pub no_publish: bool,
+    #[command(flatten)]
+    pub publish: Toggle<Publish>,
     #[command(flatten)]
     pub workers: ShareWorkers,
     #[arg(
@@ -1171,18 +1173,8 @@ pub struct DeployArgs {
         help = "Print the plan and compile each rule; send nothing"
     )]
     pub dry_run: bool,
-    #[arg(
-        long = "keep-deprecated",
-        help = "Include rules whose status maps to DISABLEMENT or DELETION, so a RELEASE run disables or deletes them. Default: on, off with --all",
-        overrides_with = "drop_deprecated"
-    )]
-    pub keep_deprecated: bool,
-    #[arg(
-        long = "drop-deprecated",
-        overrides_with = "keep_deprecated",
-        help = "Turn --keep-deprecated off"
-    )]
-    pub drop_deprecated: bool,
+    #[command(flatten)]
+    pub keep_deprecated: Toggle<KeepDeprecated>,
     #[arg(
         long = "skip-promotion",
         help = "Skip the status promotion of a RELEASE run on a push to the default branch"
@@ -1289,18 +1281,8 @@ pub struct GenerateExtractArgs {
 pub struct GenerateExtractElasticArgs {
     #[arg(long = "space", help = "Kibana space ID", default_value = "default")]
     pub space: String,
-    #[arg(
-        long = "include-prebuilt",
-        help = "Include prebuilt rules converted to custom rules with derived UUIDs",
-        overrides_with = "custom_only"
-    )]
-    pub include_prebuilt: bool,
-    #[arg(
-        long = "custom-only",
-        overrides_with = "include_prebuilt",
-        help = "Turn --include-prebuilt off"
-    )]
-    pub custom_only: bool,
+    #[command(flatten)]
+    pub include_prebuilt: Toggle<IncludePrebuilt>,
 }
 
 /// `opentide generate extract defender`.

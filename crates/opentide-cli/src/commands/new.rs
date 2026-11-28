@@ -583,7 +583,7 @@ fn target_path(
             .any(|suffix| folder.join(format!("{stem}{suffix}")).exists())
     };
     let stem = if taken {
-        format!("{stem}-{}", &uuid[..8.min(uuid.len())])
+        format!("{stem}-{}", uuid.chars().take(8).collect::<String>())
     } else {
         stem
     };

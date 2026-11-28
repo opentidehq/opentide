@@ -539,6 +539,7 @@ exit: 0
           ]
         },
         "name": "Sysdig Falco Rule",
+        "tenant": "staging",
         "uuid": "00000000-0000-4000-8003-0000005d1a90"
       }
     ]

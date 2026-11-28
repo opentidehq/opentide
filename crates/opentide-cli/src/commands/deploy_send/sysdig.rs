@@ -2,6 +2,7 @@
 //! deploy the rules of `--platform sysdig`.
 
 use opentide_compile::Json as CJson;
+use opentide_compile::compiler::{self, Compiler};
 use opentide_connectors::connector::{
     DeployError, DeployFailure, DeployOutcome, DeployRequest, DeployScope, Deployer,
 };
@@ -67,19 +68,23 @@ impl Sender<'_, '_> {
         let tenant = batch.tenant.name.clone();
         let mut result = RuleResult::new(PLATFORM, Some(&tenant), &rule.uuid, &rule.name);
         let strategy = self.strategy_of(rule, PLATFORM);
-        let body = strategy.clone().and_then(|_| {
-            opentide_compile::sysdig::compile_body(self.compile, rule, Some(&batch.table)).map_err(
-                |error| Raised::new(format!("Rule {} ({}): {error}", rule.uuid, rule.name)),
-            )
+        // The dry run's compile ([`Compiler`]), so it shows this body and
+        // the block's policies.
+        let compiled = strategy.clone().and_then(|_| {
+            compiler::Sysdig::compile(self.compile, rule, Some(&batch.table)).map_err(|error| {
+                Raised::new(format!("Rule {} ({}): {error}", rule.uuid, rule.name))
+            })
         });
-        let (strategy, body) = match (strategy, body) {
-            (Ok(strategy), Ok(body)) => (strategy, body),
+        let (strategy, compiled) = match (strategy, compiled) {
+            (Ok(strategy), Ok(compiled)) => (strategy, compiled),
             (Err(raised), _) | (_, Err(raised)) => {
                 self.close(log, result, Err(raised.clone()))?;
                 return Ok(false);
             }
         };
-        let policies = opentide_compile::sysdig::block_policies(rule)
+        let body = compiler::Sysdig::body(&compiled);
+        let policies = compiled
+            .policies
             .unwrap_or_else(|| tenant_policies.to_vec());
         let recreate_refusal = self.recreate_refusal(&rule.uuid, PLATFORM, &tenant);
         let (operation, stored) = operation_of(action, strategy);

@@ -1855,7 +1855,15 @@ fn toml_problem(path: &Path) -> Option<(Option<usize>, String)> {
         Err(error) => {
             let line = error
                 .span()
-                .map(|span| text[..span.start.min(text.len())].matches('\n').count() + 1);
+                // Newlines are single bytes: a span starting inside a
+                // character counts the newlines before that character.
+                .map(|span| {
+                    text.bytes()
+                        .take(span.start)
+                        .filter(|byte| *byte == b'\n')
+                        .count()
+                        + 1
+                });
             let reason = error
                 .message()
                 .lines()
@@ -2055,6 +2063,21 @@ pub(crate) fn on_path(name: &str, path: &str, cwd: &std::path::Path) -> Option<s
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_toml_problem_after_multi_byte_text_is_on_its_line() {
+        // #1946: the line counts newlines up to the error, wherever the
+        // multi-byte characters before it are.
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("x.toml");
+        std::fs::write(&path, "# é😀\nnom = \"é😀\"\n😀 = 1\n").unwrap();
+        let (line, reason) = toml_problem(&path).expect("invalid TOML");
+        assert_eq!(line, Some(3), "{reason}");
+        std::fs::write(&path, "nom = \"é😀\"\nclé = \"é😀").unwrap();
+        assert_eq!(toml_problem(&path).expect("invalid TOML").0, Some(2));
+        std::fs::write(&path, "nom = \"é😀\"\n").unwrap();
+        assert_eq!(toml_problem(&path), None);
+    }
 
     fn context<'a>(env: &'a Env, cwd: &'a Path) -> Context<'a> {
         Context {

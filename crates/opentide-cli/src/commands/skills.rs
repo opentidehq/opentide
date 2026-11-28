@@ -421,8 +421,8 @@ pub fn shorten(text: &str, width: usize, ellipsis: &str) -> String {
     }
     let take = (width + 1).saturating_sub(ellipsis.chars().count());
     let cut: String = chars[..take.min(chars.len())].iter().collect();
-    let kept = match cut.rfind(' ') {
-        Some(at) if at > 0 => cut[..at].to_owned(),
+    let kept = match cut.rsplit_once(' ') {
+        Some((head, _)) if !head.is_empty() => head.to_owned(),
         _ => {
             let mut all: Vec<char> = cut.chars().collect();
             all.pop();
@@ -686,6 +686,9 @@ mod tests {
         );
         assert_eq!(shorten("Abcdefghijklmnopqrstuvwxyz", 10, "…"), "Abcdefghi…");
         assert_eq!(shorten("one two, three", 9, "…"), "one two…");
+        // #1946: cut at a word among multi-byte text.
+        assert_eq!(shorten("é😀 détection 😀é", 8, "…"), "é😀…");
+        assert_eq!(shorten("😀😀😀😀😀😀", 4, "…"), "😀😀😀…");
     }
 
     #[test]

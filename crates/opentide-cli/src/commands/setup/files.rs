@@ -463,8 +463,7 @@ fn readme_no_platform() -> String {
 fn readme_with_platforms(text: &str, chosen: &[String]) -> Option<String> {
     let newline = opentide_core::text::newline_of(text);
     let heading = format!("{newline}## Platforms{newline}{newline}");
-    let at = text.rfind(&heading)? + heading.len();
-    let section = &text[at..];
+    let (head, section) = text.rsplit_once(&heading)?;
     let empty = readme_no_platform();
     let mut listed: Vec<String> = Vec::new();
     for line in section.split(newline).filter(|line| !line.is_empty()) {
@@ -488,7 +487,7 @@ fn readme_with_platforms(text: &str, chosen: &[String]) -> Option<String> {
         .iter()
         .map(|platform| format!("- {platform}"))
         .collect();
-    Some(format!("{}{}{newline}", &text[..at], lines.join(newline)))
+    Some(format!("{head}{heading}{}{newline}", lines.join(newline)))
 }
 
 // ---------------------------------------------------------------- repo
@@ -1716,6 +1715,12 @@ mod tests {
                 "- (configure platforms in .opentide/configurations/)",
                 "- graylog"
             )
+        );
+        // #1946: multi-byte text before the section is kept as it is.
+        let accented = "# Détection 😀\n\n## Platforms\n\n- sentinel\n";
+        assert_eq!(
+            readme_with_platforms(accented, &["splunk".to_owned()]).unwrap(),
+            "# Détection 😀\n\n## Platforms\n\n- sentinel\n- splunk\n"
         );
         // A section the user rewrote is not setup's list: left alone.
         for edited in [

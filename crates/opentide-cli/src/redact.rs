@@ -235,27 +235,28 @@ impl Redactor {
 
     fn redact_identifiers(&self, text: &str) -> String {
         let mut out = String::with_capacity(text.len());
-        let mut index = 0;
+        let mut rest = text;
         let mut previous: Option<char> = None;
-        while index < text.len() {
-            let rest = &text[index..];
+        while !rest.is_empty() {
             let found = if previous.is_some_and(is_word) {
                 None
             } else {
-                self.identifiers.iter().find(|identifier| {
-                    rest.starts_with(identifier.as_str())
-                        && !rest[identifier.len()..].chars().next().is_some_and(is_word)
+                self.identifiers.iter().find_map(|identifier| {
+                    rest.strip_prefix(identifier.as_str())
+                        .filter(|after| !after.chars().next().is_some_and(is_word))
+                        .map(|after| (identifier, after))
                 })
             };
-            if let Some(identifier) = found {
+            if let Some((identifier, after)) = found {
                 out.push_str(REDACTED);
-                index += identifier.len();
+                rest = after;
                 previous = identifier.chars().last();
                 continue;
             }
-            let Some(c) = rest.chars().next() else { break };
+            let mut chars = rest.chars();
+            let Some(c) = chars.next() else { break };
             out.push(c);
-            index += c.len_utf8();
+            rest = chars.as_str();
             previous = Some(c);
         }
         out
@@ -307,6 +308,11 @@ fn masked(value: &str) -> String {
     }
 }
 
+#[expect(
+    clippy::string_slice,
+    reason = "every index is the end of a regex match on `text`, or of one on \
+              the text after it: a char boundary"
+)]
 fn redact_assignments(text: &str) -> String {
     let p = patterns();
     let mut out = String::with_capacity(text.len());
@@ -345,8 +351,8 @@ fn redact_assignments(text: &str) -> String {
 fn is_http_status(value: &str, rest: &str) -> bool {
     value == "HTTP"
         && rest.strip_prefix(' ').is_some_and(|rest| {
-            let digits: String = rest.chars().take_while(char::is_ascii_digit).collect();
-            digits.len() == 3 && !rest[3..].starts_with(|c: char| c.is_alphanumeric())
+            let after = rest.trim_start_matches(|c: char| c.is_ascii_digit());
+            rest.len() - after.len() == 3 && !after.starts_with(char::is_alphanumeric)
         })
 }
 
@@ -601,6 +607,25 @@ mod tests {
         );
         let numbers = Redactor::new(vec!["12345".into(), "1234567".into()], vec![]);
         assert_eq!(numbers.secrets, vec!["1234567".to_owned()]);
+    }
+
+    #[test]
+    fn multi_byte_text_around_identifiers_and_assignments_is_kept() {
+        // #1946: the text is walked by characters, never by a byte index
+        // that could fall inside `é` or `😀`.
+        let redactor = Redactor::new(Vec::new(), vec!["prodé".to_owned(), "😀acme".to_owned()]);
+        assert_eq!(
+            redactor.redact("😀 prodé, 😀acme é prodéx éprodé"),
+            "😀 ***, *** é prodéx éprodé"
+        );
+        assert_eq!(redactor.redact("é😀"), "é😀");
+        assert_eq!(redactor.redact("é😀 token=sécret😀 é"), "é😀 token=*** é");
+        assert_eq!(
+            redactor.redact("le jeton é: HTTP 401 😀"),
+            "le jeton é: HTTP 401 😀"
+        );
+        assert_eq!(redactor.redact("token: HTTP 401é"), "token: *** 401é");
+        assert_eq!(redactor.redact("token: HTTP 40é"), "token: *** 40é");
     }
 
     #[test]

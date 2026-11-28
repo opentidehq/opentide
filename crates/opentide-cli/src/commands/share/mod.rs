@@ -94,8 +94,7 @@ impl Args {
         let unset = |selection: &ShareSelection, workers: i64| SharePushArgs {
             selection: selection.clone(),
             dry_run: false,
-            publish: false,
-            no_publish: false,
+            publish: crate::tree::Toggle::default(),
             workers: ShareWorkers { workers },
             changed: false,
             since: None,
@@ -132,16 +131,16 @@ impl Args {
             if group_wins(id) { typed } else { own }.clone()
         };
         // Each of the pair is the group's or the subcommand's alone.
-        let publish = if group_wins("publish") {
-            typed.publish
-        } else {
-            own.publish
+        let typed_last = |id: &str| {
+            if group_wins(id) {
+                typed.publish
+            } else {
+                own.publish
+            }
+            .get()
         };
-        let no_publish = if group_wins("no_publish") {
-            typed.no_publish
-        } else {
-            own.no_publish
-        };
+        let publish = typed_last("publish") == Some(true);
+        let no_publish = typed_last("no_publish") == Some(false);
         Args {
             mode,
             targets: pick("target", &own.selection.target, &typed.selection.target),
@@ -1203,6 +1202,74 @@ mod from_cli_tests {
         let args = parse(&["share", "push", "--no-publish"], &[]);
         assert_eq!(args.publish, Some(false));
         assert_eq!(parse(&["share", "push"], &[]).publish, None);
+    }
+
+    #[test]
+    fn publish_is_read_as_its_two_flags_were_for_every_spelling() {
+        // #1967: `--publish` / `--no-publish` typed on the group, on `push`,
+        // or both, in every spelling clap accepts, give what the two
+        // booleans gave: `--publish` from where it was looked for first,
+        // then `--no-publish` from where it was.
+        use crate::tree::Publish;
+        use crate::tree::toggle::Pair as _;
+        use crate::tree::toggle::spellings::SPELLINGS;
+        use clap::FromArgMatches as _;
+        let flags = |typed: &[bool]| -> Vec<String> {
+            typed
+                .iter()
+                .map(|on| {
+                    format!(
+                        "--{}",
+                        if *on {
+                            Publish::ON_LONG
+                        } else {
+                            Publish::OFF_LONG
+                        }
+                    )
+                })
+                .collect()
+        };
+        for (group, _) in SPELLINGS {
+            for (push, _) in SPELLINGS {
+                let line: Vec<String> = ["opentide", "share"]
+                    .into_iter()
+                    .map(str::to_owned)
+                    .chain(flags(group))
+                    .chain(["push".to_owned()])
+                    .chain(flags(push))
+                    .collect();
+                let matches = crate::catalog::root().try_get_matches_from(&line).unwrap();
+                let share_matches = matches.subcommand_matches("share").unwrap();
+                let given = |id: &str| {
+                    share_matches.value_source(id) == Some(clap::parser::ValueSource::CommandLine)
+                };
+                let Ok(Some(RootCommand::Share(share))) =
+                    Cli::from_arg_matches(&matches).map(|cli| cli.command)
+                else {
+                    panic!("not a share command: {line:?}");
+                };
+                let args = Args::from_cli(&share, given);
+                // The two booleans: each true when its flag was typed last
+                // where it is read from.
+                let last = |typed: &[bool], on: bool| typed.last() == Some(&on);
+                let publish = if given("publish") {
+                    last(group, true)
+                } else {
+                    last(push, true)
+                };
+                let no_publish = if given("no_publish") {
+                    last(group, false)
+                } else {
+                    last(push, false)
+                };
+                let want = match (publish, no_publish) {
+                    (true, _) => Some(true),
+                    (_, true) => Some(false),
+                    _ => None,
+                };
+                assert_eq!(args.publish, want, "{line:?}");
+            }
+        }
     }
 
     fn record(uuid: &str, action: &str) -> Record {

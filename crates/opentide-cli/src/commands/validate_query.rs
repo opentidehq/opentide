@@ -604,8 +604,8 @@ fn unreadable_rule(
 /// `(os error N)`.
 fn os_problem(error: &std::io::Error) -> String {
     let text = error.to_string();
-    match text.rfind(" (os error ") {
-        Some(at) if text.ends_with(')') => text[..at].to_owned(),
+    match text.rsplit_once(" (os error ") {
+        Some((head, _)) if text.ends_with(')') => head.to_owned(),
         _ => text,
     }
 }
@@ -1440,6 +1440,15 @@ mod tests {
         assert!(!problem.is_empty());
         assert_eq!(format!("{problem} (os error {code})"), error.to_string());
         assert_eq!(os_problem(&std::io::Error::other("gone")), "gone");
+        // #1946: words in any script before the suffix.
+        assert_eq!(
+            os_problem(&std::io::Error::other("fichier é😀 absent (os error 2)")),
+            "fichier é😀 absent"
+        );
+        assert_eq!(
+            os_problem(&std::io::Error::other("é (os error 2) 😀")),
+            "é (os error 2) 😀"
+        );
     }
 
     #[test]

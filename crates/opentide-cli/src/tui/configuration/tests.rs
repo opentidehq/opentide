@@ -389,3 +389,24 @@ fn redaction_output_is_pinned() {
         "[proxy]\r\ntoken = \"•••• hidden\" # c https://•••• hidden@h\r\nname = \"plain\"\r\n"
     );
 }
+
+/// #1946: comments and quoted keys among multi-byte text are cut between
+/// characters; a comment's URL user is still hidden.
+#[test]
+fn multi_byte_text_between_values_is_kept_and_its_comment_urls_hidden() {
+    assert_eq!(
+        between_values("é😀 # https://usé😀r@hôte.example 😀\n\"clé # 😀\" = ").unwrap(),
+        format!("é😀 # https://{HIDDEN}@hôte.example 😀\n\"clé # 😀\" = ")
+    );
+    assert_eq!(between_values("'é😀' = ").unwrap(), "'é😀' = ");
+    assert_eq!(between_values("😀\"é").unwrap(), "😀\"é");
+    let text =
+        "# é😀 https://usér@hôte.example\n[[tenants]]\nname = \"é😀\" # 😀\n\"clé é\" = 'x😀'\n";
+    let redacted = redact_toml(text, &env(&[])).unwrap();
+    assert_eq!(
+        redacted,
+        format!(
+            "# é😀 https://{HIDDEN}@hôte.example\n[[tenants]]\nname = \"é😀\" # 😀\n\"clé é\" = 'x😀'\n"
+        )
+    );
+}
