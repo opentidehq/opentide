@@ -2168,7 +2168,7 @@ pub enum TlpName {
 }
 
 impl TlpName {
-    /// The name.
+    /// The name as the configuration writes it (`clear`, `amber+strict`).
     pub const fn name(self) -> &'static str {
         match self {
             Self::Clear => "clear",

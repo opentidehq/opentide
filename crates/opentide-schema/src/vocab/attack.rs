@@ -79,7 +79,7 @@ pub struct Technique {
     pub subtechniques: Vec<String>,
 }
 
-/// The matrix.
+/// The Enterprise matrix: its tactics in order, and every technique by id.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct Matrix {
     /// The tactics, in order.

@@ -5,7 +5,7 @@ use super::annotate::annotate_editor_schema;
 use super::json::{Json, Object};
 use crate::revisions::SchemaId;
 
-/// The router's title.
+/// The object router schema's `title`.
 pub const ROUTER_TITLE: &str = "opentide Object Router";
 
 /// The file a revision's schema is written to: `rule.1.1.schema.json`.

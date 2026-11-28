@@ -20,7 +20,7 @@ pub struct ParseError {
     /// Where, when the parser says so: line and column from 1, columns in
     /// code points.
     pub line: Option<usize>,
-    /// The column.
+    /// The column of that place, from 1, in code points.
     pub column: Option<usize>,
     /// The tables nest deeper than [`MAX_DEPTH`]: `config_parse`, "The
     /// document is nested too deeply."

@@ -81,7 +81,7 @@ pub struct TargetRow {
 pub struct FieldRow {
     /// Its API name (`Process.CommandLine`).
     pub name: String,
-    /// Its target.
+    /// The API name of the target the field belongs to ([`TargetRow::name`]).
     pub target: String,
     /// Its Control Center label.
     pub label: String,

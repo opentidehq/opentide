@@ -32,7 +32,7 @@ pub const ADVISORY_CODES: [&str; 4] = [
 /// One advisory: its code, its path in the rule, and its message.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Advisory {
-    /// The code.
+    /// One of [`ADVISORY_CODES`].
     pub code: &'static str,
     /// The path in the rule (`configurations.bitdefender.detection.criteria.0`).
     pub field_path: Vec<String>,

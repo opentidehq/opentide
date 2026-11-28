@@ -55,7 +55,7 @@ impl fmt::Display for Version {
 pub struct Contract {
     /// The vocabulary's field name (`tlp`, `att&ck`).
     pub field: String,
-    /// The version.
+    /// The version the field is held to (`M.m` in `field::M.m`).
     pub version: Version,
 }
 
