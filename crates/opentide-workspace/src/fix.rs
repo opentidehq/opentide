@@ -180,12 +180,13 @@ pub fn split_keeping_breaks(text: &str) -> Vec<&str> {
                 continue;
             }
         };
-        lines.push(&text[start..end]);
+        // Each line ends after an ASCII line break.
+        lines.push(crate::cut(text, start, end));
         start = end;
         index = end;
     }
     if start < text.len() {
-        lines.push(&text[start..]);
+        lines.push(crate::cut(text, start, text.len()));
     }
     lines
 }
@@ -210,7 +211,8 @@ fn line_spans(text: &str) -> Vec<(usize, usize)> {
 /// column may be one past the line's last character.
 fn offset(text: &str, spans: &[(usize, usize)], line: usize, column: usize) -> Option<usize> {
     let (start, end) = *spans.get(line.checked_sub(1)?)?;
-    let content = &text[start..end];
+    // A line's span ends before its ASCII line break.
+    let content = crate::cut(text, start, end);
     let column = column.checked_sub(1)?;
     if column == content.chars().count() {
         return Some(end);
@@ -231,11 +233,14 @@ pub fn apply(text: &str, edit: &TextEdit) -> Option<(String, String)> {
     if end <= start {
         return None;
     }
+    // `offset` reads both from `char_indices` or a line's end.
+    let (before, rest) = text.split_at_checked(start)?;
+    let (replaced, after) = rest.split_at_checked(end - start)?;
     let mut updated = String::with_capacity(text.len() + edit.replacement.len());
-    updated.push_str(&text[..start]);
+    updated.push_str(before);
     updated.push_str(&edit.replacement);
-    updated.push_str(&text[end..]);
-    Some((updated, text[start..end].to_owned()))
+    updated.push_str(after);
+    Some((updated, replaced.to_owned()))
 }
 
 /// The edits `--fix` may apply for `diagnostic`: none unless its fix is safe
@@ -881,5 +886,26 @@ mod tests {
         assert_eq!(fix_phrase(0, 0, false, 2), "Could not write 2 fixes");
         assert_eq!(fix_phrase(3, 2, false, 0), "Fixed 3 values in 2 files");
         assert_eq!(fix_phrase(1, 1, true, 0), "Would fix 1 value in 1 file");
+    }
+
+    #[test]
+    fn an_edit_on_multi_byte_text_replaces_whole_characters() {
+        let text = "é😀x\r\n😀é\n";
+        assert_eq!(
+            apply(text, &edit(1, 2, 3, "ab")),
+            Some(("éabx\r\n😀é\n".to_owned(), "😀".to_owned()))
+        );
+        assert_eq!(
+            apply(text, &edit(2, 2, 3, "")),
+            Some(("é😀x\r\n😀\n".to_owned(), "é".to_owned()))
+        );
+        assert_eq!(apply(text, &edit(1, 3, 2, "")), None);
+        assert_eq!(apply(text, &edit(1, 1, 9, "")), None);
+        for column in 1..=4 {
+            for end in column..=5 {
+                let _ = apply(text, &edit(1, column, end, "é"));
+                let _ = apply(text, &edit(2, column, end, "😀"));
+            }
+        }
     }
 }
