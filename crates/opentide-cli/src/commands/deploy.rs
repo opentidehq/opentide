@@ -12,9 +12,10 @@ use opentide_compile::plan::Scope;
 use opentide_schema::vocab::Vocabularies;
 use opentide_workspace::{OsFs, root};
 
+use super::result::{ExitCode, Status};
 use super::{COMMAND_FAILED, placement};
 use crate::env::Env;
-use crate::envelope::{Failure, NextAction, Outcome, USAGE_EXIT_CODE, code};
+use crate::envelope::{Failure, NextAction, Outcome, code};
 use crate::json::Json;
 use crate::render::diagnostic::{Diagnostic, Severity};
 use crate::render::glyphs;
@@ -370,7 +371,7 @@ fn with_retirements(
     workspace: &opentide_workspace::Workspace,
     owned: &Owned,
 ) {
-    if dry.outcome.status == "failed" {
+    if !dry.outcome.ok() {
         return;
     }
     let found = &retirements(args, cx, workspace, owned);
@@ -418,11 +419,11 @@ fn with_retirements(
         Some(entry) => entry.1 = value,
         None => items.push((key.to_owned(), value)),
     };
-    let was_skipped = dry.outcome.status == "skipped";
+    let was_skipped = dry.outcome.status() == Status::Skipped;
     if was_skipped {
         // Nothing else to deploy: the retirements are the plan.
-        "completed".clone_into(&mut dry.outcome.status);
-        dry.outcome.exit_code = 0;
+        dry.outcome.set_status(Status::Completed);
+        dry.outcome.set_exit(ExitCode::Success);
         dry.outcome.failure = None;
         dry.outcome.next_actions.clear();
         dry.outcome
@@ -546,7 +547,7 @@ fn promotion_warnings(args: &Args, cx: &Context, owned: &Owned) -> Vec<String> {
 fn refused(message: String, failure_code: &str, argument: &str) -> DryRun {
     let mut failure = Failure::new(failure_code, message);
     failure.argument = Some(argument.to_owned());
-    let outcome = Outcome::failed(COMMAND, USAGE_EXIT_CODE, failure);
+    let outcome = Outcome::failed(COMMAND, ExitCode::Usage.code(), failure);
     DryRun {
         result: Json::Null,
         outcome,
@@ -561,7 +562,11 @@ fn refused(message: String, failure_code: &str, argument: &str) -> DryRun {
 
 /// A run that stopped on an error of its own (the workspace did not open).
 fn failed(message: String) -> DryRun {
-    let outcome = Outcome::failed(COMMAND, 1, Failure::new(COMMAND_FAILED, message.clone()));
+    let outcome = Outcome::failed(
+        COMMAND,
+        ExitCode::Failure.code(),
+        Failure::new(COMMAND_FAILED, message.clone()),
+    );
     DryRun {
         result: Json::object([
             ("status", Json::str("failed")),
