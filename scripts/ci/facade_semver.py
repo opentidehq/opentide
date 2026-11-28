@@ -32,7 +32,13 @@ Majors only (`--release-type minor`): the facade's release decides the
 version, and an addition, such as a variant of a `#[non_exhaustive]` enum, is
 a minor change, as cargo semver-checks reads it.
 
-Usage (the `facade` job of ci.yml):
+Each document is built once per tree, the two trees at once. `--save-dir`
+copies the change's documents out, and a later run at a commit whose parent
+is that change reads them back with `--baseline-cache`, building only a
+package the directory lacks (ci.yml's `facade-reexports` job keeps them in
+actions/cache, keyed on the commit).
+
+Usage (the `facade-reexports` job of ci.yml):
 
     python3 scripts/ci/facade_semver.py --baseline-root <checkout of the base>
 
@@ -45,11 +51,13 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, TypeVar
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -58,13 +66,38 @@ FACADE = "opentide"
 #: The facade's crate name in Rust paths, and in rustdoc's JSON.
 FACADE_CRATE = "opentide"
 
+T = TypeVar("T")
 JsonDoc = dict[str, Any]
 #: A canonical path inside a crate, without the crate's name: ("codes",).
 ItemPath = tuple[str, ...]
 
 
-def rustdoc_json(root: Path, target: Path, package: str) -> JsonDoc:
-    """`package`'s rustdoc JSON, every feature, built from the tree at `root`."""
+#: A tree's rustdoc JSON documents, built once: (tree, package) to the file.
+_BUILT: dict[tuple[Path, str], Path] = {}
+#: Trees whose documents are read from a directory first (`--baseline-cache`):
+#: `<package>.json` there stands for a build of that package at that tree.
+CACHES: dict[Path, Path] = {}
+#: Trees whose built documents are also copied to a directory (`--save-dir`),
+#: for the next run's `--baseline-cache`.
+SAVES: dict[Path, Path] = {}
+
+
+def rustdoc_path(root: Path, target: Path, package: str) -> Path:
+    """The file holding `package`'s rustdoc JSON, every feature, for the tree at `root`.
+
+    Read from the tree's cache directory when it holds the package; built
+    with `cargo rustdoc` otherwise, once per tree and package (the document
+    is asked for again by each step that reads it).
+    """
+    key = (root, package)
+    if key in _BUILT:
+        return _BUILT[key]
+    name = f"{package.replace('-', '_')}.json"
+    cached = CACHES[root] / f"{package}.json" if root in CACHES else None
+    if cached is not None and cached.is_file():
+        print(f"==> {package}: rustdoc JSON from the cache", flush=True)
+        _BUILT[key] = cached
+        return cached
     env = dict(os.environ, RUSTC_BOOTSTRAP="1", CARGO_TARGET_DIR=str(target))
     # Warnings are not this check's concern: the docs job denies them.
     env.pop("RUSTDOCFLAGS", None)
@@ -89,8 +122,17 @@ def rustdoc_json(root: Path, target: Path, package: str) -> JsonDoc:
         env=env,
         check=True,
     )
-    path = target / "doc" / f"{package.replace('-', '_')}.json"
-    return json.loads(path.read_text(encoding="utf-8"))
+    built = target / "doc" / name
+    if root in SAVES:
+        SAVES[root].mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(built, SAVES[root] / f"{package}.json")
+    _BUILT[key] = built
+    return built
+
+
+def rustdoc_json(root: Path, target: Path, package: str) -> JsonDoc:
+    """`package`'s rustdoc JSON, every feature, built from the tree at `root`."""
+    return json.loads(rustdoc_path(root, target, package).read_text(encoding="utf-8"))
 
 
 def facade_paths(facade: JsonDoc) -> dict[int, ItemPath]:
@@ -430,6 +472,21 @@ def semver_checks(current: Path, baseline: Path) -> bool:
     return result.returncode == 0
 
 
+def across_sides(
+    sides: dict[str, tuple[Path, Path]], work: Callable[[str, Path, Path], T]
+) -> dict[str, T]:
+    """`work(side, root, target)` for each side, the sides at once.
+
+    The two trees build in separate target directories, so neither waits for
+    the other's lock; the builds inside one side stay one after another.
+    """
+    with ThreadPoolExecutor(max_workers=len(sides)) as pool:
+        futures = {
+            side: pool.submit(work, side, root, target) for side, (root, target) in sides.items()
+        }
+        return {side: future.result() for side, future in futures.items()}
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("--baseline-root", type=Path, required=True)
@@ -438,6 +495,17 @@ def main() -> int:
         "--work-dir",
         type=Path,
         help="where the JSON documents and the baseline's target go (a temporary directory)",
+    )
+    parser.add_argument(
+        "--baseline-cache",
+        type=Path,
+        help="a directory of the baseline's rustdoc JSON (`<package>.json`, as --save-dir "
+        "wrote it at the same commit): a package found there is not built",
+    )
+    parser.add_argument(
+        "--save-dir",
+        type=Path,
+        help="copy each rustdoc JSON document built for the change here",
     )
     args = parser.parse_args()
     work = args.work_dir or Path(tempfile.mkdtemp(prefix="facade-semver-"))
@@ -453,9 +521,15 @@ def main() -> int:
         "current": (args.current_root.resolve(), current_target),
         "baseline": (args.baseline_root.resolve(), baseline_target),
     }
+    if args.baseline_cache is not None:
+        CACHES[sides["baseline"][0]] = args.baseline_cache.resolve()
+    if args.save_dir is not None:
+        SAVES[sides["current"][0]] = args.save_dir.resolve()
     found = {
-        side: reexports(rustdoc_json(root, target, FACADE))
-        for side, (root, target) in sides.items()
+        side: reexports(document)
+        for side, document in across_sides(
+            sides, lambda _side, root, target: rustdoc_json(root, target, FACADE)
+        ).items()
     }
     packages = {side: workspace_packages(root) for side, (root, _) in sides.items()}
     # Each item is tracked by its facade path: one that moved between
@@ -464,6 +538,17 @@ def main() -> int:
         "current": by_crate(found["current"]),
         "baseline": by_crate(found["baseline"], found["current"], set(packages["current"])),
     }
+    # Every crate the check reads, built on both sides at once before the
+    # steps below ask for them (the types a re-exported item names add a few
+    # more, built when asked for).
+    wanted = sorted((set(exposed["current"]) | set(exposed["baseline"])) - {FACADE_CRATE})
+
+    def build_all(side: str, root: Path, target: Path) -> None:
+        for crate in wanted:
+            if crate in packages[side]:
+                rustdoc_json(root, target, packages[side][crate])
+
+    across_sides(sides, build_all)
     # The types of other workspace crates that a re-exported item names (a
     # field's, a parameter's) are the facade's API too, though the facade
     # never names them: they are held in their own crates, on each side from
