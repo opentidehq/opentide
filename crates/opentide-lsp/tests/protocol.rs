@@ -4598,7 +4598,7 @@ fn a_keystroke_runs_the_engine_on_the_object_it_changed_alone() {
 /// #2169: the field catalogs arrive after the first pulls of `OPEN` open
 /// rules of `scratch` (the server generates no catalog before a path the
 /// test creates exists, `OPENTIDE_LSP_HOLD_CATALOGS`), once `generated`
-/// catalogs are ready; the next pull installs them, then a keystroke in one
+/// catalogs are ready; a pull installs them (pulled until one does), then a keystroke in one
 /// rule is pulled. How many engine analyses ran after the first pulls: once
 /// the catalogs were installed, and after the keystroke.
 fn engine_analyses_across_late_catalogs(
@@ -4656,8 +4656,22 @@ fn engine_analyses_across_late_catalogs(
         );
         std::thread::sleep(std::time::Duration::from_millis(20));
     }
-    pull_all(&mut lsp, &texts);
-    let arrived = stats(&mut lsp);
+    // `catalogsBuilt` counts a catalog before the server can hand it out
+    // (the warm-up thread's `OnceLock` is set after the count, a root's own
+    // thread is joined once finished), so a pull right after the count can
+    // still find none to install: pull until one did.
+    let arrived = loop {
+        pull_all(&mut lsp, &texts);
+        let arrived = stats(&mut lsp);
+        if arrived["catalogInstalled"] == true {
+            break arrived;
+        }
+        assert!(
+            std::time::Instant::now() < deadline,
+            "the catalogs were generated but never installed: {arrived}"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    };
     assert_eq!(arrived["catalogInstalled"], true, "{arrived}");
     let installed = engine(&mut lsp) - first;
 
