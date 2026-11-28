@@ -18,7 +18,7 @@ use opentide_schema::platforms::PlatformId;
 use crate::json::Json;
 use crate::rule::{CompileError, Rule};
 use crate::strategy::StatusStrategy;
-use crate::{Context, datadog, deploy, exabeam, google_secops, graylog, sentinel};
+use crate::{Context, datadog, deploy, exabeam, google_secops, graylog, sentinel, sysdig};
 
 /// The compile of one platform's rules, shared by the dry run and the deploy.
 pub trait Compiler {
@@ -195,5 +195,35 @@ impl Compiler for GoogleSecops {
 
     fn body(compiled: &Json) -> Json {
         compiled.clone()
+    }
+}
+
+/// Sysdig: the Falco rule body for one tenant, whose tags it carries, under
+/// its block's status, and beside it the runtime policies the block names.
+#[derive(Debug, Clone, Copy)]
+pub struct Sysdig;
+
+impl Compiler for Sysdig {
+    const PLATFORM: PlatformId = PlatformId::Sysdig;
+
+    /// The tenant's table. `None` in a dry run that reaches no tenant: the
+    /// tenant's tags are left out.
+    type Target<'t> = Option<&'t Json>;
+
+    type Compiled = sysdig::SysdigRule;
+
+    fn compile(
+        cx: &Context<'_>,
+        rule: &Rule,
+        tenant: Option<&Json>,
+    ) -> Result<sysdig::SysdigRule, CompileError> {
+        Ok(sysdig::SysdigRule {
+            body: sysdig::compile_body(cx, rule, tenant)?,
+            policies: sysdig::block_policies(rule),
+        })
+    }
+
+    fn body(compiled: &sysdig::SysdigRule) -> Json {
+        compiled.body.clone()
     }
 }

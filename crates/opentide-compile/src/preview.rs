@@ -10,12 +10,14 @@ use opentide_schema::platforms::{PlatformId, PlatformKey};
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 
-use crate::compiler::{Compiler, Datadog, Exabeam, GoogleSecops, Graylog, GraylogTarget, Sentinel};
+use crate::compiler::{
+    Compiler, Datadog, Exabeam, GoogleSecops, Graylog, GraylogTarget, Sentinel, Sysdig,
+};
 use crate::json::{Json, Object};
 use crate::rule::{CompileError, Rule};
 use crate::{
     Context, bitdefender, carbon_black, crowdstrike, datadog, deploy, elastic, exabeam,
-    google_secops, graylog, harfanglab, microsoft_defender, plan, sentinel_one, splunk, sysdig,
+    google_secops, graylog, harfanglab, microsoft_defender, plan, sentinel_one, splunk,
 };
 
 /// The tenant a preview compiles for: exclusions scoped to a tenant name are
@@ -58,7 +60,9 @@ pub fn compile_offline(
     match platform {
         PlatformId::Sentinel => Some(sentinel_body(cx, rule, PREVIEW_TENANT)),
         PlatformId::Elastic => Some(elastic::compile(cx, rule, &elastic::Setup::none())),
-        PlatformId::Sysdig => Some(sysdig::compile_body(cx, rule, None)),
+        PlatformId::Sysdig => {
+            Some(Sysdig::compile(cx, rule, None).map(|compiled| Sysdig::body(&compiled)))
+        }
         PlatformId::Bitdefender => Some(bitdefender_request(cx, rule, None)),
         PlatformId::Exabeam => Some(
             Exabeam::compile(cx, rule, None).map(|compiled| exabeam::create_request(&compiled)),
@@ -171,7 +175,9 @@ pub fn compile_tenant(
     match platform {
         deployer!() => tenant_writes(cx, platform, rule, tenant, config, inputs),
         PlatformId::Sentinel => sentinel_body(cx, rule, tenant),
-        PlatformId::Sysdig => sysdig::compile_body(cx, rule, known),
+        PlatformId::Sysdig => {
+            Sysdig::compile(cx, rule, known).map(|compiled| Sysdig::body(&compiled))
+        }
         PlatformId::Bitdefender => bitdefender_tenant(cx, rule, config, id),
         PlatformId::Exabeam => {
             Exabeam::compile(cx, rule, known).map(|compiled| exabeam::create_request(&compiled))
@@ -528,8 +534,8 @@ pub fn failure(rule: &Rule, error: &CompileError) -> Json {
 /// The preview of `rule` on `platform` for a run that sends it to the
 /// tenants named `tenants` (`preview_rule_deployment`): a platform whose
 /// request depends on the tenant (Sentinel, Bitdefender, Graylog, Exabeam)
-/// compiles it for each, and shows the first; Elastic compiles it for the
-/// first; every other platform is [`preview`]'s.
+/// compiles it for each, and shows the first; Elastic and Sysdig compile it
+/// for the first; every other platform is [`preview`]'s.
 pub fn preview_on(
     cx: &Context<'_>,
     platform: &PlatformKey,
@@ -560,8 +566,9 @@ pub fn preview_planned(
         PlatformId::Elastic => elastic_preview(cx, rule, tenants),
         deployer!() => requests_preview(cx, platform_id, rule, tenants, known),
         PlatformId::Sentinel => sentinel_preview(cx, rule, tenants),
+        PlatformId::Sysdig => sysdig_preview(cx, rule, tenants),
         // The same request on every tenant.
-        PlatformId::Sysdig | PlatformId::GoogleSecops => preview(cx, platform, rule),
+        PlatformId::GoogleSecops => preview(cx, platform, rule),
     }
 }
 
@@ -697,6 +704,36 @@ fn exabeam_preview(cx: &Context<'_>, rule: &Rule, tenants: &[String]) -> Json {
     }
 }
 
+/// The body a Sysdig deploy would send: compiled, as the deploy compiles it
+/// ([`Sysdig`]), for the first tenant the run sends the rule to, so the
+/// tenant's tags are in it, and the entry names that `tenant`. With no
+/// tenant, the tenant's tags are left out. The block's own policies, which
+/// a deploy takes before the tenant's, are shown beside the body (they are
+/// not in it), only when the block names them.
+fn sysdig_preview(cx: &Context<'_>, rule: &Rule, tenants: &[String]) -> Json {
+    let first = tenants.iter().find_map(|name| {
+        deploy::tenant(cx, &PlatformId::Sysdig.into(), name).map(|table| (name.as_str(), table))
+    });
+    match Sysdig::compile(cx, rule, first.map(|(_, table)| table)) {
+        Ok(sent) => {
+            let mut entry = compiled(rule, Sysdig::body(&sent));
+            if let Json::Object(fields) = &mut entry {
+                if let Some(policies) = sent.policies {
+                    fields.insert(
+                        "policies".into(),
+                        Json::Array(policies.into_iter().map(Json::Str).collect()),
+                    );
+                }
+                if let Some((name, _)) = first {
+                    fields.insert("tenant".into(), name.into());
+                }
+            }
+            entry
+        }
+        Err(error) => failure(rule, &error),
+    }
+}
+
 /// The request a Datadog deploy would send (RFC rfc-datadog-cloud-siem §7.2):
 /// compiled for each tenant the run sends the rule to, so a tenant that lacks
 /// a notification alias the block names fails the dry run, naming it; the
@@ -760,24 +797,7 @@ pub fn preview(cx: &Context<'_>, platform: &PlatformKey, rule: &Rule) -> Json {
         // The oracle names Sentinel in a Sysdig failure (`_compile_failure`
         // calls `compile_diagnostic(exc)` without the platform); this names
         // Sysdig (tests/golden/payloads/APPROVED.toml).
-        // The block's own policies, which a deploy takes before the tenant's,
-        // beside the body (they are not in it): only when the block names
-        // them.
-        PlatformId::Sysdig => match sysdig::compile_body(cx, rule, None) {
-            Ok(body) => {
-                let mut entry = compiled(rule, body);
-                if let (Json::Object(fields), Some(policies)) =
-                    (&mut entry, sysdig::block_policies(rule))
-                {
-                    fields.insert(
-                        "policies".into(),
-                        Json::Array(policies.into_iter().map(Json::Str).collect()),
-                    );
-                }
-                entry
-            }
-            Err(error) => failure(rule, &error),
-        },
+        PlatformId::Sysdig => sysdig_preview(cx, rule, &[]),
         PlatformId::Exabeam => exabeam_preview(cx, rule, &[]),
         PlatformId::Datadog => datadog_preview(cx, rule, &[]),
         // `_google_secops_compile_preview`: the `rules.create` body with what
