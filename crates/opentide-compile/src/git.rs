@@ -2248,6 +2248,15 @@ fn current_branch(repo: &Repo) -> Option<String> {
     }
 }
 
+/// What `git rev-parse --abbrev-ref HEAD` prints from `start`: the branch
+/// HEAD is on, or `HEAD` when it is detached. `None` outside a checkout and
+/// when HEAD names no commit yet (a branch with no commit).
+pub fn head_name(start: &Path) -> Option<String> {
+    let repo = open(start).ok()?;
+    head_commit(&repo)?;
+    Some(current_branch(&repo).unwrap_or_else(|| "HEAD".to_owned()))
+}
+
 /// The branch `origin/HEAD` names.
 fn remote_default_branch(repo: &Repo) -> Option<String> {
     let reference = repo.refs.try_find("refs/remotes/origin/HEAD").ok()??;
