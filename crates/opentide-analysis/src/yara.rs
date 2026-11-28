@@ -154,7 +154,7 @@ mod tests {
     fn definition_and_references_in_a_decomposed_block() {
         let at = RULE.rfind("$cmd").unwrap() + 1;
         let def = definition(LanguageId::TideYaml, RULE, at).unwrap();
-        assert_eq!(&RULE[def.start..def.end], "$cmd");
+        assert_eq!(RULE.get(def.start..def.end), Some("$cmd"));
         assert_eq!(def.start, RULE.find("$cmd").unwrap());
         assert_eq!(references(LanguageId::TideYaml, RULE, at, true).len(), 3);
     }
