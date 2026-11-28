@@ -2,6 +2,7 @@
 //! methods that deploy the rules of `--platform bitdefender`.
 
 use opentide_compile::Json as CJson;
+use opentide_compile::compiler::{self, Compiler};
 use opentide_compile::strategy::StatusStrategy;
 use opentide_connectors::connector::{
     DeployError, DeployFailure, DeployOutcome, DeployRequest, DeployScope, Deployer,
@@ -53,8 +54,9 @@ impl Sender<'_, '_> {
     }
 
     /// The request a Bitdefender rule sends: a delete names the recorded id
-    /// alone; anything else sends the compiled rule's `params`, and says when
-    /// the tenant runs no automatic actions while the rule has some.
+    /// alone; anything else sends the compiled rule's `params`, the body the
+    /// dry run shows ([`Compiler`]), and says when the tenant runs no
+    /// automatic actions while the rule has some.
     fn bitdefender_request(
         &self,
         batch: &Batch,
@@ -63,7 +65,6 @@ impl Sender<'_, '_> {
         strategy: StatusStrategy,
         automatic: bool,
     ) -> Result<DeployRequest, opentide_compile::rule::CompileError> {
-        use opentide_compile::bitdefender::{compile_rule, create_params};
         const PLATFORM: &str = PlatformId::Bitdefender.as_str();
         if let Planned::Delete(id) = action {
             // A delete sends the recorded id alone.
@@ -75,9 +76,9 @@ impl Sender<'_, '_> {
                 .block(PLATFORM)
                 .and_then(|block| block.get("actions"))
                 .is_some_and(|actions| !actions.is_null());
-        let compiled = compile_rule(self.compile, rule, strategy, Some(&batch.table))?;
+        let compiled = compiler::Bitdefender::compile(self.compile, rule, Some(&batch.table))?;
         let mut body = opentide_compile::json::Object::new();
-        body.insert("params".into(), create_params(&compiled));
+        body.insert("params".into(), compiler::Bitdefender::body(&compiled));
         if actions_unsupported {
             body.insert("actions_unsupported".into(), CJson::Bool(true));
         }

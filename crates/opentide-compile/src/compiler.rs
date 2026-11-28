@@ -18,7 +18,9 @@ use opentide_schema::platforms::PlatformId;
 use crate::json::Json;
 use crate::rule::{CompileError, Rule};
 use crate::strategy::StatusStrategy;
-use crate::{Context, datadog, deploy, exabeam, google_secops, graylog, sentinel, sysdig};
+use crate::{
+    Context, bitdefender, datadog, deploy, exabeam, google_secops, graylog, sentinel, sysdig,
+};
 
 /// The compile of one platform's rules, shared by the dry run and the deploy.
 pub trait Compiler {
@@ -225,5 +227,36 @@ impl Compiler for Sysdig {
 
     fn body(compiled: &sysdig::SysdigRule) -> Json {
         compiled.body.clone()
+    }
+}
+
+/// Bitdefender GravityZone: the rule for one tenant, whose `setup` resolves
+/// the block's targets and gives the tenant's tags, `companyId` and whether
+/// it takes automatic actions, under its block's status. Its body is the
+/// `createCustomRule` params.
+#[derive(Debug, Clone, Copy)]
+pub struct Bitdefender;
+
+impl Compiler for Bitdefender {
+    const PLATFORM: PlatformId = PlatformId::Bitdefender;
+
+    /// The tenant's table. `None` in a dry run that reaches no tenant: the
+    /// targets, the tenant's tags and `companyId` are left out
+    /// ([`bitdefender::unresolved_targets`] names the targets' aliases).
+    type Target<'t> = Option<&'t Json>;
+
+    type Compiled = bitdefender::GravityZoneRule;
+
+    fn compile(
+        cx: &Context<'_>,
+        rule: &Rule,
+        tenant: Option<&Json>,
+    ) -> Result<bitdefender::GravityZoneRule, CompileError> {
+        let strategy = bitdefender::strategy(cx, rule)?;
+        bitdefender::compile_rule(cx, rule, strategy, tenant)
+    }
+
+    fn body(compiled: &bitdefender::GravityZoneRule) -> Json {
+        bitdefender::create_params(compiled)
     }
 }
