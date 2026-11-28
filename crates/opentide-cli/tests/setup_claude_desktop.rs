@@ -22,6 +22,10 @@ struct Machine {
     home: PathBuf,
     workspace: PathBuf,
     bin: PathBuf,
+    /// A copy of the binary under test, alone in its own folder. Cargo's
+    /// `target/debug` may hold a sibling `opentide` (the facade's binary),
+    /// which the lookup prefers to `PATH`; a copy has no sibling.
+    program: PathBuf,
 }
 
 impl Machine {
@@ -39,8 +43,13 @@ impl Machine {
         let opentide = bin.join("opentide");
         std::fs::write(&opentide, "#!/bin/sh\n").unwrap();
         std::fs::set_permissions(&opentide, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let app = root.join("app");
+        std::fs::create_dir_all(&app).unwrap();
+        let program = app.join("opentide-cli");
+        std::fs::copy(env!("CARGO_BIN_EXE_opentide-cli"), &program).unwrap();
         Machine {
             _dir: dir,
+            program,
             home,
             workspace,
             bin,
@@ -76,7 +85,7 @@ impl Machine {
     /// console script's interpreter) when given.
     fn run_as(&self, args: &[&str], path: &str, argv0: Option<&Path>) -> (i32, Value) {
         use std::os::unix::process::CommandExt as _;
-        let mut command = Command::new(env!("CARGO_BIN_EXE_opentide-cli"));
+        let mut command = Command::new(&self.program);
         if let Some(argv0) = argv0 {
             command.arg0(argv0);
         }
