@@ -4,6 +4,7 @@
 //! result that replaced them, read by the old reader
 //! (`CommandResult::from_fields`, kept for tests).
 
+use super::planning::Settled;
 use super::*;
 use crate::json::document_text;
 use crate::render::summary::deploy_summary;
