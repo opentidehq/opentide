@@ -1,7 +1,6 @@
 //! `opentide deploy` without `--dry-run` on the connectors (UC-4.6, #979):
-//! `cli/services/deploy.py` `run_deploy` and `_deploy`, the platforms'
-//! deployers (`platforms/<platform>/deployer.py`), `deployment/external_ids.py`
-//! and `cli/ui/deploy_log.py`, step by step.
+//! the run's plan, each platform's sender (`deploy_send/<platform>.rs`), the
+//! vendor ids kept in deployment state, and the log printed as rules finish.
 //!
 //! The plan is the dry run's (`opentide_compile::plan`): the rules the run
 //! reads, their platforms, the tenants each reaches, with the platform's
@@ -15,9 +14,9 @@
 //! ids CrowdStrike, Microsoft Defender, SentinelOne and Sysdig give a
 //! rule are kept in deployment state ([`super::deploy_state`]).
 //!
-//! The run's result is the oracle's dictionary, keys in its order, read into
-//! the envelope as `CommandResult.from_payload` reads it
-//! ([`super::validate_live::report_of`]).
+//! The run's result is a list of keys in the order the run adds them (the
+//! `--json` contract the `deploy` snapshot cases hold), `_`-keys included,
+//! read into the envelope by [`super::validate_live::report_of`].
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -256,7 +255,7 @@ impl std::fmt::Debug for Context<'_> {
     }
 }
 
-/// A run's result, keys in the oracle's order, `_`-keys included.
+/// A run's result, keys in the order `--json` prints them, `_`-keys included.
 #[derive(Clone, Debug)]
 pub struct Sent {
     /// The result.
@@ -348,7 +347,7 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Sent {
     }
 }
 
-/// `run_deploy`: the plan and the sends, then the warnings and the blocks
+/// The run: the plan and the sends, then the warnings and the blocks
 /// a status kept out.
 fn run_deploy(args: &Args, cx: &Context<'_>) -> Vec<(String, Json)> {
     let (_, options) = placement(cx.repo, cx.env, cx.cwd);
@@ -576,8 +575,7 @@ fn report_skipped(
     }
 }
 
-/// A skipped deploy, in the same envelope as one that planned rules
-/// (`_nothing_to_deploy`); a run whose planning refused a rule failed.
+/// A skipped deploy, in the same envelope as one that planned rules; a run whose planning refused a rule failed.
 fn nothing(message: &str, refused: bool, field: (&str, Json)) -> Vec<(String, Json)> {
     let mut result = vec![
         (field.0.to_owned(), field.1),
@@ -667,10 +665,11 @@ fn retire_mode(args: &Args) -> super::deploy_retire::Mode {
     }
 }
 
-/// `_deploy` for a run that sends.
+/// A run that sends: checks the run's options, plans, compiles, sends each
+/// rule and builds the result.
 #[expect(
     clippy::too_many_lines,
-    reason = "the oracle's steps in order (_deploy), read top to bottom"
+    reason = "the run's steps in order, read top to bottom; split by #1959's split 9"
 )]
 fn deploy(
     args: &Args,
@@ -1381,8 +1380,8 @@ fn deploy(
         result.push(("_failure_code".into(), Json::str(super::ISSUES_FOUND)));
     }
     if let Some((first, _)) = failures.first() {
-        // The run's error names its first failure, as the Python deployer's
-        // did when that failure stopped it.
+        // The run's error names its first failure, and how many more there
+        // were.
         let more = more_failures(failures.len());
         result.push(("error".into(), Json::str(format!("{first}{more}"))));
         result.push((
@@ -2518,7 +2517,7 @@ fn action_verb(action: &Planned) -> &'static str {
 /// The run's state while it sends.
 #[expect(
     clippy::struct_excessive_bools,
-    reason = "the oracle's flags (`DEPLOYMENT_ERROR_RAISED`, `DEPLOYMENT_WARNING_RAISED`) and the run's options"
+    reason = "whether a rule failed or warned, and the run's options: independent flags"
 )]
 struct Sender<'s, 'c> {
     cx: &'s Context<'c>,
@@ -2527,14 +2526,16 @@ struct Sender<'s, 'c> {
     runs: &'s [StatusStrategy],
     wide: bool,
     persist: bool,
-    /// `DEPLOYMENT_ERROR_RAISED`.
+    /// Whether a rule or tenant failed: the run's status is `failed` and it
+    /// exits 1.
     failed: bool,
     /// The tenants and platforms that could not deploy, in order: each
     /// failed rule is in the log's results.
     failures: Vec<Unusable>,
     /// Every tenant that stopped before its last rule (platform, tenant).
     stopped_tenants: Vec<(String, String)>,
-    /// `DEPLOYMENT_WARNING_RAISED`.
+    /// Whether a rule reported a deployment warning: the result carries
+    /// `warnings`.
     warned: bool,
     /// The Sentinel and Microsoft Defender rules whose technique warnings
     /// were logged, shared by every tenant's sender ([`Sender::fork`]).

@@ -1,5 +1,5 @@
-//! A dry run's payload entries (`deployment/preview.py`): what each rule
-//! would send, or why it would fail.
+//! A dry run's payload entries: what each rule would send, or why it would
+//! fail.
 
 use opentide_schema::objects::platform::{
     BitdefenderConfig, CarbonBlackConfig, CrowdstrikeConfig, DatadogConfig, ElasticConfig,
@@ -435,10 +435,10 @@ fn model_dump<T: DeserializeOwned + Serialize>(block: &Json) -> Option<Json> {
     Json::from_serialize(&model).ok()
 }
 
-/// The block of `platform` read by its model (`_config_preview`, Pydantic's
-/// `model_dump`): opentide-schema's model, serialised by serde. An unset
-/// optional field is left out where the oracle writes it `null`, and a
-/// mapping keeps its model's order (`tests/golden/payloads/APPROVED.toml`).
+/// The block of `platform` read by its model: opentide-schema's model,
+/// serialised by serde. An unset optional field is left out, never written
+/// `null`, and a mapping keeps its model's order
+/// (`tests/golden/payloads/APPROVED.toml`).
 /// A block the model refuses is as written. Elastic's checks read it whole.
 pub fn config_dump(platform: PlatformId, block: &Json) -> Json {
     model_config_dump(platform, block).unwrap_or_else(|| block.clone())
@@ -791,12 +791,10 @@ pub fn preview(cx: &Context<'_>, platform: &PlatformKey, rule: &Rule) -> Json {
     };
     match platform_id {
         PlatformId::Graylog => graylog_preview(cx, rule, &[]),
-        // A compile error the oracle reports with the platform's display
-        // name: compile_diagnostic(exc) names Sentinel.
+        // A compile failure's error is the compiler's own, which names its
+        // platform: Sentinel's names Sentinel, Sysdig's names Sysdig
+        // (tests/golden/payloads/APPROVED.toml).
         PlatformId::Sentinel => sentinel_entry(cx, rule, PREVIEW_TENANT, None),
-        // The oracle names Sentinel in a Sysdig failure (`_compile_failure`
-        // calls `compile_diagnostic(exc)` without the platform); this names
-        // Sysdig (tests/golden/payloads/APPROVED.toml).
         PlatformId::Sysdig => sysdig_preview(cx, rule, &[]),
         PlatformId::Exabeam => exabeam_preview(cx, rule, &[]),
         PlatformId::Datadog => datadog_preview(cx, rule, &[]),
