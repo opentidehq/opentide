@@ -277,7 +277,7 @@ impl Transport for FakeSplunk {
 }
 
 impl TransportFactory for FakeSplunk {
-    fn make(&self, _spec: &TransportSpec<'_>) -> Result<Arc<dyn Transport>, String> {
+    fn make(&self, _spec: &TransportSpec<'_>) -> Result<Arc<dyn Transport>, transport::SetupError> {
         Ok(Arc::new(self.clone()))
     }
 }

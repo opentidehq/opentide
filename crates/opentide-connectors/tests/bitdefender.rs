@@ -799,7 +799,10 @@ impl opentide_connectors::transport::TransportFactory for ScriptedFactory {
     fn make(
         &self,
         spec: &opentide_connectors::transport::TransportSpec<'_>,
-    ) -> Result<Arc<dyn opentide_connectors::transport::Transport>, String> {
+    ) -> Result<
+        Arc<dyn opentide_connectors::transport::Transport>,
+        opentide_connectors::transport::SetupError,
+    > {
         if spec.label.tenant == SCRIPTED {
             Ok(self.0.clone())
         } else {

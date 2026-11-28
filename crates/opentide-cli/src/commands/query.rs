@@ -426,7 +426,7 @@ fn rows(result: &QueryOutcome) -> Vec<Json> {
     result
         .rows
         .iter()
-        .map(|row| crate::commands::deploy::convert(&opentide_compile::Json::Object(row.clone())))
+        .map(|row| Json::Object(row.clone()))
         .collect()
 }
 

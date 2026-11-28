@@ -377,7 +377,6 @@ fn with_retirements(
     dry.warnings.extend(found.warnings.iter().cloned());
     // What `--prune` would retire, sent nowhere.
     if let Some(retirable) = found.retirable_json() {
-        let retirable = convert(&retirable);
         dry.outcome
             .data
             .push(("retirable".to_owned(), retirable.clone()));
@@ -391,7 +390,7 @@ fn with_retirements(
     let rows: Vec<Json> = found
         .retirements
         .iter()
-        .map(|retirement| convert(&retirement.change().to_json()))
+        .map(|retirement| retirement.change().to_json())
         .collect();
     let mut changes: Vec<Json> = match dry.result.get("changes") {
         Some(Json::Array(items)) => items.clone(),
@@ -410,11 +409,7 @@ fn with_retirements(
     tenants.sort_unstable();
     tenants.dedup();
     let message = opentide_compile::plan::message(&planned);
-    let summary = convert(&opentide_compile::plan::summary(
-        &planned,
-        platforms.len(),
-        tenants.len(),
-    ));
+    let summary = opentide_compile::plan::summary(&planned, platforms.len(), tenants.len());
     let changes = Json::Array(changes);
     let set = |items: &mut Vec<(String, Json)>, key: &str, value: Json| match items
         .iter_mut()
@@ -432,7 +427,7 @@ fn with_retirements(
         dry.outcome.next_actions.clear();
         dry.outcome
             .data
-            .retain(|(key, _)| !matches!(key.as_str(), "advice" | "detail" | "_outcome"));
+            .retain(|(key, _)| !matches!(key.as_str(), "advice" | "detail"));
         dry.plan_kind = true;
     }
     set(&mut dry.outcome.data, "changes", changes.clone());
@@ -582,31 +577,11 @@ fn failed(message: String) -> DryRun {
     }
 }
 
-/// `opentide-compile`'s JSON as this crate's.
-pub fn convert(value: &opentide_compile::Json) -> Json {
-    use opentide_compile::Json as From;
-    match value {
-        From::Null => Json::Null,
-        From::Bool(flag) => Json::Bool(*flag),
-        From::Int(integer) => Json::Int(*integer),
-        From::UInt(integer) => Json::UInt(*integer),
-        From::Float(float) => Json::Float(*float),
-        From::Str(text) => Json::Str(text.clone()),
-        From::Array(items) => Json::Array(items.iter().map(convert).collect()),
-        From::Object(members) => Json::Object(
-            members
-                .iter()
-                .map(|(key, value)| (key.clone(), convert(value)))
-                .collect(),
-        ),
-    }
-}
-
 /// The envelope's parts of a service result (`CommandResult.from_payload`):
 /// `message`, `status` and `warnings` leave the command's keys, the usage
 /// failure or the status names `failure.code`.
 fn from_outcome(outcome: dry_run::Outcome, at_root: bool) -> DryRun {
-    let result = convert(&opentide_compile::Json::Object(outcome.payload.clone()));
+    let result = Json::Object(outcome.payload.clone());
     let mut data: Vec<(String, Json)> = Vec::new();
     let mut message = "Deployment completed".to_owned();
     let mut status = "completed".to_owned();
@@ -660,7 +635,7 @@ fn from_outcome(outcome: dry_run::Outcome, at_root: bool) -> DryRun {
     if status == "skipped" && !at_root {
         next_actions.push(NextAction::new(NO_WORKSPACE_STEP.0, NO_WORKSPACE_STEP.1));
     }
-    let summary = match outcome.summary.as_ref().map(convert) {
+    let summary = match outcome.summary.clone() {
         Some(Json::Object(members)) => members.into_iter().collect(),
         _ => Vec::new(),
     };

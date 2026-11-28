@@ -110,10 +110,10 @@ impl HttpClient {
             env,
         })
         .map_err(|error| match error {
-            transport::MakeError::Setup(message) => ConnectorError::Setup {
+            transport::MakeError::Setup(error) => ConnectorError::Setup {
                 platform: label.platform.clone(),
                 tenant: label.tenant.clone(),
-                message,
+                message: error.to_string(),
             },
             transport::MakeError::NetworkUnavailable => ConnectorError::NetworkUnavailable {
                 platform: label.platform.clone(),

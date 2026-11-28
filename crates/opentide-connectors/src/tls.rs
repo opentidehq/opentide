@@ -27,6 +27,8 @@ use rustls::pki_types::{CertificateDer, ServerName, UnixTime};
 use rustls::{ClientConfig, DigitallySignedStruct, RootCertStore, SignatureScheme};
 
 use crate::Environment;
+#[cfg(not(target_os = "wasi"))]
+use crate::transport::SetupError;
 
 /// The variables that name a CA bundle, in the order they are read.
 pub const CA_BUNDLE_VARIABLES: [&str; 3] =
@@ -68,17 +70,19 @@ fn native_roots() -> &'static [CertificateDer<'static>] {
 
 #[cfg(not(target_os = "wasi"))]
 /// The certificates of the PEM bundle at *path*.
-pub fn read_bundle(path: &Path) -> Result<Vec<CertificateDer<'static>>, String> {
+pub fn read_bundle(path: &Path) -> Result<Vec<CertificateDer<'static>>, SetupError> {
+    let unreadable = |error: rustls::pki_types::pem::Error| SetupError::CaBundleUnreadable {
+        path: path.to_owned(),
+        reason: error.to_string(),
+    };
     let certs: Result<Vec<_>, _> = CertificateDer::pem_file_iter(path)
-        .map_err(|error| format!("cannot read the CA bundle {}: {error}", path.display()))?
+        .map_err(unreadable)?
         .collect();
-    let certs =
-        certs.map_err(|error| format!("cannot read the CA bundle {}: {error}", path.display()))?;
+    let certs = certs.map_err(unreadable)?;
     if certs.is_empty() {
-        return Err(format!(
-            "the CA bundle {} holds no certificate",
-            path.display()
-        ));
+        return Err(SetupError::CaBundleEmpty {
+            path: path.to_owned(),
+        });
     }
     Ok(certs)
 }
@@ -105,11 +109,14 @@ pub fn bundles(settings: &TlsSettings, env: &Environment) -> Vec<PathBuf> {
 /// An environment bundle that cannot be read is skipped, as a client that
 /// does not need it would not notice it; the tenant's own bundle is an
 /// error.
-pub fn client_config(settings: &TlsSettings, env: &Environment) -> Result<ClientConfig, String> {
+pub fn client_config(
+    settings: &TlsSettings,
+    env: &Environment,
+) -> Result<ClientConfig, SetupError> {
     let provider = provider();
     let builder = ClientConfig::builder_with_provider(provider.clone())
         .with_safe_default_protocol_versions()
-        .map_err(|error| error.to_string())?;
+        .map_err(SetupError::Tls)?;
     if !settings.verify {
         let verifier = AcceptAny {
             algorithms: provider.signature_verification_algorithms,
@@ -127,7 +134,7 @@ pub fn client_config(settings: &TlsSettings, env: &Environment) -> Result<Client
             Ok(certs) => {
                 roots.add_parsable_certificates(certs);
             }
-            Err(message) if own => return Err(message),
+            Err(error) if own => return Err(error),
             Err(_) => {}
         }
     }
@@ -174,5 +181,53 @@ impl ServerCertVerifier for AcceptAny {
 
     fn supported_verify_schemes(&self) -> Vec<SignatureScheme> {
         self.algorithms.supported_schemes()
+    }
+}
+
+#[cfg(all(test, not(target_os = "wasi")))]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_bundle_that_does_not_read_or_holds_nothing_is_a_typed_setup_error() {
+        let dir = tempfile::tempdir().unwrap();
+        let missing = dir.path().join("absente-é😀.pem");
+        let error = read_bundle(&missing).unwrap_err();
+        let SetupError::CaBundleUnreadable { path, reason } = &error else {
+            panic!("{error:?}");
+        };
+        assert_eq!(path, &missing);
+        assert_eq!(
+            error.to_string(),
+            format!("cannot read the CA bundle {}: {reason}", missing.display())
+        );
+        let empty = dir.path().join("vide-é😀.pem");
+        std::fs::write(&empty, "no certificate here\n").unwrap();
+        let error = read_bundle(&empty).unwrap_err();
+        assert!(
+            matches!(&error, SetupError::CaBundleEmpty { path } if path == &empty),
+            "{error:?}"
+        );
+        assert_eq!(
+            error.to_string(),
+            format!("the CA bundle {} holds no certificate", empty.display())
+        );
+    }
+
+    #[test]
+    fn the_tenants_own_bundle_fails_the_config_and_an_environments_is_skipped() {
+        let dir = tempfile::tempdir().unwrap();
+        let missing = dir.path().join("absente.pem");
+        let own = TlsSettings {
+            verify: true,
+            ca_bundle: Some(missing.clone()),
+        };
+        let error = client_config(&own, &Environment::default()).unwrap_err();
+        assert!(
+            matches!(&error, SetupError::CaBundleUnreadable { path, .. } if path == &missing),
+            "{error:?}"
+        );
+        let env = Environment::from_pairs([("SSL_CERT_FILE", missing.display().to_string())]);
+        assert!(client_config(&TlsSettings::default(), &env).is_ok());
     }
 }
