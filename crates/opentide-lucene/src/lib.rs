@@ -21,6 +21,10 @@
     clippy::too_many_lines,
     reason = "engine dispatchers match every node kind in one function"
 )]
+// Slicing a `str` by byte index panics off a char boundary, and this crate
+// reads user queries: every slice is checked or says why it is safe (#1946;
+// the lint moves to `[workspace.lints]` once every crate is clean).
+#![warn(clippy::string_slice)]
 pub mod carbon_black;
 mod ecs;
 pub mod graylog;
@@ -44,6 +48,15 @@ use opentide_core::{
 };
 use opentide_highlight::{HighlightSpec, HighlightToken, tokens_from_spans, tokens_in};
 use syntax::SyntaxKind as K;
+
+/// `text[start..end]`, a range this crate computes: a token's bounds, a
+/// character's, or an ASCII byte's, so its ends are char boundaries. A range
+/// that is not fails a debug assertion and reads as empty.
+pub(crate) fn cut(text: &str, start: usize, end: usize) -> &str {
+    let piece = text.get(start..end);
+    debug_assert!(piece.is_some(), "{start}..{end} in {} bytes", text.len());
+    piece.unwrap_or_default()
+}
 use tree::{Node, Tree, walk_once};
 
 const SYNTAX_DOCS: &str = "https://www.elastic.co/docs/reference/query-languages/query-dsl/query-dsl-query-string-query#query-string-syntax";
@@ -247,11 +260,13 @@ pub fn analyze_dialect(source: &str, dialect: Dialect) -> AnalyzeResult {
 
 /// The first syntax error, in words, and its span.
 fn parse_error(tree: &Tree, err: &opentide_parse::SyntaxError, source: &str) -> (String, ByteSpan) {
+    // The gap starts at a token's bounds.
     let at = usize::from(err.gap.start());
+    let (before, after) = (cut(source, 0, at), cut(source, at, source.len()));
     let point = |at: usize| ByteSpan::new(at, at + 1);
     // An unclosed `"` or `/` where the error stands is what to fix, whatever
     // the parser missed because of it (`message:"failed login`).
-    let next = source[at..]
+    let next = after
         .char_indices()
         .find(|(_, c)| !c.is_whitespace())
         .map(|(i, _)| at + i);
@@ -264,8 +279,8 @@ fn parse_error(tree: &Tree, err: &opentide_parse::SyntaxError, source: &str) -> 
         parser::MISSING_TO => return missing("TO"),
         parser::MISSING_CLOSE => {
             // The bracket that would close the range: `]` for `[`, else `}`.
-            let open = source[..at].rfind(['[', '{']).map(|i| &source[i..=i]);
-            return missing(if open == Some("[") { "]" } else { "}" });
+            let open = before.rfind(['[', '{']).map(|i| source.as_bytes().get(i));
+            return missing(if open == Some(Some(&b'[')) { "]" } else { "}" });
         }
         parser::MISSING_BOUND => {
             return (
@@ -275,15 +290,18 @@ fn parse_error(tree: &Tree, err: &opentide_parse::SyntaxError, source: &str) -> 
             );
         }
         parser::MISSING_CLAUSE => {
-            let before = source[..at].trim_end();
-            let last = before.rsplit(char::is_whitespace).next().unwrap_or("");
+            let last = before
+                .trim_end()
+                .rsplit(char::is_whitespace)
+                .next()
+                .unwrap_or("");
             // `foo:AND`: an operator where a value belongs.
-            let word = source[at..].split_whitespace().next().unwrap_or("");
+            let word = after.split_whitespace().next().unwrap_or("");
             if let Some(op) = ["AND", "OR", "NOT"]
                 .into_iter()
                 .find(|op| word.trim_end_matches(')') == *op)
             {
-                let start = at + source[at..].find(op).unwrap_or(0);
+                let start = at + after.find(op).unwrap_or(0);
                 return (
                     format!(
                         "Lucene syntax error: `{op}` is an operator, so a clause is missing after `{last}`; quote it (`\"{op}\"`) to search the word"
@@ -348,8 +366,12 @@ fn unclosed_at(tree: &Tree, source: &str, at: usize) -> Option<(String, ByteSpan
     if token.text() != "/" {
         return None;
     }
-    let word = source[at + 1..].split_whitespace().next().unwrap_or("");
-    let glued = source[..at]
+    // `at` is the `/` token's start.
+    let word = cut(source, at + 1, source.len())
+        .split_whitespace()
+        .next()
+        .unwrap_or("");
+    let glued = cut(source, 0, at)
         .chars()
         .next_back()
         .is_some_and(|c| !c.is_whitespace() && !matches!(c, '(' | ':'));
@@ -538,7 +560,7 @@ fn bare_terms(node: &Node, cx: Cx<'_>, dialect: Dialect, out: &mut Vec<Diagnosti
         let upper = word.to_ascii_uppercase();
         if matches!(upper.as_str(), "AND" | "OR" | "NOT")
             || matches!(word, "<" | "<=" | ">" | ">=")
-            || source[prev.end()..item.start()].is_empty()
+            || prev.end() >= item.start()
         {
             continue;
         }
@@ -626,7 +648,7 @@ fn range_operator(node: &Node, cx: Cx<'_>, dialect: Dialect, out: &mut Vec<Diagn
     let field = node.field().map_or("", |f| f.text(source));
     let next = node
         .next_sibling()
-        .filter(|n| n.kind() == K::TermQuery && source[node.end()..n.start()] == *" ");
+        .filter(|n| n.kind() == K::TermQuery && source.get(node.end()..n.start()) == Some(" "));
     let mut d = Diagnostic::warning(
         codes::LUCENE_RANGE_OPERATOR,
         format!(
@@ -680,7 +702,8 @@ fn fuzziness(
     if ancestors.last().is_none_or(|p| p.kind() != K::TermQuery) {
         return;
     }
-    let slop = &node.text(source)[1..];
+    // The lexer starts a fuzzy token with its `~`.
+    let slop = node.text(source).strip_prefix('~').unwrap_or_default();
     if slop.is_empty() {
         return;
     }
@@ -805,15 +828,20 @@ fn regexp_body(
     out: &mut Vec<Diagnostic>,
 ) {
     let source = cx.source;
+    // The lexer closes a regexp token: `/` at both ends.
     let t = node.text(source);
     if t.len() < 2 {
         return;
     }
-    let body = &t[1..t.len() - 1];
+    let body = t.strip_prefix('/').unwrap_or(t);
+    let body = body.strip_suffix('/').unwrap_or(body);
     let start = node.start() + 1;
     let at_char = |at: usize| {
         let b = body.char_indices().nth(at).map_or(body.len(), |(b, _)| b);
-        let width = body[b..].chars().next().map_or(1, char::len_utf8);
+        let width = body
+            .get(b..)
+            .and_then(|rest| rest.chars().next())
+            .map_or(1, char::len_utf8);
         if b >= body.len() {
             node.span()
         } else {
@@ -1818,5 +1846,67 @@ mod tests {
             assert!(completions_dialect(src, inside, dialect).is_empty());
             assert_eq!(hover_dialect(src, inside, dialect), None);
         }
+    }
+
+    /// Queries with multi-byte text in every place the crate cuts: parse
+    /// errors (a missing `)`, `TO`, bracket, bound or clause, an unclosed
+    /// phrase or regexp), fuzziness, range operators, regexps and their
+    /// intervals, the lexer's terms and operators. The ranges are checked in
+    /// debug builds (`cut`).
+    const MULTI_BYTE: &[&str] = &[
+        "é😀:(é OR 😀 AND (é😀 NOT x) é:[é TO 😀] é:{😀 TO *} é:[é 😀] é:[é TO",
+        "é:\"😀 é\"~é😀 é~😀 😀~2 é:>😀 é:>= 😀 é:/é😀\\/[é-😀]<1-é>/ /😀",
+        "é😀:AND 😀: é:\"😀 +é -😀 !é é^😀 😀\\ é😀:/<é😀>/ é:/(é)<-😀/ é:[😀 TO é}",
+        "(é😀 😀:é\\😀* é😀? \"é😀",
+    ];
+
+    #[test]
+    fn multi_byte_text_is_read_whole_everywhere() {
+        for query in MULTI_BYTE {
+            for dialect in [Dialect::Elastic, Dialect::CarbonBlack, Dialect::Graylog] {
+                let result = analyze_dialect(query, dialect);
+                for token in &result.tokens {
+                    assert!(
+                        query.get(token.span.start..token.span.end).is_some(),
+                        "{query}"
+                    );
+                }
+                for (offset, _) in query.char_indices().chain([(query.len(), ' ')]) {
+                    let _ = hover_dialect(query, offset, dialect);
+                    let _ = completions_dialect(query, offset, dialect);
+                    let _ = analyze_dialect(query.get(..offset).unwrap(), dialect);
+                }
+            }
+            let _ = fields(query);
+        }
+    }
+
+    #[test]
+    fn cut_reads_a_range_on_char_boundaries() {
+        assert_eq!(cut("é😀x", 0, 2), "é");
+        assert_eq!(cut("é😀x", 2, 7), "😀x");
+        assert_eq!(cut("é😀x", 7, 7), "");
+    }
+
+    #[test]
+    fn a_missing_bracket_after_multi_byte_text_is_named() {
+        let message = |query: &str| {
+            analyze(query)
+                .diagnostics
+                .into_iter()
+                .map(|d| d.message)
+                .collect::<Vec<_>>()
+                .join("\n")
+        };
+        assert!(
+            message("é:[é😀 TO 😀").contains("missing `]`"),
+            "{}",
+            message("é:[é😀 TO 😀")
+        );
+        assert!(
+            message("é:{é😀 TO 😀").contains("missing `}`"),
+            "{}",
+            message("é:{é😀 TO 😀")
+        );
     }
 }

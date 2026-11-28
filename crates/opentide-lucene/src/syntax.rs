@@ -208,8 +208,9 @@ fn size(n: usize) -> TextSize {
 }
 
 impl<'s> Lexer<'s> {
+    /// The text from `pos`, which moves by whole characters.
     fn rest(&self) -> &'s str {
-        &self.source[self.pos..]
+        crate::cut(self.source, self.pos, self.source.len())
     }
 
     fn peek(&self) -> Option<char> {
@@ -262,7 +263,7 @@ impl<'s> Lexer<'s> {
             self.push(K::ErrorToken, end);
             return;
         };
-        let text = &self.source[self.pos..end];
+        let text = crate::cut(self.source, self.pos, end);
         let kind = match text {
             "*" => K::Star,
             _ if wild => K::WildcardTerm,
@@ -336,7 +337,8 @@ impl<'s> Lexer<'s> {
     fn fuzzy(&mut self) -> usize {
         let base = self.pos + 1;
         let mut end = base;
-        let mut chars = self.source[base..].char_indices();
+        // Past the `~`.
+        let mut chars = crate::cut(self.source, base, self.source.len()).char_indices();
         while let Some((i, c)) = chars.next() {
             let at = base + i;
             if c == '\\' {
@@ -407,7 +409,7 @@ impl<'s> Lexer<'s> {
             Mode::To => {
                 self.mode = Mode::Normal;
                 if let Some((end, false)) = self.run()
-                    && &self.source[self.pos..end] == "TO"
+                    && crate::cut(self.source, self.pos, end) == "TO"
                 {
                     self.mode = Mode::Upper;
                     return self.push(K::ToKw, end);
@@ -422,7 +424,9 @@ impl<'s> Lexer<'s> {
         let one = self.pos + c.len_utf8();
         match c {
             '+' | '-' | '!' => {
-                let next = self.source[one..].chars().next();
+                let next = crate::cut(self.source, one, self.source.len())
+                    .chars()
+                    .next();
                 if let Some(w) = next.filter(|w| is_ws(*w)) {
                     return self.push(K::BareOperator, one + w.len_utf8());
                 }
@@ -498,7 +502,12 @@ mod tests {
     fn kinds(source: &str) -> Vec<(SyntaxKind, &str)> {
         lex(source)
             .iter()
-            .map(|l| (SyntaxKind::from_raw(l.kind), &source[l.range]))
+            .map(|l| {
+                (
+                    SyntaxKind::from_raw(l.kind),
+                    source.get(std::ops::Range::<usize>::from(l.range)).unwrap(),
+                )
+            })
             .filter(|(k, _)| *k != K::Whitespace)
             .collect()
     }
