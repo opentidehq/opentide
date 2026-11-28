@@ -4595,6 +4595,123 @@ fn a_keystroke_runs_the_engine_on_the_object_it_changed_alone() {
     );
 }
 
+/// #2169: the field catalogs arrive after the first pulls of `OPEN` open
+/// rules of `scratch` (the server generates no catalog before a path the
+/// test creates exists, `OPENTIDE_LSP_HOLD_CATALOGS`), once `generated`
+/// catalogs are ready; the next pull installs them, then a keystroke in one
+/// rule is pulled. How many engine analyses ran after the first pulls: once
+/// the catalogs were installed, and after the keystroke.
+fn engine_analyses_across_late_catalogs(
+    scratch: &Scratch,
+    open_rules: usize,
+    generated: u64,
+) -> (u64, u64) {
+    let hold = scratch.0.with_extension("hold");
+    let _ = std::fs::remove_file(&hold);
+    let rules = scratch.0.join("objects/rules");
+    let mut texts: Vec<(String, String)> = (0..open_rules)
+        .map(|n| {
+            let path = rules.join(format!("rule-{n}.yaml"));
+            let text = fixture(RULE)
+                .replace("8003-000000000001", &format!("8003-0000000001{n:02}"))
+                .replace("name: Sentinel KQL Rule", &format!("name: Rule é😀 {n}"));
+            std::fs::write(&path, &text).unwrap();
+            (file_uri(&path), text)
+        })
+        .collect();
+    let mut lsp = Lsp::spawn_with_env(&[("OPENTIDE_LSP_HOLD_CATALOGS", hold.as_os_str())]);
+    lsp.request(
+        "initialize",
+        json!({ "capabilities": watching_relative(), "rootUri": file_uri(&scratch.0) }),
+    );
+    lsp.notify("initialized", json!({}));
+    for (uri, text) in &texts {
+        open(&mut lsp, uri, "opentide-yaml", text);
+    }
+    let pull_all = |lsp: &mut Lsp, texts: &[(String, String)]| {
+        for (uri, _) in texts {
+            let report = lsp.request(
+                "textDocument/diagnostic",
+                json!({ "textDocument": { "uri": uri } }),
+            );
+            assert!(report["result"]["items"].is_array(), "{report}");
+        }
+    };
+    let stats = |lsp: &mut Lsp| lsp.request("opentide/__stats", Value::Null)["result"].clone();
+    let engine = |lsp: &mut Lsp| stats(lsp)["engineAnalyses"].as_u64().unwrap();
+
+    pull_all(&mut lsp, &texts);
+    let before = stats(&mut lsp);
+    assert_eq!(before["catalogsBuilt"], 0, "{before}");
+    assert_eq!(before["catalogInstalled"], false, "{before}");
+    let first = engine(&mut lsp);
+    assert_eq!(first, open_rules as u64, "each rule once");
+
+    std::fs::write(&hold, "").unwrap();
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(120);
+    while stats(&mut lsp)["catalogsBuilt"].as_u64().unwrap() < generated {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "the catalogs were not generated"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
+    pull_all(&mut lsp, &texts);
+    let arrived = stats(&mut lsp);
+    assert_eq!(arrived["catalogInstalled"], true, "{arrived}");
+    let installed = engine(&mut lsp) - first;
+
+    let typed = format!("{}\n# typé 😀\n", texts[0].1);
+    lsp.notify(
+        "textDocument/didChange",
+        json!({ "textDocument": { "uri": texts[0].0, "version": 2 },
+                "contentChanges": [{ "text": typed }] }),
+    );
+    texts[0].1 = typed;
+    pull_all(&mut lsp, &texts);
+    let typed = engine(&mut lsp) - first;
+    let _ = std::fs::remove_file(&hold);
+    (installed, typed)
+}
+
+/// #2169: the bundled configuration's catalogs, which the warm-up thread
+/// generates, are the ones compiled into the engine but for their version
+/// label. Arriving after the first pulls, they run the engine on no open
+/// object again: a keystroke then runs it on the rule it changed alone.
+#[test]
+fn the_bundled_catalogs_arriving_late_run_the_engine_on_nothing_again() {
+    const OPEN: usize = 4;
+    let scratch = workspace("late-bundled-catalogs", true);
+    assert_eq!(
+        engine_analyses_across_late_catalogs(&scratch, OPEN, 1),
+        (0, 1),
+        "the bundled catalogs arriving ran the engine again"
+    );
+}
+
+/// #2169: a root's own catalogs (its teams, from `deployment.toml`) hold
+/// something else than the engine's: arriving late, they are what every
+/// open object of the root is analysed with from then on, so the engine
+/// runs on each again.
+#[test]
+fn a_roots_own_catalogs_arriving_late_run_the_engine_again() {
+    const OPEN: usize = 4;
+    let scratch = workspace("late-own-catalogs", true);
+    let configurations = scratch.0.join(".opentide/configurations");
+    std::fs::create_dir_all(&configurations).unwrap();
+    std::fs::write(
+        configurations.join("deployment.toml"),
+        "[[responders]]\nname = \"Équipe 😀\"\ndescription = \"Our own\"\n",
+    )
+    .unwrap();
+    // The bundled configuration's catalogs and the root's.
+    let (_, typed) = engine_analyses_across_late_catalogs(&scratch, OPEN, 2);
+    assert_eq!(
+        typed, OPEN as u64,
+        "the root's own catalogs did not reach every open rule"
+    );
+}
+
 /// The `esql_unavailable` diagnostics of the document, pulled now: severity
 /// and message.
 fn esql_unavailable(lsp: &mut Lsp, uri: &str) -> Vec<(u64, String)> {
