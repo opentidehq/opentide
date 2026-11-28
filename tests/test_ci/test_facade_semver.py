@@ -489,3 +489,58 @@ def test_an_unchanged_foreign_type_passes(monkeypatch: pytest.MonkeyPatch, tmp_p
     assert run_main(monkeypatch, tmp_path, node_core(["kind", "text"])) == 0
     # A field added is no break.
     assert run_main(monkeypatch, tmp_path, node_core(["kind", "text", "span"])) == 0
+
+
+@pytest.fixture
+def builds(monkeypatch: pytest.MonkeyPatch) -> list[list[str]]:
+    """`cargo rustdoc` runs, with each writing the document it would build."""
+    ran: list[list[str]] = []
+
+    def run(cmd: list[str], *, env: dict[str, str], **_kwargs: Any) -> None:
+        ran.append(cmd)
+        package = cmd[cmd.index("--package") + 1]
+        out = Path(env["CARGO_TARGET_DIR"]) / "doc"
+        out.mkdir(parents=True, exist_ok=True)
+        (out / f"{package.replace('-', '_')}.json").write_text('{"built": true}', "utf-8")
+
+    monkeypatch.setattr(facade_semver.subprocess, "run", run)
+    monkeypatch.setattr(facade_semver, "_BUILT", {})
+    monkeypatch.setattr(facade_semver, "CACHES", {})
+    monkeypatch.setattr(facade_semver, "SAVES", {})
+    return ran
+
+
+def test_a_document_is_built_once_per_tree_and_package(
+    builds: list[list[str]], tmp_path: Path
+) -> None:
+    root, target = tmp_path / "tree", tmp_path / "target"
+    for _ in range(3):
+        assert facade_semver.rustdoc_json(root, target, "opentide-core") == {"built": True}
+    facade_semver.rustdoc_json(root, target, "opentide-schema")
+    assert len(builds) == 2
+
+
+def test_a_cached_baseline_document_is_read_not_built(
+    builds: list[list[str]], tmp_path: Path
+) -> None:
+    base, change = tmp_path / "base", tmp_path / "change"
+    cache = tmp_path / "cache"
+    cache.mkdir()
+    (cache / "opentide-core.json").write_text('{"cached": true}', "utf-8")
+    facade_semver.CACHES[base] = cache
+    assert facade_semver.rustdoc_json(base, tmp_path / "t1", "opentide-core") == {"cached": True}
+    assert builds == []
+    # A package the cache lacks is built, and the change's tree never reads the cache.
+    assert facade_semver.rustdoc_json(base, tmp_path / "t1", "opentide-schema") == {"built": True}
+    assert facade_semver.rustdoc_json(change, tmp_path / "t2", "opentide-core") == {"built": True}
+    assert len(builds) == 2
+
+
+def test_the_changes_documents_are_saved_for_the_next_baseline(
+    builds: list[list[str]], tmp_path: Path
+) -> None:
+    change, saved = tmp_path / "change", tmp_path / "saved"
+    facade_semver.SAVES[change] = saved
+    facade_semver.rustdoc_json(change, tmp_path / "target", "opentide-core")
+    assert json.loads((saved / "opentide-core.json").read_text("utf-8")) == {"built": True}
+    assert len(builds) == 1
