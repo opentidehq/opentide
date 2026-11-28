@@ -235,27 +235,50 @@ impl Candidates {
 /// What is left of `a` and `b` once the prefix and the suffix they share are
 /// set aside: the part an edit has to change.
 fn middles<'s>(a: &'s str, b: &'s str) -> (&'s str, &'s str) {
-    let (prefix, suffix) = shared(a, b);
-    (&a[prefix..a.len() - suffix], &b[prefix..b.len() - suffix])
+    shared(a, b).middles
 }
 
-/// The lengths, in bytes, of the prefix and the suffix `a` and `b` share; the
-/// suffix is taken from what the prefix leaves, so the two never overlap.
-fn shared(a: &str, b: &str) -> (usize, usize) {
-    let prefix: usize = a
-        .chars()
-        .zip(b.chars())
-        .take_while(|(x, y)| x == y)
-        .map(|(x, _)| x.len_utf8())
-        .sum();
-    let suffix: usize = a[prefix..]
-        .chars()
-        .rev()
-        .zip(b[prefix..].chars().rev())
-        .take_while(|(x, y)| x == y)
-        .map(|(x, _)| x.len_utf8())
-        .sum();
-    (prefix, suffix)
+/// `a` and `b` around the prefix and the suffix they share, cut by whole
+/// characters.
+struct Shared<'s> {
+    /// The shared prefix's length in bytes.
+    prefix: usize,
+    /// The shared suffix's length in bytes, taken from what the prefix
+    /// leaves, so the two never overlap.
+    suffix: usize,
+    /// What is left of `a` and of `b` between them.
+    middles: (&'s str, &'s str),
+}
+
+fn shared<'s>(a: &'s str, b: &'s str) -> Shared<'s> {
+    let (mut x, mut y) = (a.chars(), b.chars());
+    skip_same(&mut x, &mut y, Iterator::next);
+    let prefix = a.len() - x.as_str().len();
+    let after_prefix = x.as_str().len();
+    skip_same(&mut x, &mut y, DoubleEndedIterator::next_back);
+    Shared {
+        prefix,
+        suffix: after_prefix - x.as_str().len(),
+        middles: (x.as_str(), y.as_str()),
+    }
+}
+
+/// Steps `x` and `y` on, with `step`, while they read the same character.
+fn skip_same<'s>(
+    x: &mut std::str::Chars<'s>,
+    y: &mut std::str::Chars<'s>,
+    step: fn(&mut std::str::Chars<'s>) -> Option<char>,
+) {
+    loop {
+        let (before_x, before_y) = (x.clone(), y.clone());
+        match (step(x), step(y)) {
+            (Some(p), Some(q)) if p == q => {}
+            _ => {
+                (*x, *y) = (before_x, before_y);
+                return;
+            }
+        }
+    }
 }
 
 /// The whole words of `a` and `b` that hold their differing part
@@ -265,8 +288,12 @@ fn shared(a: &str, b: &str) -> (usize, usize) {
 /// name) is a typo of `SecurityEvent`, while `Big incident` is not one of
 /// `Minor incident`: its differing word, `big`/`minor`, is too short for four
 /// edits.
+#[expect(
+    clippy::string_slice,
+    reason = "`shared` measures the prefix and the suffix in whole characters, and the cuts inside them follow or start at a whitespace character"
+)]
 fn words<'s>(a: &'s str, b: &'s str) -> (&'s str, &'s str) {
-    let (prefix, suffix) = shared(a, b);
+    let Shared { prefix, suffix, .. } = shared(a, b);
     // The prefix and the suffix are the same text in both spellings.
     let start = a[..prefix]
         .char_indices()
@@ -806,5 +833,26 @@ mod tests {
         let _ = prepared.closest("proc.fielx");
         let counted = VALUES_COUNTED.with(std::cell::Cell::get);
         assert_eq!(counted, 1, "{counted} spellings counted");
+    }
+
+    /// The shared prefix and suffix are cut by whole characters, whatever
+    /// their width.
+    #[test]
+    fn multi_byte_spellings_are_cut_by_characters() {
+        assert_eq!(middles("é😀a😀é", "é😀b😀é"), ("a", "b"));
+        assert_eq!(middles("😀", "😀😀"), ("", "😀"));
+        assert_eq!(middles("éa", "èa"), ("é", "è"));
+        assert_eq!(middles("", "é"), ("", "é"));
+        assert_eq!(
+            words("é😀 grand incidént", "é😀 grond incidént"),
+            ("grand", "grond")
+        );
+        assert_eq!(words("😀 é", "😀 è"), ("é", "è"));
+        let Shared { prefix, suffix, .. } = shared("aé😀", "aè😀");
+        assert_eq!((prefix, suffix), (1, "😀".len()));
+        assert_eq!(
+            closest("Évènement😀", ["Évènemant😀", "Autre"]),
+            Some("Évènemant😀")
+        );
     }
 }

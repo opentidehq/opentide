@@ -144,10 +144,18 @@ impl Document {
     fn line_chars(&self, number: usize) -> Option<&[char]> {
         let index = number.checked_sub(1)?;
         let &(start, end) = self.lines.get(index)?;
+        // `split_lines` cuts at ASCII line breaks: char boundaries.
+        let line = self.source.get(start..end);
+        debug_assert!(
+            line.is_some(),
+            "{start}..{end} in {} bytes",
+            self.source.len()
+        );
+        let line = line?;
         let chars = self
             .line_chars
             .get(index)?
-            .get_or_init(|| self.source[start..end].chars().collect());
+            .get_or_init(|| line.chars().collect());
         Some(chars)
     }
 
@@ -349,7 +357,7 @@ mod tests {
         let text = "a\r\nb\rc\n\nd";
         let lines: Vec<&str> = split_lines(text)
             .iter()
-            .map(|&(s, e)| &text[s..e])
+            .map(|&(s, e)| text.get(s..e).unwrap())
             .collect();
         assert_eq!(lines, ["a", "b", "c", "", "d"]);
         assert_eq!(split_lines("a\n").len(), 1);
@@ -484,5 +492,19 @@ mod tests {
         assert_eq!((span.line, span.column, span.text.as_str()), (4, 5, "k"));
         let span = document.span(&path(&["a", "3"]), false).unwrap();
         assert_eq!((span.line, span.column, span.text.as_str()), (6, 5, "~"));
+    }
+
+    /// Columns count characters, not bytes, on a line with multi-byte text.
+    #[test]
+    fn a_span_on_a_multi_byte_line_counts_characters() {
+        let document = load("é😀: 'ü😀'  # é\nb: é\n").unwrap();
+        let span = document.span(&path(&["é😀"]), false).unwrap();
+        assert_eq!((span.line, span.column, span.end_column), (1, 6, 8));
+        assert_eq!(span.text, "ü😀");
+        let span = document.span(&path(&["b"]), false).unwrap();
+        assert_eq!(
+            (span.line, span.column, span.end_column, span.text.as_str()),
+            (2, 4, 5, "é")
+        );
     }
 }

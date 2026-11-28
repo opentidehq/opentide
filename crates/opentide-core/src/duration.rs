@@ -99,10 +99,9 @@ pub fn duration_seconds(value: &str, allow_zero: bool) -> Result<u128, DurationE
 /// Whether a `T` (the time part) is followed by a digit: `PT` and `P1DT`
 /// are not durations.
 fn iso_time_part_ok(value: &str) -> bool {
-    match value.find('T') {
-        None => true,
-        Some(at) => value[at + 1..].starts_with(|ch: char| ch.is_ascii_digit()),
-    }
+    value
+        .split_once('T')
+        .is_none_or(|(_, time)| time.starts_with(|ch: char| ch.is_ascii_digit()))
 }
 
 /// An ISO 8601 duration grammar (`P1W`, `P1DT2H`, `PT30M`): a date part
@@ -183,21 +182,26 @@ fn parts(text: &str, units: &[(char, u64)]) -> Option<Parts> {
     let mut rest = text;
     let mut next = 0;
     while !rest.is_empty() {
-        let digits = rest.bytes().take_while(u8::is_ascii_digit).count();
-        if digits == 0 {
+        let after = rest.trim_start_matches(|ch: char| ch.is_ascii_digit());
+        let digits = &rest.as_bytes()[..rest.len() - after.len()];
+        if digits.is_empty() {
             return None;
         }
-        let unit = rest[digits..].chars().next()?;
+        let mut chars = after.chars();
+        let unit = chars.next()?;
         let position = units[next..].iter().position(|(name, _)| *name == unit)?;
         let size = units[next + position].1;
         next += position + 1;
-        let amount = rest[..digits].parse::<u64>().ok();
+        // The digits' value, `None` past `u64::MAX` as `parse` gives.
+        let amount = digits.iter().try_fold(0u64, |sum, digit| {
+            sum.checked_mul(10)?.checked_add(u64::from(digit - b'0'))
+        });
         read.seconds = read
             .seconds
             .zip(amount.and_then(|amount| amount.checked_mul(size)))
             .and_then(|(sum, part)| sum.checked_add(part));
         read.any = true;
-        rest = &rest[digits + unit.len_utf8()..];
+        rest = chars.as_str();
     }
     Some(read)
 }
@@ -394,5 +398,36 @@ mod tests {
         };
         assert_eq!(short.seconds("PT60S"), Ok(60));
         assert_eq!(short.seconds("PT61S"), Err(Iso8601Error::TooLong));
+    }
+
+    /// The unit after the digits, and the time part after a `T`, are read
+    /// as whole characters: a multi-byte one is a format error, not a panic.
+    #[test]
+    fn multi_byte_text_is_a_format_error() {
+        for text in [
+            "1é",
+            "5m😀",
+            "é5m",
+            "1h😀m",
+            "PTé",
+            "P1DTé1H",
+            "PT1é",
+            "😀",
+            "1\u{1f600}",
+        ] {
+            assert_eq!(
+                duration_seconds(text, false),
+                Err(DurationError::Format),
+                "{text:?}"
+            );
+        }
+        assert_eq!(duration_seconds("1d2h", false), Ok(93_600));
+        assert!(!iso_time_part_ok("P1DTé"));
+        assert!(iso_time_part_ok("P1DT2H"));
+        assert!(iso_time_part_ok("é"));
+        assert!(parts("1é", &[('é', 2)]).is_some_and(|read| read.seconds == Some(2)));
+        assert!(
+            parts("18446744073709551616é", &[('é', 1)]).is_some_and(|read| read.seconds.is_none())
+        );
     }
 }
