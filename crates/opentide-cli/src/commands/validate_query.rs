@@ -22,7 +22,7 @@ use super::findings;
 use super::result::{CommandResult, ExitCode, FailureDetail, Status};
 use super::{Block, ISSUES_FOUND, Report, Terminal, placement};
 use crate::env::Env;
-use crate::envelope::{Failure, NextAction, USAGE_EXIT_CODE, code};
+use crate::envelope::{Failure, NextAction, code};
 use crate::json::Json;
 use crate::queries::{CheckedQuery, Finding, Profiles, REPORTED_AS_WARNING_NOTE};
 use crate::render::diagnostic::{Diagnostic, Severity, SourceFiles, relative_path};
@@ -304,7 +304,12 @@ pub fn query_file_language(target: &str) -> Option<LanguageId> {
 
 /// A failed result with the keys every refusal carries: `platform`, `mode`,
 /// `supported`. Exit 2 is a usage error (`failure_code`).
-fn refused(platform: Option<&str>, message: &str, exit_code: i32, failure_code: &str) -> Report {
+fn refused(
+    platform: Option<&str>,
+    message: &str,
+    exit_code: ExitCode,
+    failure_code: &str,
+) -> Report {
     let failure = Failure::new(failure_code, message);
     let mut report = Report::failed(COMMAND, exit_code, failure);
     report.outcome.data = vec![
@@ -320,8 +325,8 @@ fn refused(platform: Option<&str>, message: &str, exit_code: i32, failure_code: 
 
 /// A scope refusal: exit 2 a usage error, exit 1
 /// a run that could not read its scope.
-fn scope_refused(platform: Option<&str>, message: &str, exit_code: i32) -> Report {
-    let failure_code = if exit_code == USAGE_EXIT_CODE {
+fn scope_refused(platform: Option<&str>, message: &str, exit_code: ExitCode) -> Report {
+    let failure_code = if exit_code == ExitCode::Usage {
         code::USAGE_ERROR
     } else {
         super::COMMAND_FAILED
@@ -333,7 +338,7 @@ fn scope_refused(platform: Option<&str>, message: &str, exit_code: i32) -> Repor
 fn usage(message: impl Into<String>, argument: &str, failure_code: &str) -> Report {
     let mut failure = Failure::new(failure_code, message);
     failure.argument = Some(argument.to_owned());
-    Report::failed(COMMAND, USAGE_EXIT_CODE, failure)
+    Report::failed(COMMAND, ExitCode::Usage, failure)
 }
 
 /// The usage errors the options make offline, before anything runs.
@@ -749,7 +754,7 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
             platform,
             "--position rule checks a query as a platform's rule block checks its own: pass \
              --platform",
-            USAGE_EXIT_CODE,
+            ExitCode::Usage,
             code::USAGE_MISSING_OPTION,
         );
         if let Some(failure) = &mut report.outcome.failure {
@@ -763,7 +768,7 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
         if !live_query_platforms().contains(&name) {
             let mut report = Report::failed(
                 COMMAND,
-                1,
+                ExitCode::Failure,
                 Failure::new(
                     super::COMMAND_FAILED,
                     format!("query validation not supported for {name}"),
@@ -782,7 +787,7 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
                 "{name} queries are checked on the tenant only; the offline engine does not \
                  parse them. Re-run with --live."
             ),
-            USAGE_EXIT_CODE,
+            ExitCode::Usage,
             code::USAGE_MISSING_OPTION,
         );
         if let Some(failure) = &mut report.outcome.failure {
@@ -802,7 +807,7 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
             platform,
             "--position says where a --file query will sit; a rule's own queries are checked as \
              its blocks check them",
-            USAGE_EXIT_CODE,
+            ExitCode::Usage,
             code::USAGE_ERROR,
         );
         if let Some(failure) = &mut report.outcome.failure {
@@ -820,7 +825,7 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
         return scope_refused(
             platform,
             "--changed cannot be combined with --file or --uuid",
-            USAGE_EXIT_CODE,
+            ExitCode::Usage,
         );
     }
     let on_disk = |target: &str| cx.cwd.join(target);
@@ -833,7 +838,7 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
         let mut report = scope_refused(
             platform,
             &format!("No such query file: {}", missing.join(", ")),
-            USAGE_EXIT_CODE,
+            ExitCode::Usage,
         );
         report.outcome.data.push((
             "unmatched".into(),
@@ -858,7 +863,7 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
                     languages.join(", "),
                     other.join(", ")
                 ),
-                USAGE_EXIT_CODE,
+                ExitCode::Usage,
             );
             if let Some(failure) = &mut report.outcome.failure {
                 failure.argument = Some("--file".into());
@@ -892,7 +897,7 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
             return scope_refused(
                 platform,
                 "--changed cannot be combined with --file or --uuid",
-                USAGE_EXIT_CODE,
+                ExitCode::Usage,
             );
         }
         log_load_errors(&ws, cx.cwd);
@@ -906,7 +911,11 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
                     warnings.extend(warning);
                 }
                 Err(error) => {
-                    return scope_refused(platform, &error.message, error.exit_code);
+                    return scope_refused(
+                        platform,
+                        &error.message,
+                        ExitCode::of_service(error.exit_code),
+                    );
                 }
             }
         } else if !rule_targets.is_empty() || !args.uuids.is_empty() {
@@ -925,7 +934,7 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
                         "No rule file directly in {folder} matched: {}",
                         unmatched.join(", ")
                     ),
-                    1,
+                    ExitCode::Failure,
                 );
                 report.outcome.data.push((
                     "unmatched".into(),
@@ -1092,7 +1101,7 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
         data.push(("queries_validated".into(), Json::from(0usize)));
         scoped(&mut data);
         let mut report = Report::completed(COMMAND, data);
-        report.outcome.set_status(Status::Skipped);
+        report.outcome.status = Status::Skipped;
         report.outcome.message = message;
         report.outcome.summary = vec![
             ("queries".into(), Json::from(0usize)),
@@ -1210,11 +1219,11 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
     ));
     scoped(&mut data);
     let mut report = Report::completed(COMMAND, data);
-    report.outcome.set_status(if failed {
+    report.outcome.status = if failed {
         Status::Failed
     } else {
         Status::Passed
-    });
+    };
     report.outcome.message = if failed {
         "Queries rejected offline".to_owned()
     } else {
@@ -1222,7 +1231,7 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
     };
     report.outcome.summary = summary;
     if failed {
-        report.outcome.set_exit(ExitCode::Failure);
+        report.outcome.exit_code = ExitCode::Failure;
         report.outcome.failure = Some(Failure::new(ISSUES_FOUND, report.outcome.message.clone()));
         let mut next = Vec::new();
         let first = diagnostics
@@ -1253,7 +1262,7 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
     let mut body = vec![Block::Raw(text)];
     let kind = match outcome_kind {
         Some(OutcomeKind::Warning) => "warning",
-        _ => findings::kind_name(&report.outcome.status, !failed),
+        _ => findings::kind_name(report.outcome.status.as_str(), !failed),
     };
     let published = findings::publish(
         &diagnostics,
@@ -1318,7 +1327,7 @@ mod tests {
     fn offline_options_that_choose_tenants_are_refused() {
         let failure = |args: &Args| {
             let report = refuse(args).unwrap();
-            assert_eq!(report.outcome.exit(), ExitCode::Usage);
+            assert_eq!(report.outcome.exit_code, ExitCode::Usage);
             report.outcome.failure.unwrap()
         };
         let strategy = Args {
@@ -1372,7 +1381,7 @@ mod tests {
                 interrupted: &|| false,
             },
         );
-        assert_eq!(report.outcome.exit(), ExitCode::Usage);
+        assert_eq!(report.outcome.exit_code, ExitCode::Usage);
         let failure = report.outcome.failure.unwrap();
         assert_eq!(failure.code, code::USAGE_ERROR);
         assert_eq!(failure.argument.as_deref(), Some("--strict"));

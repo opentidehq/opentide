@@ -275,7 +275,7 @@ mod tests {
     fn a_code_the_value_starts_is_suggested_before_a_near_one() {
         // B19 (smoke test): `explain kql_parse` suggested "yaml_parse".
         let report = run(Some("kql_parse"), &Terminal::plain(Mode::Json));
-        assert_eq!(report.outcome.exit(), ExitCode::Usage);
+        assert_eq!(report.outcome.exit_code, ExitCode::Usage);
         let failure = report.outcome.failure.unwrap();
         assert_eq!(failure.suggestion.as_deref(), Some("kql_parse_error"));
         let report = run(Some("SPL_PARSE"), &Terminal::plain(Mode::Json));
@@ -286,7 +286,7 @@ mod tests {
     #[test]
     fn an_unknown_code_is_a_usage_error_with_the_closest_code() {
         let report = run(Some("vocab_unknwn"), &Terminal::plain(Mode::Json));
-        assert_eq!(report.outcome.exit(), ExitCode::Usage);
+        assert_eq!(report.outcome.exit_code, ExitCode::Usage);
         let failure = report.outcome.failure.unwrap();
         assert_eq!(failure.code, "usage_invalid_choice");
         assert_eq!(failure.argument.as_deref(), Some("code"));

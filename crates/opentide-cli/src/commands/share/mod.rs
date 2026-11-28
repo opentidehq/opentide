@@ -26,6 +26,7 @@ use opentide_workspace::Workspace;
 
 use self::config::{Block, Sharing};
 use self::engine::{Filters, Record, ShareRun};
+use super::result::{ExitCode, Status};
 use super::{Block as BodyBlock, Report, USAGE_INVALID_CHOICE, USAGE_INVALID_VALUE, placement};
 use crate::env::Env;
 use crate::envelope::{Failure, USAGE_EXIT_CODE};
@@ -328,8 +329,8 @@ impl Payload {
     fn report(self, command: &str) -> Report {
         let mut report = Report::completed(command, self.data);
         report.outcome.message = self.message;
-        report.outcome.status = self.status;
-        report.outcome.exit_code = self.exit_code;
+        report.outcome.status = Status::from_text(&self.status);
+        report.outcome.exit_code = ExitCode::of_service(self.exit_code);
         report.outcome.summary = self.summary;
         report.warnings = self.warnings;
         report.body = self.body;

@@ -511,7 +511,7 @@ fn each_outcome_of_a_check_is_the_oracles() {
         report.stderr_first,
         "{\"event\":\"progress\",\"step\":\"Stand-in queries\",\"done\":1,\"total\":1}\n"
     );
-    assert_eq!(report.outcome.exit_code, 1);
+    assert_eq!(report.outcome.exit_code, ExitCode::Failure);
 }
 
 /// A buffer the test's log layer writes to.

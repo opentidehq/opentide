@@ -220,7 +220,7 @@ fn stopped(command: &str, stop: Stop, cx: &Context<'_>) -> Report {
             }
             let mut report = Report::failed(
                 command,
-                ExitCode::Interrupted.code(),
+                ExitCode::Interrupted,
                 Failure::new("interrupted", "Interrupted"),
             );
             report.outcome.message = "Interrupted".into();
@@ -638,7 +638,7 @@ fn needs_input(command: &str, family: &str, missing: &str) -> Report {
         ),
     );
     failure.argument = Some(missing.to_owned());
-    Report::failed(command, ExitCode::Usage.code(), failure)
+    Report::failed(command, ExitCode::Usage, failure)
 }
 
 /// A name that is empty or only spaces, given or answered: `message`.
@@ -647,7 +647,7 @@ fn empty_name(command: &str, message: &str) -> Report {
         command,
         message.to_owned(),
         code::USAGE_INVALID_VALUE,
-        ExitCode::Usage.code(),
+        ExitCode::Usage,
         Some("--name"),
     )
 }
@@ -657,7 +657,7 @@ fn new_error(
     command: &str,
     message: String,
     failure_code: &str,
-    exit_code: i32,
+    exit_code: ExitCode,
     argument: Option<&str>,
 ) -> Report {
     let mut failure = Failure::new(failure_code, message);
@@ -690,7 +690,7 @@ pub fn run(args: &NewArgs, cx: &Context<'_>) -> Report {
                 root.display()
             ),
             WORKSPACE_NOT_FOUND,
-            1,
+            ExitCode::Failure,
             None,
         );
         report.next("opentide setup", "create a workspace first");
@@ -789,7 +789,7 @@ pub fn run(args: &NewArgs, cx: &Context<'_>) -> Report {
                     file(&paths.schema)
                 ),
                 TEMPLATE_MISSING,
-                1,
+                ExitCode::Failure,
                 None,
             );
             report.steps = steps;
@@ -823,7 +823,7 @@ pub fn run(args: &NewArgs, cx: &Context<'_>) -> Report {
                     &command,
                     format!("{argument} takes a UUID, got {value:?}"),
                     code::USAGE_INVALID_VALUE,
-                    ExitCode::Usage.code(),
+                    ExitCode::Usage,
                     Some(argument),
                 ),
                 &steps,
@@ -855,7 +855,7 @@ pub fn run(args: &NewArgs, cx: &Context<'_>) -> Report {
                         folder_shown(&folder, cx.cwd, &root)
                     ),
                     REFERENCE_NOT_FOUND,
-                    ExitCode::Usage.code(),
+                    ExitCode::Usage,
                     Some(argument),
                 ),
                 &steps,
@@ -893,13 +893,7 @@ pub fn run(args: &NewArgs, cx: &Context<'_>) -> Report {
         Ok(lint) => lint,
         Err(error) => {
             return with_steps(
-                new_error(
-                    &command,
-                    error.0,
-                    COMMAND_FAILED,
-                    ExitCode::Usage.code(),
-                    None,
-                ),
+                new_error(&command, error.0, COMMAND_FAILED, ExitCode::Usage, None),
                 &steps,
             );
         }
@@ -928,7 +922,7 @@ pub fn run(args: &NewArgs, cx: &Context<'_>) -> Report {
                 shown(destination, cx.cwd, &root)
             ),
             PATH_EXISTS,
-            1,
+            ExitCode::Failure,
             Some(argument),
         )
     };
@@ -1239,7 +1233,7 @@ fn not_writable(
             shown(destination, cx.cwd, root)
         ),
         PATH_NOT_WRITABLE,
-        1,
+        ExitCode::Failure,
         args.path.is_some().then_some("--path"),
     );
     report.next(

@@ -284,12 +284,12 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
     report.outcome_line = Some(outcome);
     if load_errors > 0 {
         report.next("opentide validate", "show where each object failed to load");
-        report.outcome.set_status(Status::Issues);
+        report.outcome.status = Status::Issues;
     }
     if args.strict && load_errors > 0 {
-        report.outcome.set_status(Status::Failed);
+        report.outcome.status = Status::Failed;
         report.outcome.message = "Repository has objects that failed to load".into();
-        report.outcome.set_exit(ExitCode::Failure);
+        report.outcome.exit_code = ExitCode::Failure;
         report.outcome.failure = Some(Failure::new(
             ISSUES_FOUND,
             "Repository has objects that failed to load",
@@ -751,7 +751,7 @@ mod tests {
             },
             &cx,
         );
-        assert_eq!(report.outcome.exit(), ExitCode::Usage);
+        assert_eq!(report.outcome.exit_code, ExitCode::Usage);
         assert_eq!(report.outcome.failure.unwrap().code, USAGE_INVALID_VALUE);
     }
 }

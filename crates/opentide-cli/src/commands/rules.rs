@@ -102,7 +102,7 @@ pub fn run(
         report.outcome_kind = Some(OutcomeKind::Warning);
     } else if !findings.any_rule_files {
         report.outcome.message = "No rules yet".into();
-        report.outcome.set_status(Status::Skipped);
+        report.outcome.status = Status::Skipped;
         report.next("opentide new rule", "scaffold your first rule");
     } else {
         report.outcome.message = format!("Every rule reviewed in the last {span}");
@@ -151,7 +151,7 @@ mod tests {
             Timestamp::UNIX_EPOCH,
             false,
         );
-        assert_eq!(report.outcome.exit(), ExitCode::Usage);
+        assert_eq!(report.outcome.exit_code, ExitCode::Usage);
         let failure = report.outcome.failure.unwrap();
         assert_eq!(failure.message, "window must look like 90d, 12h, or 30m");
         assert_eq!(failure.argument.as_deref(), Some("--older-than"));
@@ -180,8 +180,8 @@ mod tests {
         let report = run("90d", root.to_str(), &env, &root, now(), false);
         std::fs::remove_dir_all(&root).unwrap();
         let outcome = &report.outcome;
-        assert_eq!(outcome.status(), Status::Skipped);
-        assert_eq!(outcome.exit(), ExitCode::Success);
+        assert_eq!(outcome.status, Status::Skipped);
+        assert_eq!(outcome.exit_code, ExitCode::Success);
         assert_eq!(outcome.message, "No rules yet");
         let next: Vec<(&str, &str)> = outcome
             .next_actions
@@ -207,13 +207,13 @@ mod tests {
         let stale = run("3d", root.to_str(), &env, &root, now(), true);
         std::fs::remove_dir_all(&root).unwrap();
         let outcome = &report.outcome;
-        assert_eq!(outcome.status(), Status::Completed);
-        assert_eq!(outcome.exit(), ExitCode::Success);
+        assert_eq!(outcome.status, Status::Completed);
+        assert_eq!(outcome.exit_code, ExitCode::Success);
         assert_eq!(outcome.message, "Every rule reviewed in the last 90 days");
         assert!(outcome.next_actions.is_empty());
         assert_eq!(report.outcome_kind, None);
         // The same rule, past a shorter window, is reported.
-        assert_eq!(stale.outcome.status(), Status::Completed);
+        assert_eq!(stale.outcome.status, Status::Completed);
         assert_eq!(stale.outcome.message, "1 rule unreviewed for 3 days");
         assert_eq!(stale.outcome_kind, Some(OutcomeKind::Warning));
     }

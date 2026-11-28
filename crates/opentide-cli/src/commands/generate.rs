@@ -193,7 +193,7 @@ pub(crate) fn phase_failed(
     let message = format!("{phase}: {detail}");
     let mut report = Report::failed(
         command,
-        ExitCode::Failure.code(),
+        ExitCode::Failure,
         Failure::new(COMMAND_FAILED, &message),
     );
     let mut data = vec![("phase".to_owned(), Json::str(phase))];
@@ -571,7 +571,7 @@ pub fn docs(args: &DocsArgs, cx: &Context<'_>) -> Report {
             "--changed cannot be combined with scoped docs generation",
         );
         failure.argument = Some("--changed".into());
-        return Report::failed(&command, ExitCode::Usage.code(), failure);
+        return Report::failed(&command, ExitCode::Usage, failure);
     }
     // A flavour no forge has is a usage error before anything is read (D8:
     // it failed the docs phase with `command_failed`, exit 1).
@@ -611,7 +611,7 @@ pub fn docs(args: &DocsArgs, cx: &Context<'_>) -> Report {
         step.status = StepStatus::Failed;
         let mut report = Report::failed(
             &command,
-            ExitCode::Failure.code(),
+            ExitCode::Failure,
             Failure::new(COMMAND_FAILED, &message),
         );
         report.outcome.data = run.data;
@@ -994,7 +994,7 @@ pub fn explorer(options: &ExplorerOptions, cx: &Context<'_>) -> Report {
                 "--visibility-tlp needs --include-visibility: it labels explorer.visibility.json, which only --include-visibility writes.",
             );
             failure.argument = Some("--visibility-tlp".into());
-            return Report::failed(COMMAND, ExitCode::Usage.code(), failure);
+            return Report::failed(COMMAND, ExitCode::Usage, failure);
         }
         Some(given) => given.trim().to_lowercase(),
         None => explorer::DEFAULT_TLP.to_owned(),
@@ -1846,7 +1846,7 @@ mod tests {
             },
             &cx,
         );
-        assert_eq!(alone.outcome.exit(), ExitCode::Usage);
+        assert_eq!(alone.outcome.exit_code, ExitCode::Usage);
         let failure = alone.outcome.failure.unwrap();
         assert_eq!(failure.code, "usage_missing_option");
         assert_eq!(failure.argument.as_deref(), Some("--visibility-tlp"));
@@ -1857,7 +1857,7 @@ mod tests {
             },
             &cx,
         );
-        assert_eq!(unknown.outcome.exit(), ExitCode::Usage);
+        assert_eq!(unknown.outcome.exit_code, ExitCode::Usage);
         assert_eq!(
             unknown.outcome.message,
             "Unknown TLP \"redd\". Pass one of: clear, green, amber, amber+strict, red."
@@ -1876,7 +1876,7 @@ mod tests {
             vec![("target".into(), Json::str("objects"))],
             vec![],
         );
-        assert_eq!(report.outcome.exit(), ExitCode::Failure);
+        assert_eq!(report.outcome.exit_code, ExitCode::Failure);
         assert_eq!(
             report.outcome.message,
             "exports: missing key `version` while rendering x"
@@ -1904,7 +1904,7 @@ mod tests {
         };
         let report = docs(&DocsArgs::default(), &cx);
         assert_eq!(
-            report.outcome.exit(),
+            report.outcome.exit_code,
             ExitCode::Success,
             "{:?}",
             report.outcome.message
@@ -1921,7 +1921,7 @@ mod tests {
         };
         let report = docs(&output, &cx);
         assert_eq!(
-            report.outcome.exit(),
+            report.outcome.exit_code,
             ExitCode::Success,
             "{:?}",
             report.outcome.message
@@ -1937,7 +1937,7 @@ mod tests {
         };
         let report = docs(&sibling, &cx);
         assert_eq!(
-            report.outcome.exit(),
+            report.outcome.exit_code,
             ExitCode::Success,
             "{:?}",
             report.outcome.message
@@ -1954,7 +1954,7 @@ mod tests {
         };
         let report = docs(&args, &cx);
         assert_eq!(
-            report.outcome.exit(),
+            report.outcome.exit_code,
             ExitCode::Success,
             "{:?}",
             report.outcome.message
@@ -1987,7 +1987,7 @@ mod tests {
         ];
         for report in reports {
             assert_eq!(
-                report.outcome.exit(),
+                report.outcome.exit_code,
                 ExitCode::Failure,
                 "{}",
                 report.outcome.message
@@ -2030,7 +2030,7 @@ mod tests {
         };
         let all = phases(&[], &cx, "0.0.0");
         assert_eq!(
-            all.outcome.exit(),
+            all.outcome.exit_code,
             ExitCode::Failure,
             "{}",
             all.outcome.message
@@ -2049,7 +2049,7 @@ mod tests {
             .collect();
         let editor = phases(&named, &cx, "0.0.0");
         assert_eq!(
-            editor.outcome.exit(),
+            editor.outcome.exit_code,
             ExitCode::Failure,
             "{}",
             editor.outcome.message
@@ -2058,7 +2058,7 @@ mod tests {
         assert_eq!(editor.steps.len(), 1, "it stops at schemas");
         for report in [docs(&DocsArgs::default(), &cx), exports(None, &cx)] {
             assert_eq!(
-                report.outcome.exit(),
+                report.outcome.exit_code,
                 ExitCode::Failure,
                 "{}",
                 report.outcome.message
@@ -2067,7 +2067,7 @@ mod tests {
         // `generate explorer` reads the catalogue too (review round 2).
         let explored = explorer(&ExplorerOptions::default(), &cx);
         assert_eq!(
-            explored.outcome.exit(),
+            explored.outcome.exit_code,
             ExitCode::Failure,
             "{}",
             explored.outcome.message
@@ -2125,7 +2125,7 @@ mod tests {
         };
         for report in [docs(&DocsArgs::default(), &cx), phases(&[], &cx, "0.0.0")] {
             let message = &report.outcome.message;
-            assert_eq!(report.outcome.exit(), ExitCode::Failure, "{message}");
+            assert_eq!(report.outcome.exit_code, ExitCode::Failure, "{message}");
             let (raised, logged) = message.split_once("; ").unwrap_or_else(|| {
                 panic!("one error where two were due: {message}");
             });
@@ -2162,7 +2162,7 @@ mod tests {
             ..DocsArgs::default()
         };
         let report = docs(&args, &cx);
-        assert_eq!(report.outcome.exit(), ExitCode::Usage);
+        assert_eq!(report.outcome.exit_code, ExitCode::Usage);
         let failure = report.outcome.failure.as_ref().unwrap();
         assert_eq!(failure.code, "usage_invalid_choice");
         assert_eq!(failure.argument.as_deref(), Some("--flavor"));
@@ -2174,7 +2174,11 @@ mod tests {
                 flavor: Some(name.into()),
                 ..DocsArgs::default()
             };
-            assert_eq!(docs(&args, &cx).outcome.exit(), ExitCode::Success, "{name}");
+            assert_eq!(
+                docs(&args, &cx).outcome.exit_code,
+                ExitCode::Success,
+                "{name}"
+            );
         }
     }
 

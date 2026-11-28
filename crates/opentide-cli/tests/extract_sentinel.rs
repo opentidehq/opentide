@@ -22,6 +22,7 @@ use std::path::{Path, PathBuf};
 
 use opentide_cassette::{Cassette, Mode, Proxy, Redaction};
 use opentide_cli::commands::extract::{Context, sentinel_with};
+use opentide_cli::commands::result::ExitCode;
 use opentide_cli::env::Env;
 use opentide_cli::json::Json;
 
@@ -157,8 +158,16 @@ fn sentinel_rules_are_extracted_as_the_recorded_run_extracted_them() {
     let oracle: serde_json::Value =
         serde_json::from_str(&std::fs::read_to_string(here().join("oracle/result.json")).unwrap())
             .unwrap();
-    assert_eq!(report.outcome.exit_code, 0, "{:?}", report.outcome.failure);
-    assert_eq!(report.outcome.status, oracle["status"].as_str().unwrap());
+    assert_eq!(
+        report.outcome.exit_code,
+        ExitCode::Success,
+        "{:?}",
+        report.outcome.failure
+    );
+    assert_eq!(
+        report.outcome.status.as_str(),
+        oracle["status"].as_str().unwrap()
+    );
     assert_eq!(report.outcome.message, oracle["message"].as_str().unwrap());
     assert_eq!(
         report.outcome.data,
@@ -260,7 +269,12 @@ fn a_rule_with_a_mistyped_field_is_skipped_and_the_others_imported() {
         *body = body.replace(typed, r#""queryPeriod": 3"#);
     });
     assert_eq!(edited, 1, "the cassette changed");
-    assert_eq!(report.outcome.exit_code, 0, "{:?}", report.outcome.failure);
+    assert_eq!(
+        report.outcome.exit_code,
+        ExitCode::Success,
+        "{:?}",
+        report.outcome.failure
+    );
     let skipped = report
         .outcome
         .data

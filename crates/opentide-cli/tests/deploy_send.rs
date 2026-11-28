@@ -1062,7 +1062,7 @@ fn a_platform_without_tenants_is_refused_before_anything_is_sent() {
     );
     assert_eq!(sent.result.exit, ExitCode::Failure);
     let report = sent.report();
-    assert_eq!(report.outcome.exit_code, 1);
+    assert_eq!(report.outcome.exit_code, ExitCode::Failure);
     assert_eq!(
         report.outcome.failure.map(|failure| failure.code),
         Some("command_failed".to_owned())
@@ -1094,7 +1094,7 @@ fn a_platform_with_no_rule_to_deploy_is_skipped_and_counts_the_blocks_left_out()
         Some("No rules to deploy for this platform")
     );
     let report = sent.report();
-    assert_eq!(report.outcome.exit_code, 0);
+    assert_eq!(report.outcome.exit_code, ExitCode::Success);
     assert_eq!(
         report.outcome_line.as_deref(),
         Some("No rule has a status PREVIEW or RELEASE deploys · 1 rule in DESIGN")
@@ -1298,7 +1298,7 @@ fn every_platform_without_tenants_can_be_skipped_with_skip_unconfigured() {
     let (sent, _) = deploy_with(dir.path(), &args, &env, &Registry::new(), 0);
     assert_eq!(sent.result.status, Status::Skipped);
     assert!(matches!(&sent.result.message, Some(text) if text.starts_with("Skipped deploy: ")));
-    assert_eq!(sent.report().outcome.exit_code, 0);
+    assert_eq!(sent.report().outcome.exit_code, ExitCode::Success);
 }
 
 /// A workspace of `platform` whose rules each have their id `state` on the

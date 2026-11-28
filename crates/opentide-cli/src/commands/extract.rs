@@ -25,6 +25,7 @@ use opentide_schema::platforms::PlatformKey;
 use tokio_util::sync::CancellationToken;
 
 use super::query::{Configured, http_settings};
+use super::result::Status;
 use super::template::fill;
 use super::{Report, open, placement};
 use crate::env::Env;
@@ -166,7 +167,7 @@ fn report(platform: &str, started: Instant, written: usize, outcome: Outcome) ->
             data.retain(|(key, _)| key != "status");
             let mut report = Report::completed(&command, data);
             report.outcome.message = message;
-            report.outcome.status = status;
+            report.outcome.status = Status::from_text(&status);
             report.outcome.summary = vec![
                 ("imported".into(), Json::from(count)),
                 ("skipped".into(), Json::from(skipped)),
@@ -1024,6 +1025,29 @@ impl Skipped {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+
+    /// The importer's own `status` (`success`, no `Status` names it) is
+    /// printed as it came and is not a failure (#1949).
+    #[test]
+    fn an_importers_own_status_is_kept_and_does_not_fail() {
+        let keys = vec![
+            ("status".to_owned(), Json::str("success")),
+            ("extracted_count".to_owned(), Json::Int(2)),
+        ];
+        let report = report("elastic", Instant::now(), 2, Ok(keys));
+        assert_eq!(report.outcome.status, Status::Other("success".to_owned()));
+        assert!(report.outcome.ok());
+        assert_eq!(
+            report.outcome.document(0).get("status"),
+            Some(&Json::str("success"))
+        );
+        assert_eq!(
+            report.outcome.exit_code,
+            super::super::result::ExitCode::Success
+        );
+    }
+
     use super::*;
 
     #[test]

@@ -267,10 +267,10 @@ impl Report {
         Report {
             outcome: Outcome {
                 command: command.to_owned(),
-                status: Status::Completed.as_str().into(),
+                status: Status::Completed,
                 message: "Completed successfully".into(),
                 data: data.into_iter().collect(),
-                exit_code: ExitCode::Success.code(),
+                exit_code: ExitCode::Success,
                 summary: Vec::new(),
                 next_actions: Vec::new(),
                 failure: None,
@@ -293,7 +293,7 @@ impl Report {
     }
 
     /// A failure, with `failure.code` `code`.
-    pub fn failed(command: &str, exit_code: i32, failure: Failure) -> Report {
+    pub fn failed(command: &str, exit_code: ExitCode, failure: Failure) -> Report {
         Report {
             outcome: Outcome::failed(command, exit_code, failure),
             warnings: Vec::new(),
@@ -331,14 +331,14 @@ impl Report {
                     .filter(|choice| *choice != value)
             })
             .map(str::to_owned);
-        Report::failed(command, ExitCode::Usage.code(), failure)
+        Report::failed(command, ExitCode::Usage, failure)
     }
 
     /// An error the command stopped on: exit 1, `command_failed`.
     pub fn error(command: &str, message: impl Into<String>) -> Report {
         Report::failed(
             command,
-            ExitCode::Failure.code(),
+            ExitCode::Failure,
             Failure::new(COMMAND_FAILED, message),
         )
     }
@@ -424,7 +424,7 @@ pub fn no_workspace(command: &str, repo: Option<&str>, env: &Env, cwd: &Path) ->
     let root = unplaced_root(repo, env, cwd)?;
     let mut report = Report::failed(
         command,
-        ExitCode::Failure.code(),
+        ExitCode::Failure,
         Failure::new(
             new::WORKSPACE_NOT_FOUND,
             format!(
@@ -530,7 +530,7 @@ pub fn open_for(command: &str, options: RootOptions) -> Result<Workspace, Box<Re
     };
     let mut report = Report::failed(
         command,
-        ExitCode::Failure.code(),
+        ExitCode::Failure,
         Failure::new(CONFIG_PARSE, message),
     );
     report
@@ -610,7 +610,7 @@ mod tests {
         };
         let failure = report.outcome.failure.as_ref().unwrap();
         assert_eq!(failure.code, "config_parse");
-        assert_eq!(report.outcome.exit(), ExitCode::Failure);
+        assert_eq!(report.outcome.exit_code, ExitCode::Failure);
         assert!(
             report.outcome.message.contains("sentinel.toml:2:"),
             "{}",
@@ -690,7 +690,7 @@ mod tests {
             Some("rulez"),
             &["rules", "threats"],
         );
-        assert_eq!(report.outcome.exit(), ExitCode::Usage);
+        assert_eq!(report.outcome.exit_code, ExitCode::Usage);
         let failure = report.outcome.failure.unwrap();
         assert_eq!(failure.suggestion.as_deref(), Some("rules"));
         assert_eq!(failure.argument.as_deref(), Some("section"));

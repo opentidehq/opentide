@@ -237,7 +237,7 @@ impl Run<'_> {
                 let text = document_text(&outcome.document(self.duration_ms()), self.indent);
                 out.write_all(text.as_bytes())?;
             }
-            _ if outcome.failure.is_some() && outcome.exit() != ExitCode::Success => {
+            _ if outcome.failure.is_some() && outcome.exit_code != ExitCode::Success => {
                 let message = outcome
                     .failure
                     .as_ref()
@@ -265,7 +265,7 @@ impl Run<'_> {
         }
         out.flush()?;
         err.flush()?;
-        Ok(outcome.exit_code)
+        Ok(outcome.exit_code.code())
     }
 
     /// A usage error a command found itself once the line parsed: exit 2,
@@ -302,8 +302,7 @@ impl Run<'_> {
         err: &mut dyn Write,
     ) -> std::io::Result<i32> {
         if self.mode == Mode::Json {
-            let outcome =
-                Outcome::failed(&problem.command, ExitCode::Usage.code(), problem.failure);
+            let outcome = Outcome::failed(&problem.command, ExitCode::Usage, problem.failure);
             return self.emit(&outcome, &[], out, err);
         }
         let console = self.console(self.host.stderr_tty);
@@ -468,7 +467,7 @@ impl Run<'_> {
                 };
                 Outcome {
                     command: String::new(),
-                    status: Status::Completed.as_str().into(),
+                    status: Status::Completed,
                     message: format!("Installed {shell} completion in {shown}"),
                     data: vec![
                         ("shell".into(), crate::json::Json::Str(shell.to_owned())),
@@ -477,7 +476,7 @@ impl Run<'_> {
                             crate::json::Json::Str(installed.path.to_string_lossy().into_owned()),
                         ),
                     ],
-                    exit_code: ExitCode::Success.code(),
+                    exit_code: ExitCode::Success,
                     summary: Vec::new(),
                     next_actions: vec![next],
                     failure: None,
@@ -485,7 +484,7 @@ impl Run<'_> {
             }
             Err(error) => Outcome::failed(
                 "",
-                1,
+                ExitCode::Failure,
                 Failure::new(
                     "io_error",
                     format!("Could not install {shell} completion: {error}"),
@@ -584,7 +583,7 @@ impl Run<'_> {
             };
             let mut failure = Failure::new(code::USAGE_INVALID_VALUE, message);
             failure.argument = Some(named.into());
-            let mut outcome = Outcome::failed("", ExitCode::Usage.code(), failure);
+            let mut outcome = Outcome::failed("", ExitCode::Usage, failure);
             let reason = match named {
                 "--repo" => "--repo takes the folder with .opentide/ in it",
                 "OPENTIDE_REPO_ROOT" => {
@@ -601,7 +600,7 @@ impl Run<'_> {
                 "--quiet and --verbose cannot be used together",
             );
             failure.argument = Some("--verbose".into());
-            let outcome = Outcome::failed("", ExitCode::Usage.code(), failure);
+            let outcome = Outcome::failed("", ExitCode::Usage, failure);
             return self.emit(&outcome, &[], out, err);
         }
         // The commands dispatched by their clap derive structs (`tree.rs`).
@@ -639,10 +638,10 @@ impl Run<'_> {
                 let count = catalog::entries(&self.root).len();
                 let outcome = Outcome {
                     command: "commands".into(),
-                    status: Status::Completed.as_str().into(),
+                    status: Status::Completed,
                     message: format!("{count} commands"),
                     data,
-                    exit_code: ExitCode::Success.code(),
+                    exit_code: ExitCode::Success,
                     summary,
                     next_actions: Vec::new(),
                     failure: None,
@@ -885,7 +884,7 @@ impl Run<'_> {
                 // `generate extract` needs a subcommand: clap refused it.
                 None => crate::commands::Report::failed(
                     "generate extract",
-                    1,
+                    ExitCode::Failure,
                     Failure::new(
                         code::INTERNAL,
                         "opentide generate extract has no implementation: this is a bug in opentide",
@@ -1225,7 +1224,7 @@ impl Run<'_> {
         use crate::commands::validate_query::{Args, COMMAND, Context, plugin_live, refusal, run};
         if let Some(problem) = refusal(validate, query) {
             let failure = Failure::new(code::USAGE_INVALID_VALUE, problem);
-            return crate::commands::Report::failed(COMMAND, ExitCode::Usage.code(), failure);
+            return crate::commands::Report::failed(COMMAND, ExitCode::Usage, failure);
         }
         let parsed = Args::from_cli(validate, query);
         let plugin = parsed
@@ -1510,7 +1509,7 @@ impl Run<'_> {
                     format!("Metadata deployment is not implemented for {platform}"),
                 );
                 self.emit(
-                    &Outcome::failed("deploy metadata", ExitCode::Usage.code(), failure),
+                    &Outcome::failed("deploy metadata", ExitCode::Usage, failure),
                     &[],
                     out,
                     err,
@@ -1577,7 +1576,7 @@ impl Run<'_> {
             let document = run.document(self.duration_ms());
             out.write_all(document_text(&document, self.indent).as_bytes())?;
             out.flush()?;
-            return Ok(outcome.exit_code);
+            return Ok(outcome.exit_code.code());
         }
         let stdout = self.console(self.host.stdout_tty);
         let stderr = self.console(self.host.stderr_tty);
@@ -1610,7 +1609,7 @@ impl Run<'_> {
             )?;
             err.flush()?;
         }
-        if !run.refused && outcome.exit() != ExitCode::Usage {
+        if !run.refused && outcome.exit_code != ExitCode::Usage {
             let markdown = summary::fit(
                 &summary::deploy_summary(&run.result, None, Some(true)),
                 summary::MAX_SUMMARY_BYTES,
@@ -1626,7 +1625,7 @@ impl Run<'_> {
         let view = ResultView {
             message: outcome.message.clone(),
             outcome: run.outcome_line.clone(),
-            status: outcome.status.clone(),
+            status: outcome.status.as_str().to_owned(),
             ok: outcome.ok(),
             outcome_kind: run.plan_kind.then_some(OutcomeKind::Plan),
             failure: outcome
@@ -1654,7 +1653,7 @@ impl Run<'_> {
         }
         out.flush()?;
         err.flush()?;
-        Ok(outcome.exit_code)
+        Ok(outcome.exit_code.code())
     }
 
     /// The width a table or a long line is laid out at on stdout: `COLUMNS`,
@@ -1696,7 +1695,7 @@ impl Run<'_> {
         if report.bare_exit {
             out.flush()?;
             err.flush()?;
-            return Ok(outcome.exit_code);
+            return Ok(outcome.exit_code.code());
         }
         if report.usage_notes
             && let Some(failure) = &outcome.failure
@@ -1746,7 +1745,7 @@ impl Run<'_> {
             }
             out.write_all(document_text(&document, self.indent).as_bytes())?;
             out.flush()?;
-            return Ok(outcome.exit_code);
+            return Ok(outcome.exit_code.code());
         }
         let mut logged = false;
         if !report.steps.is_empty() && self.mode != Mode::Mcp && !self.globals.quiet {
@@ -1787,7 +1786,7 @@ impl Run<'_> {
             }
         }
         if let Some(markdown) = &report.ci_summary
-            && outcome.exit() != ExitCode::Usage
+            && outcome.exit_code != ExitCode::Usage
         {
             use crate::render::{ci, summary};
             let markdown = summary::fit(markdown, summary::MAX_SUMMARY_BYTES);
@@ -1811,7 +1810,7 @@ impl Run<'_> {
                 out.write_all(whole.as_bytes())?;
             }
             out.flush()?;
-            return Ok(outcome.exit_code);
+            return Ok(outcome.exit_code.code());
         }
         if self.mode != Mode::Mcp {
             for block in &report.body {
@@ -1842,15 +1841,15 @@ impl Run<'_> {
                 }
             }
         }
-        if report.body_only && outcome.exit() == ExitCode::Success {
+        if report.body_only && outcome.exit_code == ExitCode::Success {
             out.flush()?;
             err.flush()?;
-            return Ok(outcome.exit_code);
+            return Ok(outcome.exit_code.code());
         }
         let view = ResultView {
             message: outcome.message.clone(),
             outcome: report.outcome_line.clone(),
-            status: outcome.status.clone(),
+            status: outcome.status.as_str().to_owned(),
             ok: outcome.ok(),
             outcome_kind: report.outcome_kind,
             failure: outcome
@@ -1878,7 +1877,7 @@ impl Run<'_> {
         err.write_all(text_err.as_bytes())?;
         out.flush()?;
         err.flush()?;
-        Ok(outcome.exit_code)
+        Ok(outcome.exit_code.code())
     }
 
     fn resolve(&self, path: &str) -> PathBuf {
@@ -2083,7 +2082,7 @@ impl Run<'_> {
         let usage = |message: String| {
             let mut failure = crate::envelope::Failure::new(code::USAGE_INVALID_VALUE, message);
             failure.argument = None;
-            crate::commands::Report::failed(path, ExitCode::Usage.code(), failure)
+            crate::commands::Report::failed(path, ExitCode::Usage, failure)
         };
         if let Some(refusal) = refusal {
             return usage(refusal);
@@ -2731,7 +2730,11 @@ fn version_only(argv: &[String], version: &str) -> Option<String> {
 /// (`internal`, exit 1). Every path the tree has is answered.
 fn unhandled(path: &str) -> Outcome {
     let message = format!("opentide {path} has no implementation: this is a bug in opentide");
-    Outcome::failed(path, 1, Failure::new(code::INTERNAL, message))
+    Outcome::failed(
+        path,
+        ExitCode::Failure,
+        Failure::new(code::INTERNAL, message),
+    )
 }
 
 /// The phase words followed by the subcommand names clap took after them
@@ -2752,7 +2755,7 @@ mod tests {
     use super::*;
     #[test]
     fn a_reports_detail_and_advice_are_its_note_and_help() {
-        let mut outcome = Outcome::failed("tui", 2, Failure::new("x", "m"));
+        let mut outcome = Outcome::failed("tui", ExitCode::Usage, Failure::new("x", "m"));
         assert_eq!(data_text(&outcome.data, "advice"), None);
         outcome
             .data
@@ -3988,10 +3991,10 @@ mod tests {
         let success = ran("mcp start", &[], false, |run, out, err| {
             let outcome = Outcome {
                 command: "mcp start".into(),
-                status: Status::Completed.as_str().into(),
+                status: Status::Completed,
                 message: "done".into(),
                 data: Vec::new(),
-                exit_code: ExitCode::Success.code(),
+                exit_code: ExitCode::Success,
                 summary: Vec::new(),
                 next_actions: Vec::new(),
                 failure: None,

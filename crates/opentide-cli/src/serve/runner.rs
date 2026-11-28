@@ -249,8 +249,7 @@ impl HostRunner {
             Some(Ok(captured)) if !cancelled => captured,
             Some(Err(_)) => {
                 let problem = Failure::new(code::INTERNAL, "the Rust run panicked");
-                let outcome =
-                    Outcome::failed(&plan.words.join(" "), ExitCode::Failure.code(), problem);
+                let outcome = Outcome::failed(&plan.words.join(" "), ExitCode::Failure, problem);
                 return RunOutcome::Built {
                     document: outcome.document(0),
                     exit_code: 1,
