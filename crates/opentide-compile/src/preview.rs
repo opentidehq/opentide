@@ -10,7 +10,7 @@ use opentide_schema::platforms::{PlatformId, PlatformKey};
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 
-use crate::compiler::{Compiler, Datadog, Exabeam, Graylog, GraylogTarget, Sentinel};
+use crate::compiler::{Compiler, Datadog, Exabeam, GoogleSecops, Graylog, GraylogTarget, Sentinel};
 use crate::json::{Json, Object};
 use crate::rule::{CompileError, Rule};
 use crate::{
@@ -178,7 +178,9 @@ pub fn compile_tenant(
         }
         // The text is the same on every tenant: the `rules.create` body,
         // with what the deploy reads beside it (the run state).
-        PlatformId::GoogleSecops => google_secops::compile_deployment(cx, rule),
+        PlatformId::GoogleSecops => {
+            GoogleSecops::compile(cx, rule, ()).map(|compiled| GoogleSecops::body(&compiled))
+        }
         PlatformId::Graylog => graylog_request(cx, rule, known),
         PlatformId::Datadog => {
             Datadog::compile(cx, rule, known).map(|compiled| datadog::create_request(&compiled))
@@ -779,10 +781,10 @@ pub fn preview(cx: &Context<'_>, platform: &PlatformKey, rule: &Rule) -> Json {
         PlatformId::Exabeam => exabeam_preview(cx, rule, &[]),
         PlatformId::Datadog => datadog_preview(cx, rule, &[]),
         // `_google_secops_compile_preview`: the `rules.create` body with what
-        // the deploy reads beside it (`compile_deployment`), or the failure,
-        // named for Google SecOps.
-        PlatformId::GoogleSecops => match google_secops::compile_deployment(cx, rule) {
-            Ok(body) => compiled(rule, body),
+        // the deploy reads beside it, compiled as the deploy compiles it
+        // (`compiler::GoogleSecops`), or the failure, named for Google SecOps.
+        PlatformId::GoogleSecops => match GoogleSecops::compile(cx, rule, ()) {
+            Ok(payload) => compiled(rule, GoogleSecops::body(&payload)),
             Err(error) => failure(rule, &error),
         },
         PlatformId::Elastic => elastic_preview(cx, rule, &[]),

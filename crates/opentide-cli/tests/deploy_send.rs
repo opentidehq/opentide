@@ -3123,6 +3123,137 @@ fn a_datadog_deploy_sends_the_body_its_dry_run_shows() {
     assert_eq!(&request.get("body").unwrap().to_compact(), body);
 }
 
+/// The API root of the Google SecOps instance the stand serves.
+const SECOPS_INSTANCE: &str = "/v1/projects/p/locations/eu/instances/i";
+
+/// Mounts on `server` what a Google SecOps create reaches: the token, one
+/// `verify`, one create on `rules` that answers `rule_id`, and one
+/// `deployment` update.
+fn mount_secops_create(
+    rt: &tokio::runtime::Runtime,
+    server: &wiremock::MockServer,
+    verify: &str,
+    rules: &str,
+    deployment: &str,
+    rule_id: &str,
+) {
+    use wiremock::matchers::{method, path, path_regex};
+    rt.block_on(async {
+        let ok = |body: serde_json::Value| wiremock::ResponseTemplate::new(200).set_body_json(body);
+        wiremock::Mock::given(method("POST"))
+            .and(path("/token"))
+            .respond_with(ok(
+                serde_json::json!({"access_token": "t", "expires_in": 3600}),
+            ))
+            .mount(server)
+            .await;
+        wiremock::Mock::given(method("POST"))
+            .and(path(verify))
+            .respond_with(ok(serde_json::json!({
+                "success": true,
+                "allowedRunFrequencies": ["LIVE", "HOURLY", "DAILY"]
+            })))
+            .expect(1)
+            .mount(server)
+            .await;
+        wiremock::Mock::given(method("POST"))
+            .and(path(rules))
+            .respond_with(ok(
+                serde_json::json!({"name": format!("{}/rules/{rule_id}", &SECOPS_INSTANCE[4..])}),
+            ))
+            .expect(1)
+            .mount(server)
+            .await;
+        wiremock::Mock::given(method("PATCH"))
+            .and(path_regex(format!("^{deployment}$")))
+            .respond_with(ok(serde_json::json!({})))
+            .expect(1)
+            .mount(server)
+            .await;
+    });
+}
+
+/// What a Google SecOps deploy sends is, byte for byte, what the dry run
+/// shows (#1952: both compile through `compiler::GoogleSecops`): the
+/// `rules.create` body is the shown `text` (the tenant names no scope), the
+/// text verified is that text, and the deployment the new rule gets is the
+/// shown `run_state` (its body, and its mask as `updateMask`). The rule's
+/// non-ASCII text goes through as written.
+#[test]
+fn a_google_secops_deploy_sends_the_body_its_dry_run_shows() {
+    const RULE_ID: &str = "ru_0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d";
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let server = rt.block_on(wiremock::MockServer::start());
+    let uri = server.uri();
+    let rules = format!("{SECOPS_INSTANCE}/rules");
+    let verify = format!("{SECOPS_INSTANCE}:verifyRuleText");
+    let deployment = format!("{SECOPS_INSTANCE}/rules/{RULE_ID}/deployment");
+    mount_secops_create(&rt, &server, &verify, &rules, &deployment, RULE_ID);
+    let text = std::fs::read_to_string(
+        repo().join("tests/fixtures/google_secops/rule-google-secops-process-1.0.yaml"),
+    )
+    .unwrap()
+    .replace("Microsoft Sysmon", "Sysmon é😀")
+    .replace("// Office parent", "// Parent Office (Wörd 😀)");
+    let setup = format!(
+        "ssl = false\nproject = \"p\"\nlocation = \"eu\"\ninstance = \"i\"\nendpoint = \"{uri}\"\n"
+    );
+    let ws = workspace("google_secops", "lab", &setup, &[("a.yaml", text)]);
+    let adc = ws.path().join("adc.json");
+    std::fs::write(
+        &adc,
+        format!(
+            r#"{{"type": "authorized_user", "client_id": "c", "client_secret": "s",
+                "refresh_token": "r", "token_uri": "{uri}/token"}}"#
+        ),
+    )
+    .unwrap();
+    let env = Env::from_pairs([(
+        "GOOGLE_APPLICATION_CREDENTIALS".to_owned(),
+        adc.display().to_string(),
+    )]);
+    let shown = dry_run_requests(ws.path(), "google_secops");
+    let (sent, err) = deploy(
+        ws.path(),
+        "google_secops",
+        &env,
+        &opentide_connectors::builtin(),
+        0,
+    );
+    rt.block_on(server.verify());
+    assert_eq!(rows(&sent), vec![("deployed".to_owned(), None)], "{err}");
+    assert_eq!(shown.len(), 1);
+    let payload = Json::parse(&shown[0].0).unwrap();
+    let shown_text = payload.get("text").unwrap().to_compact();
+    assert!(
+        shown_text.contains("é😀") && shown_text.contains("Wörd 😀"),
+        "{shown_text}"
+    );
+    let created = bodies_on(&rt, &server, &wiremock::http::Method::POST, &rules);
+    assert_eq!(created, [format!("{{\"text\":{shown_text}}}")], "{err}");
+    let verified = bodies_on(&rt, &server, &wiremock::http::Method::POST, &verify);
+    assert_eq!(verified, [format!("{{\"ruleText\":{shown_text}}}")]);
+    let run_state = payload.get("run_state").unwrap();
+    let deployed = rt.block_on(server.received_requests()).unwrap();
+    let patch = deployed
+        .iter()
+        .find(|request| request.url.path() == deployment)
+        .unwrap();
+    assert_eq!(
+        String::from_utf8(patch.body.clone()).unwrap(),
+        run_state.get("body").unwrap().to_compact()
+    );
+    let mask = patch
+        .url
+        .query_pairs()
+        .find(|(key, _)| key == "updateMask")
+        .map(|(_, value)| value.into_owned());
+    assert_eq!(
+        mask.as_deref(),
+        run_state.get("mask").and_then(Json::as_str)
+    );
+}
+
 /// A definition the tenant lost while git ignores deployment state is not
 /// created again: the warning, then the state's refusal; and a tenant that
 /// refuses the token on a rule stops there.
