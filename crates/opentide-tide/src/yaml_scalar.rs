@@ -40,6 +40,16 @@ impl YamlKey {
     pub(crate) fn path_is(&self, expected: &[&str]) -> bool {
         self.path.len() == expected.len() && self.path.iter().zip(expected).all(|(a, b)| a == b)
     }
+
+    /// `source`, the text the key was read from, from the key's token on.
+    /// Empty if `source` is another text, in which `key_start` is no char
+    /// boundary.
+    pub(crate) fn tail<'s>(&self, source: &'s str) -> &'s str {
+        // `key_start` is a line's start plus its indentation and `- `
+        // markers, all ASCII.
+        debug_assert!(source.is_char_boundary(self.key_start), "{self:?}");
+        source.get(self.key_start..).unwrap_or_default()
+    }
 }
 
 /// A scalar's value, and for each byte of it the source byte it comes from.
@@ -101,7 +111,7 @@ impl Line<'_> {
 
     /// The text after the indentation.
     fn body(&self) -> &str {
-        &self.text[self.indent()..]
+        self.text.trim_start_matches(' ')
     }
 
     /// Offset of the line break (or of the end of the source).
@@ -114,10 +124,11 @@ impl Line<'_> {
     }
 }
 
-fn lines_from(source: &str, from: usize) -> Vec<Line<'_>> {
+/// The lines of `text`, a suffix of the source that starts at byte `from`.
+fn lines_from(text: &str, from: usize) -> Vec<Line<'_>> {
     let mut out = Vec::new();
     let mut start = from;
-    for raw in source[from..].split_inclusive('\n') {
+    for raw in text.split_inclusive('\n') {
         out.push(Line {
             start,
             text: raw.trim_end_matches('\n').trim_end_matches('\r'),
@@ -250,8 +261,10 @@ fn is_document_marker(body: &str) -> bool {
 /// `value` without a leading tag (`!!str`) or anchor (`&a`).
 fn skip_properties(mut value: &str) -> &str {
     while value.starts_with(['!', '&']) {
-        let end = value.find([' ', '\t']).unwrap_or(value.len());
-        value = value[end..].trim_start_matches([' ', '\t']);
+        value = value
+            .split_once([' ', '\t'])
+            .map_or("", |(_, rest)| rest)
+            .trim_start_matches([' ', '\t']);
     }
     value
 }
@@ -271,11 +284,12 @@ fn opens_collection(body: &str) -> bool {
 /// The scalar starting at byte `at`, the value of a key in a mapping indented
 /// `indent` columns. `None` when it is not a scalar or is not valid YAML.
 pub(crate) fn scalar_at(source: &str, at: usize, indent: usize) -> Option<Scalar> {
-    match source.get(at..)?.chars().next()? {
-        '|' | '>' => block_scalar(source, at, indent),
-        quote @ ('"' | '\'') => quoted_scalar(source, at, quote),
+    let tail = source.get(at..)?;
+    match tail.chars().next()? {
+        '|' | '>' => block_scalar(tail, at, indent),
+        quote @ ('"' | '\'') => quoted_scalar(tail, at, quote),
         '[' | '{' | '*' | '#' => None,
-        _ => plain_scalar(source, at, indent),
+        _ => plain_scalar(tail, at, indent),
     }
 }
 
@@ -285,36 +299,42 @@ pub(crate) fn scalar_text(source: &str, key: &YamlKey) -> Option<String> {
     Some(scalar.text)
 }
 
-fn block_scalar(source: &str, at: usize, indent: usize) -> Option<Scalar> {
-    let header_end = source[at..].find('\n').map_or(source.len(), |i| at + i);
-    let header = source[at..header_end].trim_end_matches('\r');
-    let folded = header.starts_with('>');
+/// The block scalar `tail` starts with (at its `|` or `>`), `tail` being the
+/// source from byte `at`.
+fn block_scalar(tail: &str, at: usize, indent: usize) -> Option<Scalar> {
+    let (header, body) = tail.split_once('\n').unwrap_or((tail, ""));
+    let header_end = at + header.len();
+    let source_len = at + tail.len();
+    let header = header.trim_end_matches('\r');
     // The indentation indicator and the chomping indicator, in either order.
     // Chomping only decides the value's trailing line breaks, which are left
     // out here: a scalar ends at its last line of text.
     let mut explicit = None;
     let mut chomping = false;
-    let mut rest = &header[1..];
+    let mut chars = header.chars();
+    let folded = chars.next() == Some('>');
     for _ in 0..2 {
-        match rest.chars().next() {
+        let mut ahead = chars.clone();
+        match ahead.next() {
             Some(d @ '1'..='9') if explicit.is_none() => explicit = d.to_digit(10),
             Some('-' | '+') if !chomping => chomping = true,
             _ => break,
         }
-        rest = &rest[1..];
+        chars = ahead;
     }
+    let rest = chars.as_str();
     // Then nothing, or a comment after a blank.
     let comment = rest.trim_start_matches([' ', '\t']);
     if !(comment.is_empty() || (comment.starts_with('#') && comment.len() < rest.len())) {
         return None;
     }
-    let body_start = (header_end + 1).min(source.len());
+    let body_start = (header_end + 1).min(source_len);
     let mut content_indent = explicit.map(|d| indent + d as usize);
     // Lines of the scalar: `None` for an empty line.
     let mut rows: Vec<(Line<'_>, Option<&str>)> = Vec::new();
     let mut end = body_start;
-    if header_end < source.len() {
-        for line in lines_from(source, body_start) {
+    if header_end < source_len {
+        for line in lines_from(body, body_start) {
             let line_indent = line.indent();
             let only_spaces = line.text.bytes().all(|b| b == b' ');
             match content_indent {
@@ -338,7 +358,13 @@ fn block_scalar(source: &str, at: usize, indent: usize) -> Option<Scalar> {
             if line_indent < m {
                 break;
             }
-            rows.push((line, Some(&line.text[m..])));
+            #[expect(
+                clippy::string_slice,
+                reason = "`m` is at most `line_indent`, the count of the line's leading \
+                          spaces: a char boundary"
+            )]
+            let text = &line.text[m..];
+            rows.push((line, Some(text)));
         }
     }
     while rows.last().is_some_and(|(_, text)| text.is_none()) {
@@ -401,11 +427,17 @@ fn plain_line(text: &str) -> (&str, bool) {
             break;
         }
     }
-    (text[..cut].trim_end_matches([' ', '\t']), comment)
+    #[expect(
+        clippy::string_slice,
+        reason = "`cut` is the index of an ASCII `#` byte, or the text's length: a char boundary"
+    )]
+    let text = &text[..cut];
+    (text.trim_end_matches([' ', '\t']), comment)
 }
 
-fn plain_scalar(source: &str, at: usize, indent: usize) -> Option<Scalar> {
-    let lines = lines_from(source, at);
+/// The plain scalar `tail` starts with, `tail` being the source from byte `at`.
+fn plain_scalar(tail: &str, at: usize, indent: usize) -> Option<Scalar> {
+    let lines = lines_from(tail, at);
     let first = lines.first()?;
     let mut scalar = Scalar::new();
     let (text, mut done) = plain_line(first.text);
@@ -421,7 +453,7 @@ fn plain_scalar(source: &str, at: usize, indent: usize) -> Option<Scalar> {
             continue;
         }
         let line_indent = line.indent();
-        let body = line.text[line_indent..].trim_start_matches([' ', '\t']);
+        let body = line.text.trim_start_matches([' ', '\t']);
         if line_indent <= indent || body.starts_with('#') {
             break;
         }
@@ -448,14 +480,17 @@ fn fold_break(scalar: &mut Scalar, at: usize, empties: &[usize]) {
     }
 }
 
-fn quoted_scalar(source: &str, at: usize, quote: char) -> Option<Scalar> {
+/// The quoted scalar `tail` starts with (at its opening quote), `tail` being
+/// the source from byte `at`.
+fn quoted_scalar(tail: &str, at: usize, quote: char) -> Option<Scalar> {
     let mut scalar = Scalar::new();
     // Text length before the blanks that end the current line, which a line
     // break drops.
     let mut blanks_from: Option<usize> = None;
-    let mut chars = source[at + 1..]
+    let mut chars = tail
         .char_indices()
-        .map(|(i, c)| (at + 1 + i, c))
+        .skip(1)
+        .map(|(i, c)| (at + i, c))
         .peekable();
     while let Some((i, c)) = chars.next() {
         match c {
@@ -674,12 +709,36 @@ mod tests {
             );
             // Every character the source spells out maps onto itself.
             for (i, c) in scalar.text.char_indices() {
-                let from = source[scalar.map[i]..].chars().next().unwrap();
+                let from = source.get(scalar.map[i]..).unwrap().chars().next().unwrap();
                 if !matches!(c, ' ' | '\n') && from != '\\' {
                     assert_eq!(from, c, "{source:?} at {i}");
                 }
             }
             assert!(scalar.end <= source.len(), "{source:?}");
         }
+    }
+
+    /// #1946: headers, tags, comments and quotes among multi-byte text.
+    #[test]
+    fn scalars_read_multi_byte_text_around_their_markers() {
+        let value = |source: &str| {
+            let at = source.find(": ").unwrap() + 2;
+            let key = mapping_keys(source).into_iter().next().unwrap();
+            assert_eq!(key.scalar, Some(at), "{source:?}");
+            scalar_at(source, at, 0).map(|s| s.text)
+        };
+        assert_eq!(value("k: |2- # é😀\n   é😀\n").as_deref(), Some(" é😀"));
+        assert_eq!(value("k: >+ é\n  é😀\n").as_deref(), None);
+        assert_eq!(value("k: \"é😀\\u00e9\"\n").as_deref(), Some("é😀é"));
+        assert_eq!(value("k: 'é''😀'\n").as_deref(), Some("é'😀"));
+        assert_eq!(value("k: é😀 # é\n").as_deref(), Some("é😀"));
+        assert_eq!(
+            value("k: é#😀\n  suite é\n").as_deref(),
+            Some("é#😀 suite é")
+        );
+        let source = "k: !é😀 &ancre é😀\n";
+        let key = mapping_keys(source).into_iter().next().unwrap();
+        assert_eq!(scalar_text(source, &key).as_deref(), Some("é😀"));
+        assert_eq!(key.tail(source), source);
     }
 }

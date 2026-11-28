@@ -141,7 +141,10 @@ fn injected(
     if lead + trail >= text.len() || text.trim().is_empty() {
         return None;
     }
-    let inner = text[lead..text.len() - trail].to_string();
+    let inner = text
+        .trim_start_matches(['\n', '\r'])
+        .trim_end_matches(['\n', '\r'])
+        .to_string();
     let host_map = scalar.map[lead..scalar.map.len() - trail].to_vec();
     let start = *host_map.first()?;
     let end = scalar.end.max(host_map.last()? + 1);
@@ -199,7 +202,7 @@ mod tests {
         let mut units = 0;
         for (i, c) in line.char_indices() {
             if units >= d.range.start.character as usize {
-                return &line[i..];
+                return line.get(i..).unwrap();
             }
             units += c.len_utf16();
         }

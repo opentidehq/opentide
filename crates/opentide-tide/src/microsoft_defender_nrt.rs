@@ -215,7 +215,7 @@ mod tests {
                 let line = source.lines().nth(d.range.start.line as usize).unwrap();
                 let start = d.range.start.character as usize;
                 let end = d.range.end.character as usize;
-                (d.range.start.line, line[start..end].to_owned())
+                (d.range.start.line, line.get(start..end).unwrap().to_owned())
             })
             .collect()
     }

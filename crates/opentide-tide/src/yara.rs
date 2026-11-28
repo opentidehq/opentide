@@ -119,28 +119,34 @@ fn deployed_text(source: &str, keys: &[YamlKey], p: &[&str]) -> Option<String> {
 /// (`|+`) every one, including the empty lines after the text.
 fn chomped(source: &str, at: usize, scalar: Scalar) -> String {
     let mut text = scalar.text;
-    let line_end = source[at..].find('\n').map_or(source.len(), |n| at + n);
+    // `scalar_at` read a scalar at `at`: a char boundary.
+    debug_assert!(source.is_char_boundary(at), "{at}");
+    let tail = source.get(at..).unwrap_or_default();
     // The header token: `|` or `>`, then indicators up to a blank or comment.
-    let header: String = source[at..line_end]
+    let header: String = tail
         .chars()
         .take_while(|c| !c.is_whitespace() && *c != '#')
         .collect();
-    if !header.starts_with(['|', '>']) || text.is_empty() {
+    let Some(indicators) = header.strip_prefix(['|', '>']) else {
         return text;
-    }
-    let indicators = &header[1..];
-    if indicators.contains('-') {
+    };
+    if text.is_empty() || indicators.contains('-') {
         return text;
     }
     text.push('\n');
     if indicators.contains('+') {
         // Every empty line after the last line of text, up to the next
         // line with text (less indented: the scalar has ended) or the end.
+        // `last` is the source byte of the text's last byte: inside a
+        // multi-byte character when the text ends with one.
         let last = scalar.map.last().copied().unwrap_or(at);
-        let after = source[last..]
-            .find('\n')
-            .map_or(source.len(), |n| last + n + 1);
-        for line in source[after..].split_inclusive('\n') {
+        let mut offset = at;
+        for line in tail.split_inclusive('\n') {
+            let start = offset;
+            offset += line.len();
+            if start <= last {
+                continue;
+            }
             if !line.trim().is_empty() || !line.ends_with('\n') {
                 break;
             }
@@ -250,7 +256,7 @@ fn raw_items(keys: &[YamlKey], source: &str, p: &[&str]) -> Vec<(String, Vec<usi
         return Vec::new();
     };
     let key = &keys[i];
-    let Some(colon) = source[key.key_start..].find(':') else {
+    let Some(colon) = key.tail(source).find(':') else {
         return Vec::new();
     };
     let from = key.key_start + colon + 1;
@@ -258,7 +264,11 @@ fn raw_items(keys: &[YamlKey], source: &str, p: &[&str]) -> Vec<(String, Vec<usi
         .get(i + 1)
         .filter(|next| next.key_start > from)
         .map_or(source.len(), |next| next.key_start);
-    let region = &source[from..end];
+    // Past a one-byte `:`, up to a key's start or the end: char boundaries.
+    debug_assert!(source.is_char_boundary(from) && source.is_char_boundary(end));
+    let Some(region) = source.get(from..end) else {
+        return Vec::new();
+    };
     let trimmed = region.trim_start_matches([' ', '\t']);
     if trimmed.starts_with('[') {
         flow_items(
@@ -350,7 +360,13 @@ fn flow_items(
                     {
                         at += 1;
                     }
-                    let line = source[line_start..at].trim_end_matches([' ', '\t', '\r']);
+                    #[expect(
+                        clippy::string_slice,
+                        reason = "the scan stops only at ASCII bytes (blanks, `,`, `]`, `#`, \
+                                  line breaks), past one, or at `end`: char boundaries"
+                    )]
+                    let line = &source[line_start..at];
+                    let line = line.trim_end_matches([' ', '\t', '\r']);
                     if !line.is_empty() {
                         if !text.is_empty() {
                             match breaks.len() {
@@ -401,10 +417,19 @@ fn block_items(source: &str, from: usize, end: usize) -> Vec<(String, Vec<usize>
     let mut out = Vec::new();
     let mut at = from;
     let mut item_column = None;
-    for line in source[from..end].split_inclusive('\n') {
+    // `raw_items` cuts `from..end` at char boundaries.
+    debug_assert!(source.is_char_boundary(from) && source.is_char_boundary(end));
+    let region = source.get(from..end).unwrap_or_default();
+    for line in region.split_inclusive('\n') {
         let content = line.trim_start_matches([' ', '\t']);
         let dash = at + (line.len() - content.len());
-        let column = dash - source[..dash].rfind('\n').map_or(0, |n| n + 1);
+        // A line feed is one byte, and no byte of a multi-byte character is one.
+        let column = dash
+            - source
+                .bytes()
+                .take(dash)
+                .rposition(|byte| byte == b'\n')
+                .map_or(0, |n| n + 1);
         at += line.len();
         let rest = match content.strip_prefix('-') {
             Some(rest) if rest.is_empty() || rest.starts_with([' ', '\t', '\n', '\r']) => rest,
@@ -440,9 +465,9 @@ fn block_items(source: &str, from: usize, end: usize) -> Vec<(String, Vec<usize>
 
 /// A body without its leading and trailing white space, with its map.
 fn stripped(text: &str, map: &[usize]) -> (String, Vec<usize>) {
+    let body = text.trim();
     let start = text.len() - text.trim_start().len();
-    let end = text.trim_end().len().max(start);
-    (text[start..end].to_string(), map[start..end].to_vec())
+    (body.to_string(), map[start..start + body.len()].to_vec())
 }
 
 /// A section header deploy writes itself, if a fragment has one: the byte
@@ -458,7 +483,9 @@ fn section_header(text: &str) -> Option<(usize, usize, &str)> {
             .chars()
             .take_while(|c| c.is_ascii_alphabetic())
             .collect();
-        let rest = trimmed[word.len()..].trim_start();
+        let rest = trimmed
+            .trim_start_matches(|c: char| c.is_ascii_alphabetic())
+            .trim_start();
         let header = match word.as_str() {
             "strings" | "condition" | "meta" if rest.starts_with(':') => Some(word.as_str()),
             "rule" if rest.starts_with(|c: char| c.is_ascii_alphabetic() || c == '_') => {
@@ -503,13 +530,17 @@ fn mask_comments_and_strings(text: &str) -> String {
     while i < bytes.len() {
         match bytes[i] {
             b'/' if bytes.get(i + 1) == Some(&b'/') => {
-                let end = text[i..].find('\n').map_or(bytes.len(), |n| i + n);
+                let end = bytes[i..]
+                    .iter()
+                    .position(|b| *b == b'\n')
+                    .map_or(bytes.len(), |n| i + n);
                 blank(&mut out, i, end);
                 i = end;
             }
             b'/' if bytes.get(i + 1) == Some(&b'*') => {
-                let end = text[i + 2..]
-                    .find("*/")
+                let end = bytes[i + 2..]
+                    .windows(2)
+                    .position(|pair| pair == b"*/")
                     .map_or(bytes.len(), |n| i + 2 + n + 2);
                 blank(&mut out, i, end);
                 i = end;
@@ -939,5 +970,56 @@ mod tests {
         assert!(section_header("$a // condition: below\nand $b").is_none());
         assert!(section_header("/*\nrule x {\n*/ $a").is_none());
         assert!(section_header("$a = \"x\" /* c */\ncondition:\n  $a").is_some());
+    }
+
+    /// #1946: keep chomping (`|+`) looked for the line break after the
+    /// text's last byte, inside a multi-byte character when the text ends
+    /// with one, and panicked.
+    #[test]
+    fn chomping_after_multi_byte_text_keeps_its_line_breaks() {
+        for (header, want) in [
+            ("|+", "café é😀\n\n\n"),
+            ("|", "café é😀\n"),
+            ("|-", "café é😀"),
+            ("|+ # é😀", "café é😀\n\n\n"),
+        ] {
+            let source = format!("description: {header}\n  café é😀\n\n\nname: é\n");
+            let keys = crate::yaml_scalar::mapping_keys(&source);
+            assert_eq!(
+                deployed_text(&source, &keys, &["description"]).as_deref(),
+                Some(want),
+                "{header}"
+            );
+            assert_eq!(
+                deployed_text(&source, &keys, &["name"]).as_deref(),
+                Some("é")
+            );
+        }
+    }
+
+    /// #1946: list items, section headers and masks among multi-byte text.
+    #[test]
+    fn items_headers_and_masks_among_multi_byte_text() {
+        let source = "tags:\n  - é😀 # é\n  - 'é''😀'\nnames: [é😀 , \"é\\u00e9\", [é] ,\n  é\n\n  😀 # é\n]\n";
+        let keys = crate::yaml_scalar::mapping_keys(source);
+        let texts = |p: &[&str]| -> Vec<String> {
+            raw_items(&keys, source, p)
+                .into_iter()
+                .map(|item| item.0)
+                .collect()
+        };
+        assert_eq!(texts(&["tags"]), ["é😀", "é'😀"]);
+        assert_eq!(texts(&["names"]), ["é😀", "éé", "", "é\n😀"]);
+        assert_eq!(
+            stripped(" é😀 \n", &[0, 1, 2, 3, 4, 5, 6, 7, 8]),
+            ("é😀".into(), (1..7).collect())
+        );
+        assert_eq!(stripped(" \n", &[0, 1]), (String::new(), Vec::new()));
+        assert!(section_header("// é😀\ncondition: é").is_some());
+        assert!(section_header("conditioné: x").is_none());
+        assert_eq!(
+            mask_comments_and_strings("é /* 😀 */ é // é\né"),
+            format!("é{}é{}\né", " ".repeat(12), " ".repeat(6))
+        );
     }
 }

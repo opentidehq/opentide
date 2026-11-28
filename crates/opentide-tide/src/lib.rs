@@ -16,6 +16,11 @@
     clippy::too_many_lines,
     reason = "engine dispatchers match every node kind in one function"
 )]
+// Slicing a `str` by byte index panics off a char boundary, and this crate
+// reads user documents: every slice is checked or says why it is safe
+// (#1946; the lint moves to `[workspace.lints]` once every crate is clean).
+#![warn(clippy::string_slice)]
+
 mod bitdefender;
 mod elastic;
 pub mod engines;
@@ -270,7 +275,14 @@ fn assembled_line_end<'s>(
     offset: usize,
     new_lines: bool,
 ) -> Option<(usize, &'s str)> {
-    let column = |at: usize| at - source[..at].rfind('\n').map_or(0, |i| i + 1);
+    // A line feed is one byte, and no byte of a multi-byte character is one.
+    let column = |at: usize| {
+        at - source
+            .bytes()
+            .take(at)
+            .rposition(|byte| byte == b'\n')
+            .map_or(0, |i| i + 1)
+    };
     let written =
         |p: &&InjectionPart| !p.synthetic && p.end > p.start && typed_as_yara(&p.field_path);
     inj.parts.iter().rev().filter(written).find_map(|p| {
@@ -1265,12 +1277,11 @@ fn line_key(line: &str) -> Option<(&str, &str, usize, usize)> {
     let body = line.trim_end_matches(['\n', '\r']);
     let indent = body.bytes().take_while(|b| *b == b' ').count();
     let rest = body.get(indent..)?;
-    let colon = rest.find(':')?;
-    let key = &rest[..colon];
+    let (key, value) = rest.split_once(':')?;
     if key.is_empty() || !key.chars().all(is_yaml_key_char) {
         return None;
     }
-    Some((key, &rest[colon + 1..], indent, indent + key.len()))
+    Some((key, value, indent, indent + key.len()))
 }
 
 fn line_list_item(line: &str) -> Option<(&str, usize)> {
@@ -1520,8 +1531,10 @@ fn object_schema_id(object: &TideObject) -> String {
 pub fn same_file(a: &str, b: &str) -> bool {
     fn key(path: &str) -> String {
         let mut key = path.replace('\\', "/");
-        if key.as_bytes().get(1) == Some(&b':') {
-            key[..1].make_ascii_lowercase();
+        if let Some((drive, rest)) = key.split_at_mut_checked(1)
+            && rest.starts_with(':')
+        {
+            drive.make_ascii_lowercase();
         }
         key
     }
@@ -1595,11 +1608,14 @@ fn name_range(source: &str, name: &str) -> Range {
     let Some(key) = yaml_path::key_span(source, &["name"]) else {
         return Range::point(0, 0);
     };
-    let line_end = source[key.end..]
-        .find('\n')
-        .map_or(source.len(), |i| key.end + i);
+    // A key's span ends where its text does.
+    debug_assert!(source.is_char_boundary(key.end), "{key:?}");
+    let Some(after) = source.get(key.end..) else {
+        return span_to_range(source, key);
+    };
+    let line = after.split_once('\n').map_or(after, |(line, _)| line);
     let span = (!name.is_empty())
-        .then(|| source[key.end..line_end].find(name))
+        .then(|| line.find(name))
         .flatten()
         .map_or(key, |i| {
             ByteSpan::new(key.end + i, key.end + i + name.len())
@@ -1835,7 +1851,8 @@ configurations:
             };
             assert_eq!(query.host_map.len(), query.inner.len());
             assert_eq!(
-                &src[query.host_span.start..query.host_span.start + 13],
+                src.get(query.host_span.start..query.host_span.start + 13)
+                    .unwrap(),
                 "SecurityEvent"
             );
             let r = analyze(AnalyzeInput {
@@ -2187,7 +2204,7 @@ threat:
         tokens
             .iter()
             .filter(|t| t.capture == capture)
-            .map(|t| &source[t.span.start..t.span.end])
+            .map(|t| source.get(t.span.start..t.span.end).unwrap())
             .collect()
     }
 
@@ -2293,23 +2310,23 @@ configurations:
             elastic_tenants: &[],
         });
         assert!(
-            r.tokens
-                .iter()
-                .any(|t| t.capture == "type"
-                    && &src[t.span.start..t.span.end] == "DeviceNetworkEvents"),
+            r.tokens.iter().any(|t| t.capture == "type"
+                && src.get(t.span.start..t.span.end).unwrap() == "DeviceNetworkEvents"),
             "{:?}",
             r.tokens
                 .iter()
-                .map(|t| (t.capture.as_str(), &src[t.span.start..t.span.end]))
+                .map(|t| (
+                    t.capture.as_str(),
+                    src.get(t.span.start..t.span.end).unwrap()
+                ))
                 .collect::<Vec<_>>()
         );
         let purpose_keys = token_text(src, &r.tokens, "tide.property");
         assert!(purpose_keys.contains(&"purpose"), "{purpose_keys:?}");
         // The CrowdStrike block's query is CQL: `index` is a field.
         assert!(
-            r.tokens
-                .iter()
-                .any(|t| t.capture == "property" && &src[t.span.start..t.span.end] == "index"),
+            r.tokens.iter().any(|t| t.capture == "property"
+                && src.get(t.span.start..t.span.end).unwrap() == "index"),
             "{:?}",
             r.tokens
         );
@@ -2359,7 +2376,11 @@ configurations:
         );
         // Placed on the YAML, where `groupBi` is written.
         let start = opentide_core::position_to_offset(&src, d[0].range.start);
-        assert!(src[start..].starts_with("groupBi"), "{:?}", &src[start..]);
+        assert!(
+            src.get(start..).unwrap().starts_with("groupBi"),
+            "{:?}",
+            src.get(start..)
+        );
         // The rule block is a correlation rule: correlate() takes no other aggregate.
         let d = found(&rule(
             "correlate(A: { a=1 }, B: { b=1 | aid <=> A.aid }, within=5m) | count()",
@@ -2405,7 +2426,12 @@ configurations:
         let pairs: Vec<(&str, &str)> = r
             .tokens
             .iter()
-            .map(|t| (t.capture.as_str(), &src[t.span.start..t.span.end]))
+            .map(|t| {
+                (
+                    t.capture.as_str(),
+                    src.get(t.span.start..t.span.end).unwrap(),
+                )
+            })
             .collect();
         assert!(
             pairs
@@ -2548,7 +2574,7 @@ configurations:
         }
         for offset in [escape, escape + 1] {
             let (inj, inner) = injection_at_offset(source, offset).unwrap();
-            assert_eq!(&inj.inner[inner..], "\u{e9}", "{offset}");
+            assert_eq!(inj.inner.get(inner..).unwrap(), "\u{e9}", "{offset}");
         }
     }
 
@@ -2560,12 +2586,24 @@ configurations:
         let source = "name: R\nconfigurations:\n  harfanglab:\n    yara:\n      strings: |\n        $cmd = \"cmd.exe\" ascii\n      condition: |\n        $cmd and #cmd > 1\n";
         let end = source.find("> 1").unwrap() + "> 1".len();
         let (inj, inner) = injection_at_offset(source, end).unwrap();
-        assert!(inj.inner[..inner].ends_with("$cmd and #cmd > 1"), "{inner}");
+        assert!(
+            inj.inner
+                .get(..inner)
+                .unwrap()
+                .ends_with("$cmd and #cmd > 1"),
+            "{inner}"
+        );
         assert!(!inj.is_synthetic(inner.saturating_sub(1)));
         // The end of the strings line, too; not a byte past the newline.
         let strings_end = source.find("ascii").unwrap() + "ascii".len();
         let (inj, inner) = injection_at_offset(source, strings_end).unwrap();
-        assert!(inj.inner[..inner].ends_with("\"cmd.exe\" ascii"), "{inner}");
+        assert!(
+            inj.inner
+                .get(..inner)
+                .unwrap()
+                .ends_with("\"cmd.exe\" ascii"),
+            "{inner}"
+        );
         assert!(injection_at_offset(source, end + 1).is_none());
     }
 
@@ -2581,12 +2619,15 @@ configurations:
         let source = format!("{head}        $cmd \n");
         let at = source.rfind("$cmd ").unwrap() + "$cmd ".len();
         let (inj, inner, typed) = injection_typed_at(&source, at).unwrap();
-        assert!(inj.inner[..inner].ends_with("$cmd"), "{inner}");
+        assert!(inj.inner.get(..inner).unwrap().ends_with("$cmd"), "{inner}");
         assert_eq!(typed, " ");
         // A new line in the block, indented as its lines are.
         let source = format!("{head}        $cmd and\n        ");
         let (inj, inner, typed) = injection_typed_at(&source, source.len()).unwrap();
-        assert!(inj.inner[..inner].ends_with("$cmd and"), "{inner}");
+        assert!(
+            inj.inner.get(..inner).unwrap().ends_with("$cmd and"),
+            "{inner}"
+        );
         assert_eq!(typed, "\n        ");
         // Hover and definition do not take it: nothing is written there.
         assert!(injection_at_offset(&source, source.len()).is_none());
@@ -2597,13 +2638,19 @@ configurations:
         let source = format!("{head}        $cmd and\n        #cmd > 1\n");
         let at = source.find("$cmd and").unwrap() + "$cmd and".len();
         let (inj, inner, typed) = injection_typed_at(&source, at).unwrap();
-        assert!(inj.inner[..inner].ends_with("$cmd and"), "{inner}");
+        assert!(
+            inj.inner.get(..inner).unwrap().ends_with("$cmd and"),
+            "{inner}"
+        );
         assert_eq!(typed, "");
-        assert!(inj.inner[inner..].starts_with('\n'));
+        assert!(inj.inner.get(inner..).unwrap().starts_with('\n'));
         // A line ending in `é`, two bytes.
         let at = source.find("café").unwrap() + "café".len();
         let (inj, inner, typed) = injection_typed_at(&source, at).unwrap();
-        assert!(inj.inner[..inner].ends_with("// café"), "{inner}");
+        assert!(
+            inj.inner.get(..inner).unwrap().ends_with("// café"),
+            "{inner}"
+        );
         assert_eq!(typed, "");
     }
 
@@ -2615,10 +2662,24 @@ configurations:
         let source = "name: R\nconfigurations:\n  sentinel:\n    query: \"T\\Lfoo\"\n";
         let f = source.find("foo").unwrap();
         let (inj, inner) = injection_at_offset(source, f).unwrap();
-        assert_eq!(&inj.inner[inner..], "foo");
+        assert_eq!(inj.inner.get(inner..).unwrap(), "foo");
         for offset in [f - 2, f - 1] {
             let (inj, inner) = injection_at_offset(source, offset).unwrap();
-            assert_eq!(&inj.inner[inner..], "\u{2028}foo", "{offset}");
+            assert_eq!(inj.inner.get(inner..).unwrap(), "\u{2028}foo", "{offset}");
         }
+    }
+
+    /// #1946: keys, drive letters and names among multi-byte text.
+    #[test]
+    fn keys_paths_and_names_with_multi_byte_text() {
+        assert_eq!(super::line_key("  key: é😀\n"), Some(("key", " é😀", 2, 5)));
+        assert_eq!(super::line_key("  clé: 1"), None);
+        assert!(super::same_file("C:\\w\\é😀.yaml", "c:/w/é😀.yaml"));
+        assert!(!super::same_file("É:/w", "é:/w"));
+        assert!(!super::same_file("😀:/w", "😀:/x"));
+        let source = "# é😀\nname: \"Règle 😀\"\n";
+        let range = super::name_range(source, "Règle 😀");
+        assert_eq!((range.start.line, range.start.character), (1, 7));
+        assert_eq!(range.end.character, 7 + 8);
     }
 }
