@@ -28,8 +28,10 @@ fn field_name(field: &ast::Field, source: &str) -> Option<(String, bool)> {
         .map(|part| match part {
             ast::NamePart::Identifier(id) => text(id.syntax(), source).to_string(),
             ast::NamePart::QuotedIdentifier(q) => {
+                // The lexer closes a quoted name: a backtick at both ends.
                 let t = text(q.syntax(), source);
-                t[1..t.len().saturating_sub(1)].replace("``", "`")
+                let t = t.strip_prefix('`').unwrap_or(t);
+                t.strip_suffix('`').unwrap_or(t).replace("``", "`")
             }
         })
         .collect();
