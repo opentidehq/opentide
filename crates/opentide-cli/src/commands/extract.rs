@@ -1048,8 +1048,6 @@ mod tests {
         );
     }
 
-    use super::*;
-
     #[test]
     fn file_names_are_safe_on_every_system() {
         assert_eq!(sanitize_filename("a:b/c?"), "a b c ");
