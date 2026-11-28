@@ -293,8 +293,8 @@ pub fn glob_matches(pattern: &str, text: &str) -> bool {
         return rest.is_empty();
     };
     for piece in middle {
-        match rest.find(piece) {
-            Some(at) => rest = &rest[at + piece.len()..],
+        match rest.split_once(piece) {
+            Some((_, after)) => rest = after,
             None => return false,
         }
     }
@@ -382,6 +382,11 @@ mod tests {
         assert!(glob_matches("exact", "exact"));
         assert!(!glob_matches("exact", "Exact"));
         assert!(glob_matches("*", ""));
+        // Multi-byte text, in the pieces and between them.
+        assert!(glob_matches("é*😀*é", "é😀😀ééé"));
+        assert!(glob_matches("*😀", "é😀"));
+        assert!(!glob_matches("é*😀*é", "é😀"));
+        assert!(!glob_matches("😀*", "é😀"));
         // The KQL column patterns' cases (`opentide-kql`'s copy, #1957).
         assert!(glob_matches("*", "Anything"));
         assert!(glob_matches("User*", "UserPrincipalName"));

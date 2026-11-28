@@ -162,11 +162,21 @@ fn batch_of<T: DeserializeOwned>(
     }
     for (index, &(line, offset)) in starts.iter().enumerate() {
         let end = starts.get(index + 1).map_or(body.len(), |&(_, next)| next);
-        if let Err(err) = toml::from_str::<Items<T>>(&body[offset..end]) {
-            // `toml` counts lines from the item's header, which is `line`.
-            let within = err
-                .span()
-                .map(|span| body[offset..offset + span.start].matches('\n').count());
+        // Each item starts where a line of it was pushed onto `body`.
+        let Some(item) = body.get(offset..end) else {
+            debug_assert!(false, "{offset}..{end} in {} bytes", body.len());
+            return Err(CatalogError {
+                line,
+                why: format!("the [[{key}]] item of line {line} could not be cut out"),
+            });
+        };
+        if let Err(err) = toml::from_str::<Items<T>>(item) {
+            // `toml` counts lines from the item's header, which is `line`;
+            // its span is in bytes.
+            let within = err.span().and_then(|span| {
+                let before = item.as_bytes().get(..span.start)?;
+                Some(memchr::memchr_iter(b'\n', before).count())
+            });
             return Err(CatalogError {
                 line: line + within.unwrap_or(0),
                 why: format!("in the [[{key}]] item of line {line}: {}", err.message()),
@@ -189,13 +199,13 @@ fn batch_of<T: DeserializeOwned>(
 /// the module describes.
 pub fn preamble<T: DeserializeOwned>(text: &str) -> Result<T, CatalogError> {
     // Headers start their line: the preamble ends at the first `[[`.
-    let end = if text.starts_with("[[") {
-        0
+    let head = if text.starts_with("[[") {
+        ""
     } else {
-        text.find("\n[[").map_or(text.len(), |at| at + 1)
+        text.split_once("\n[[").map_or(text, |(head, _)| head)
     };
     let mut body = String::new();
-    each_line(&text[..end], |line, _, kind| {
+    each_line(head, |line, _, kind| {
         if matches!(kind, Line::Preamble) {
             body.push_str(line);
         }
@@ -354,13 +364,21 @@ fn looks_like_toml(line: &str, at: usize) -> Result<(), CatalogError> {
 fn multi_line_string(text: &str) -> Option<CatalogError> {
     for marker in ["\"\"\"", "'''"] {
         for found in memchr::memmem::find_iter(text.as_bytes(), marker) {
-            let start = text[..found].rfind('\n').map_or(0, |at| at + 1);
-            if in_string_or_comment(&text[start..found]) {
+            // The marker is ASCII, so it starts on a char boundary.
+            let Some((before, from)) = text.split_at_checked(found) else {
+                debug_assert!(false, "{found} in {} bytes", text.len());
+                return Some(CatalogError {
+                    line: 0,
+                    why: format!("a {marker} at byte {found} could not be read"),
+                });
+            };
+            let line_before = before.rsplit_once('\n').map_or(before, |(_, line)| line);
+            if in_string_or_comment(line_before) {
                 continue;
             }
-            let shown = text[start..].lines().next().unwrap_or_default();
+            let shown = format!("{line_before}{}", from.lines().next().unwrap_or_default());
             return Some(CatalogError {
-                line: text[..found].matches('\n').count() + 1,
+                line: before.matches('\n').count() + 1,
                 why: format!("a multi-line string: {shown:?}"),
             });
         }
@@ -560,5 +578,34 @@ mod tests {
             error.why.contains(&format!("item of line {bad_at}")),
             "{error}"
         );
+    }
+
+    /// Multi-byte text before a multi-line string, in the preamble and in
+    /// an item that does not parse is read whole, and lines are counted
+    /// across it.
+    #[test]
+    fn multi_byte_text_is_read_whole() {
+        let error = array_items::<toml::Value>("[[t]]\nname = \"é😀\"\ndocs = 'é' + '''\n", "t")
+            .unwrap_err();
+        assert_eq!(error.line, 3, "{error}");
+        assert!(error.why.contains("docs = 'é' + '''"), "{error}");
+        // A marker inside a string that holds multi-byte text is no
+        // multi-line string.
+        let quoted: Vec<toml::Value> = array_items("[[t]]\nk = \"😀 ''' é\"\n", "t").unwrap();
+        assert_eq!(quoted.len(), 1);
+        #[derive(Debug, serde::Deserialize, PartialEq)]
+        struct Preamble {
+            classes: Vec<String>,
+        }
+        let first: Preamble = preamble("classes = [\"é\", \"😀\"]\n[[t]]\nk = \"é\"\n").unwrap();
+        assert_eq!(first.classes, ["é", "😀"]);
+        let mut text = String::new();
+        for i in 0..20 {
+            text.push_str(&format!("[[t]]\nname = \"é{i}😀\"\n"));
+        }
+        let bad_at = text.lines().count() + 1;
+        text.push_str("[[t]]\nname = \"é😀\"\nbroken = é\n");
+        let error = array_items::<toml::Value>(&text, "t").unwrap_err();
+        assert_eq!(error.line, bad_at + 2, "{error}");
     }
 }

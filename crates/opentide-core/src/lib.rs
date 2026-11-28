@@ -10,6 +10,11 @@
     missing_docs,
     reason = "imported from language-server with public items undocumented: crates/AGENTS.md, Lints"
 )]
+// Slicing a `str` by byte index panics off a char boundary, and this crate
+// maps offsets in user documents: every slice is checked or says why it is
+// safe (#1946; the lint moves to `[workspace.lints]` once every crate is clean).
+#![warn(clippy::string_slice)]
+
 use serde::{Deserialize, Serialize};
 use std::fmt;
 use thiserror::Error;
@@ -264,27 +269,30 @@ pub fn strip_bom_at(text: &str, offset: usize) -> (&str, usize) {
 /// Convert a UTF-8 byte offset to an LSP position. An offset inside a
 /// multi-byte character counts from that character's start: a span that ends
 /// mid-character gives a slightly short range, never a panic.
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "a char is one or two UTF-16 units"
+)]
 pub fn offset_to_position(source: &str, offset: usize) -> Position {
     if let Some(position) = scoped::position(source, offset) {
         return position;
     }
-    let offset = source.floor_char_boundary(offset);
     let mut line = 0u32;
-    let mut last_line_start = 0usize;
+    // The line's UTF-16 length up to `offset`, counted while reading: a
+    // character that `offset` falls inside is not counted.
+    let mut character = 0u32;
     for (idx, ch) in source.char_indices() {
-        if idx >= offset {
+        if idx + ch.len_utf8() > offset {
             break;
         }
         if ch == '\n' {
             line += 1;
-            last_line_start = idx + 1;
+            character = 0;
+        } else {
+            character += ch.len_utf16() as u32;
         }
     }
-    let slice = &source[last_line_start..offset];
-    Position {
-        line,
-        character: utf16_len(slice),
-    }
+    Position { line, character }
 }
 
 /// Convert an LSP position (UTF-16 columns) to a UTF-8 byte offset, the
@@ -352,7 +360,7 @@ impl LineTable {
         let ascii = (0..starts.len())
             .map(|line| {
                 let end = starts.get(line + 1).copied().unwrap_or(source.len());
-                source[starts[line]..end].is_ascii()
+                source.as_bytes()[starts[line]..end].is_ascii()
             })
             .collect();
         let mut excess = 0;
@@ -436,8 +444,13 @@ impl<'a> LineIndex<'a> {
         if self.table.ascii[line] {
             return (start + position.character as usize).min(end);
         }
+        #[expect(
+            clippy::string_slice,
+            reason = "the table is this source's: `start` follows a `\\n` (or is 0) and `end` is a `\\n` (or the length)"
+        )]
+        let text = &self.source[start..end];
         let mut col = 0u32;
-        for (i, ch) in self.source[start..end].char_indices() {
+        for (i, ch) in text.char_indices() {
             if col >= position.character {
                 return start + i;
             }
@@ -1607,12 +1620,40 @@ mod tests {
         assert_eq!(word_start("a b", word), 2);
         assert_eq!(word_start("abc", word), 0);
         let text = "wehrE\u{59a}ndsWith";
-        assert_eq!(&text[word_start(text, word)..], "ndsWith");
+        assert_eq!(text.get(word_start(text, word)..).unwrap(), "ndsWith");
         let text = "x 日本name";
-        assert_eq!(&text[word_start(text, word)..], "name");
+        assert_eq!(text.get(word_start(text, word)..).unwrap(), "name");
         assert_eq!(word_start("😀", word), "😀".len());
     }
     use super::*;
+
+    /// Without a line table installed, a position is counted by reading the
+    /// text: every offset of a multi-byte text, inside a character or past
+    /// the end, reads as the table does, and an offset reads back.
+    #[test]
+    fn a_position_without_a_table_counts_utf16_units() {
+        let src = "é😀
+x😀é
+
+日";
+        let index = LineIndex::new(src);
+        for offset in 0..=src.len() + 2 {
+            assert_eq!(
+                offset_to_position(src, offset),
+                index.position(offset),
+                "{offset}"
+            );
+        }
+        let after = src.find('x').unwrap() + 1 + "😀".len();
+        assert_eq!(offset_to_position(src, after), Position::new(1, 3));
+        assert_eq!(offset_to_position(src, after - 1), Position::new(1, 1));
+        assert_eq!(index.offset(Position::new(1, 3)), after);
+        assert_eq!(
+            index.offset(Position::new(1, 99)),
+            src.find("\n\n").unwrap()
+        );
+        assert_eq!(index.offset(Position::new(0, 1)), "é".len());
+    }
 
     /// #180: a span that ends inside a multi-byte character gave a panic.
     #[test]
@@ -1891,7 +1932,7 @@ mod tests {
     #[test]
     fn a_slice_of_the_installed_text_is_scanned() {
         let text = "one\ntwo\nthree";
-        let tail = &text[4..];
+        let tail = text.get(4..).unwrap();
         let inside = with_line_index(text, || offset_to_position(tail, 4));
         assert_eq!(inside, Position::new(1, 0));
     }

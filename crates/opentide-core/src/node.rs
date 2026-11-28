@@ -398,11 +398,9 @@ pub fn scalar_end(source: &str, start: usize, end: usize) -> usize {
         if !rest.starts_with(['!', '&']) {
             break;
         }
-        let token = rest.find([' ', '\t', '\r', '\n']).unwrap_or(rest.len());
-        let blanks = rest[token..]
-            .find(|c: char| !matches!(c, ' ' | '\t'))
-            .unwrap_or(rest.len() - token);
-        at += token + blanks;
+        let after_token = rest.trim_start_matches(|c: char| !matches!(c, ' ' | '\t' | '\r' | '\n'));
+        let after_blanks = after_token.trim_start_matches([' ', '\t']);
+        at += rest.len() - after_blanks.len();
     }
     let rest = source.get(at..).unwrap_or_default();
     let mut chars = rest.char_indices().peekable();
@@ -1141,14 +1139,30 @@ mod tests {
             ("'a\n  b'  # c", "'a\n  b'"),
         ];
         for (text, scalar) in cases {
-            assert_eq!(&text[..scalar_end(text, 0, text.len())], scalar, "{text:?}");
+            assert_eq!(
+                text.get(..scalar_end(text, 0, text.len())).unwrap(),
+                scalar,
+                "{text:?}"
+            );
         }
         // A plain scalar, or a quote that never closes, keeps the end given.
         assert_eq!(scalar_end("plain # c", 0, 5), 5);
         assert_eq!(scalar_end("'open", 0, 5), 5);
         // Byte offsets: `é` and `ü` are two bytes each.
         let text = "é: 'ü' # c";
-        assert_eq!(&text[4..scalar_end(text, 4, text.len())], "'ü'");
+        assert_eq!(text.get(4..scalar_end(text, 4, text.len())).unwrap(), "'ü'");
+        // Properties with multi-byte text, followed by blanks or not.
+        for (text, scalar) in [
+            ("!é \t'😀' # c", "!é \t'😀'"),
+            ("&😀 !é \"é\" # c", "&😀 !é \"é\""),
+            ("!é😀", "!é😀"),
+        ] {
+            assert_eq!(
+                text.get(..scalar_end(text, 0, text.len())).unwrap(),
+                scalar,
+                "{text:?}"
+            );
+        }
     }
 
     use super::*;
