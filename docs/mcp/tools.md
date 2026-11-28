@@ -209,7 +209,9 @@ Where the catalogue is blind: the threat → objective → rule → production f
 
 A threat is covered when an objective lists it in `objective.threats`. A rule counts for the objective its `detection_model` names or, when that is a signal (`objective.signals[].uuid`), for the signal's objective, as in `coverage` and `get_chaining`. A rule is *in production* when one of its platform blocks has a status in `release_statuses`: the `[[statuses]]` of `deployment.toml` mapped to `RELEASE`, or to `UNIVERSAL`, which a release run deploys as well (`PRODUCTION` in the default lifecycle). `DISABLEMENT` and `DELETION` statuses are deployed by a release run to take a rule away, so they do not count.
 
-Each threat lands in the first gap that applies: no objective, else no rule, else no rule in production. Each gap is `{count, items}`: `count` is the full number and `items` lists at most 25 objects, each shaped like a `search` result. `rule_blocks_by_status` and `rule_blocks_by_platform` count platform blocks, a block without a status as `unset`. `chained_threats` counts the threats a `threat.chaining` entry names or comes from.
+Each threat lands in the first gap that applies: no objective, else no rule, else no rule in production, so `threats_without_rules` leaves out the threats in `threats_without_objectives`. Only threats have a production gap: an objective whose rules are none in production is in no list. Each gap is `{count, items}`: `count` is the full number and `items` lists at most 25 objects in file path order, each shaped like a `search` result. `rule_blocks_by_status` and `rule_blocks_by_platform` count platform blocks, a block without a status as `unset`. `chained_threats` counts the catalogue's threats on either end of a `threat.chaining` entry; a vector that names no threat of the catalogue counts neither end.
+
+A `deployment.toml` that does not match its model fails the call (`isError: true`, `deployment.toml is invalid: ...`), as `deploy_rule` does: nothing deploys under it, so `graph` does not say what is in production.
 
 ```json
 // call
@@ -220,7 +222,17 @@ Each threat lands in the first gap that applies: no objective, else no rule, els
   "counts": { "threats": 3, "objectives": 2, "rules": 11, "signals": 1, "chained_threats": 2, "actors": 1 },
   "release_statuses": ["PRODUCTION"],
   "rule_blocks_by_status": { "PRODUCTION": 1, "STAGING": 10 },
-  "rule_blocks_by_platform": { "sentinel": { "STAGING": 1 }, "splunk": { "PRODUCTION": 1, "STAGING": 1 } },
+  "rule_blocks_by_platform": {
+    "carbon_black_cloud": { "STAGING": 1 },
+    "crowdstrike": { "STAGING": 1 },
+    "elastic": { "STAGING": 1 },
+    "harfanglab": { "STAGING": 1 },
+    "microsoft_defender": { "STAGING": 1 },
+    "sentinel": { "STAGING": 2 },
+    "sentinel_one": { "STAGING": 1 },
+    "splunk": { "PRODUCTION": 1, "STAGING": 1 },
+    "sysdig": { "STAGING": 1 }
+  },
   "threats_without_objectives": {
     "count": 1,
     "items": [{ "uuid": "00000000-0000-4000-8001-0000000000a3", "type": "threat", "title": "Threat no objective covers", "status": null }]

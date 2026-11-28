@@ -40,9 +40,16 @@ pub fn detail(value: &str) -> Result<(), String> {
 /// release run deploys as well (`PRODUCTION` in the bundled lifecycle).
 /// `DISABLEMENT` and `DELETION` are deployed by a release run too, but to
 /// take the rule away: not production.
-fn release_statuses(workspace: &Workspace) -> Vec<String> {
-    Statuses::from_resolved(&workspace.configuration().resolved)
-        .0
+///
+/// A `deployment.toml` that does not match its model is the error
+/// (`deployment.toml is invalid: ...`), as `deploy_rule` reports it: no
+/// rule deploys under it, so none is in production.
+fn release_statuses(workspace: &Workspace) -> Result<Vec<String>, String> {
+    let Statuses(statuses, invalid) = Statuses::from_resolved(&workspace.configuration().resolved);
+    if let Some(invalid) = invalid {
+        return Err(invalid);
+    }
+    Ok(statuses
         .into_iter()
         .filter(|(_, strategy)| {
             matches!(
@@ -51,7 +58,7 @@ fn release_statuses(workspace: &Workspace) -> Vec<String> {
             )
         })
         .map(|(name, _)| name)
-        .collect()
+        .collect())
 }
 
 /// `{count, items}`: the first [`GAP_LIMIT`] objects as `search` lists them.
@@ -115,17 +122,18 @@ impl BlockCounts {
 pub fn tool(args: &Args<'_>, context: &Context<'_>) -> Result<Json, String> {
     detail(&args.string("detail", "summary")?)?;
     let workspace = super::catalog::require(context)?;
-    Ok(summarise(&workspace))
+    summarise(&workspace)
 }
 
-/// `graph` with `detail: "summary"`.
-pub fn summarise(workspace: &Workspace) -> Json {
+/// `graph` with `detail: "summary"`; the error is why `deployment.toml`
+/// does not read ([`release_statuses`]).
+pub fn summarise(workspace: &Workspace) -> Result<Json, String> {
     let limit = GAP_LIMIT;
     let index = workspace.index();
     let threats = bucket(index, "threat");
     let objectives = bucket(index, "objective");
     let rules = bucket(index, "rule");
-    let release = release_statuses(workspace);
+    let release = release_statuses(workspace)?;
 
     // objective.threats, as the index read the references.
     let mut objectives_of: HashMap<&str, Vec<&str>> = HashMap::new();
@@ -172,11 +180,17 @@ pub fn summarise(workspace: &Workspace) -> Json {
         .filter(|(uuid, _)| !rules_of.contains_key(uuid))
         .collect();
 
+    // The threats on either end of a chaining vector; a vector naming no
+    // threat of the catalogue (dangling, or another kind) counts neither.
+    let known: HashSet<&str> = threats.iter().map(|&(uuid, _)| uuid).collect();
     let mut chained: HashSet<&str> = HashSet::new();
     for (uuid, relation) in &index.chaining {
         for vector in relation.values().flatten() {
-            chained.insert(uuid);
-            chained.insert(vector.trim());
+            let vector = vector.trim();
+            if known.contains(uuid.as_str()) && known.contains(vector) {
+                chained.insert(uuid);
+                chained.insert(vector);
+            }
         }
     }
     let actors: HashSet<String> = threats
@@ -185,7 +199,7 @@ pub fn summarise(workspace: &Workspace) -> Json {
         .map(|(_, actor)| actor)
         .collect();
 
-    Json::object([
+    Ok(Json::object([
         (
             "counts",
             Json::object([
@@ -222,7 +236,7 @@ pub fn summarise(workspace: &Workspace) -> Json {
             gap("threat", &no_production, limit),
         ),
         ("objectives_without_rules", gap("objective", &idle, limit)),
-    ])
+    ]))
 }
 
 #[cfg(test)]
