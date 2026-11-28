@@ -15,6 +15,7 @@ use opentide_compile::google_secops::{
     tenant_instance, verify_request,
 };
 use opentide_compile::{Json, Owned, Rule, preview};
+use opentide_schema::objects::platform::GoogleSecopsConfig;
 use opentide_schema::platforms::PlatformKey;
 use opentide_schema::vocab::Vocabularies;
 use opentide_workspace::{FileSystem, MemoryFs, Options, RootOptions, Workspace};
@@ -127,6 +128,12 @@ fn compile_text(text: &str) -> Compiled {
     }
 }
 
+/// The run settings of a block, read by its model.
+fn settings(block: &Json) -> google_secops::RunSettings {
+    let config: GoogleSecopsConfig = serde_json::from_str(&block.to_compact()).unwrap();
+    google_secops::RunSettings::from(&config)
+}
+
 fn strategy(status: &str) -> opentide_compile::strategy::StatusStrategy {
     use opentide_compile::strategy::StatusStrategy;
     match status {
@@ -144,7 +151,8 @@ fn the_deployment_payload_carries_the_run_state_of_the_blocks_status() {
         let compiled = compile(stem);
         let payload = &compiled.deployment;
         assert_eq!(payload.get("text"), compiled.offline.get("text"));
-        let state = google_secops::run_state(&compiled.block, strategy(&compiled.status));
+        let state =
+            google_secops::run_state(&settings(&compiled.block), strategy(&compiled.status));
         let run = payload.get("run_state").unwrap();
         assert_eq!(
             run.get("mask").and_then(Json::as_str),
@@ -174,6 +182,74 @@ fn the_deployment_payload_carries_the_run_state_of_the_blocks_status() {
         .get("body")
         .unwrap();
     assert_eq!(body.get("alerting"), Some(&Json::Bool(false)));
+}
+
+/// The block is read by the model `opentide validate` checks it with
+/// (`GoogleSecopsConfig`, #1951): a block whose shape the model refuses fails
+/// the deploy's compile and the dry run's writes with `compile_failed` at the
+/// field, in the model's words, with a hint to run `validate`.
+#[test]
+fn a_block_the_model_refuses_fails_at_its_field() {
+    let fixture =
+        std::fs::read_to_string(fixtures().join("rule-google-secops-process-1.0.yaml")).unwrap();
+    for (written, field, reason) in [
+        (
+            "    run_frequency: LIVE\n    alerting: 'yes'\n",
+            "alerting",
+            "Input should be a valid boolean",
+        ),
+        (
+            "    run_frequency: HOURLY\n",
+            "run_frequency",
+            "Input should be",
+        ),
+        (
+            "    run_frequency: LIVE\n    schedule:\n      ensure_enrichment_completeness: é\n",
+            "schedule.ensure_enrichment_completeness",
+            "Input should be a valid boolean",
+        ),
+        (
+            "    run_frequency: LIVE\n    surprisé: 😀\n",
+            "surprisé",
+            "Extra inputs are not permitted",
+        ),
+    ] {
+        let text = fixture.replace("    run_frequency: LIVE\n", written);
+        let uuid = "00000000-0000-4000-8003-000000000061";
+        let workspace = workspace(&text);
+        let owned = Owned::new(
+            &Vocabularies::bundled(),
+            &workspace.configuration().resolved,
+        );
+        let index = workspace.index().clone();
+        let cx = owned.context(&index);
+        let object = index.get("rule", uuid).unwrap();
+        let rule = Rule::new(object.root().unwrap(), None);
+        let at: Vec<&str> = ["configurations", "google_secops"]
+            .into_iter()
+            .chain(field.split('.'))
+            .collect();
+        for error in [
+            google_secops::compile_deployment(&cx, &rule).unwrap_err(),
+            google_secops::compile(&cx, &rule, &tenant(), None).unwrap_err(),
+        ] {
+            assert_eq!(error.code, "compile_failed", "{field}: {error}");
+            assert_eq!(error.field, at, "{field}: {error}");
+            assert!(
+                error
+                    .reason
+                    .contains(&format!("configurations.google_secops.{field}: {reason}")),
+                "{field}: {error}"
+            );
+            assert!(
+                error
+                    .hint
+                    .as_deref()
+                    .is_some_and(|hint| hint.contains("opentide validate")),
+                "{field}: {error}"
+            );
+        }
+    }
 }
 
 /// A rule without `metadata.version` deploys without `opentide_version` in
@@ -227,7 +303,7 @@ fn every_request_equals_its_fixture() {
             compiled.offline,
             fixture("create").get("body").unwrap().clone()
         );
-        let state = run_state(&compiled.block, strategy(&compiled.status));
+        let state = run_state(&settings(&compiled.block), strategy(&compiled.status));
         assert_eq!(
             deployment_request(&instance, RULE_ID, &state).to_json(),
             fixture("deployment"),
@@ -267,15 +343,15 @@ fn every_request_equals_its_fixture() {
     }
 }
 
-/// Three tenants: `eu`, whose modifier runs its rules hourly; `lab`, with
+/// Three tenants: `eu`, whose modifier runs its rules daily; `lab`, with
 /// none; and `é😀`, whose modifier blanks the rule's `condition`.
 const MODIFIED_TENANTS: &str = "[platform]\nenabled = true\n\n[[tenants]]\nname = \"eu\"\n\
      strategies = [\"PREVIEW\"]\n[tenants.setup]\nproject = \"p\"\nlocation = \"eu\"\ninstance \
      = \"i\"\n\n[[tenants]]\nname = \"lab\"\nstrategies = [\"PREVIEW\"]\n[tenants.setup]\nproject \
      = \"p\"\nlocation = \"us\"\ninstance = \"i\"\n\n[[tenants]]\nname = \"é😀\"\nstrategies = \
      [\"PREVIEW\"]\n[tenants.setup]\nproject = \"p\"\nlocation = \"us\"\ninstance = \"i\"\n\n\
-     [[modifiers]]\nname = \"eu hourly\"\n[modifiers.conditions]\ntenants = [\"eu\"]\n\
-     [modifiers.modifications]\nrun_frequency = \"HOURLY\"\n\n[[modifiers]]\nname = \"no \
+     [[modifiers]]\nname = \"eu daily\"\n[modifiers.conditions]\ntenants = [\"eu\"]\n\
+     [modifiers.modifications]\nrun_frequency = \"DAILY\"\n\n[[modifiers]]\nname = \"no \
      condition\"\n[modifiers.conditions]\ntenants = [\"é😀\"]\n[modifiers.modifications]\n\
      condition = \" \"\n";
 
@@ -310,7 +386,7 @@ fn the_dry_run_compiles_for_each_tenant_with_its_modifiers() {
     // `eu` first: its modifier is in the body shown.
     let entry = dry_run(&["eu", "lab"]);
     assert_eq!(entry.get("tenant").and_then(Json::as_str), Some("eu"));
-    assert_eq!(frequency(&entry).as_deref(), Some("HOURLY"), "{entry:?}");
+    assert_eq!(frequency(&entry).as_deref(), Some("DAILY"), "{entry:?}");
     // `lab` first: `eu`'s modifier does not leak into it.
     let entry = dry_run(&["lab", "eu"]);
     assert_eq!(entry.get("tenant").and_then(Json::as_str), Some("lab"));

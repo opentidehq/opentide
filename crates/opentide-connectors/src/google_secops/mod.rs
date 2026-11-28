@@ -465,7 +465,7 @@ impl Deployer for GoogleSecops {
             } else {
                 match body.get("run_state") {
                     None => opentide_compile::google_secops::run_state(
-                        &Json::Null,
+                        &opentide_compile::google_secops::RunSettings::default(),
                         opentide_compile::strategy::StatusStrategy::Release,
                     ),
                     Some(state) => {
