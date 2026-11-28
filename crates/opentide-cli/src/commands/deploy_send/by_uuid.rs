@@ -264,28 +264,18 @@ impl Sender<'_, '_> {
         batch: &Batch,
         rule: &opentide_compile::Rule,
     ) -> Result<Option<DeployRequest>, Raised> {
+        use opentide_compile::compiler::{CarbonBlack, Compiler};
         let compile_error = |error: opentide_compile::rule::CompileError| {
             Raised::new(format!("Rule {} ({}): {error}", rule.uuid, rule.name))
         };
         let table =
             resolved_table(&batch.table, &connection.tenant).map_err(|e| unset_variable(&e))?;
-        let Some(report) = opentide_compile::carbon_black::report(self.compile, rule, &table)
-            .map_err(compile_error)?
-        else {
+        let compiled = CarbonBlack::compile(self.compile, rule, &table).map_err(compile_error)?;
+        let Some(report) = &compiled else {
             return Ok(None);
         };
         // The report's fields, as the Deployer reads them; a rule that
         // is not deployed retires its IOC.
-        let body = serde_json::json!({
-            "uuid": rule.uuid,
-            "name": report.name,
-            "description": report.description,
-            "query": report.query,
-            "tags": report.tags,
-            "severity": report.severity,
-            "watchlist": report.watchlist,
-            "report": report.report,
-        });
         let operation = if report.deployment {
             Operation::Update
         } else {
@@ -295,7 +285,7 @@ impl Sender<'_, '_> {
             DeployRequest::new(
                 rule.uuid.clone(),
                 operation,
-                serde_json::to_vec(&body).unwrap_or_default(),
+                CarbonBlack::body(&compiled).to_compact().into_bytes(),
             )
             .at(self.cx.now),
         ))
