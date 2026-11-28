@@ -1634,10 +1634,11 @@ fn handle_completion(session: &mut Session, params: lsp::CompletionParams) -> Op
     // A dotted field label (`process.parent.name`) replaces the whole dotted
     // prefix already typed. Editors split words at `.`, so plain insertText
     // would append after `process.`.
-    let before = &doc.text[..offset.min(doc.text.len())];
-    let dotted = &before[opentide_core::word_start(before, |c| {
+    let before = crate::cut(&doc.text, 0, offset.min(doc.text.len()));
+    let word_start = opentide_core::word_start(before, |c| {
         c.is_ascii_alphanumeric() || matches!(c, '_' | '.' | '@' | '-')
-    })..];
+    });
+    let dotted = crate::cut(before, word_start, before.len());
     let start = lsp::Position::new(
         position.line,
         position
@@ -2574,7 +2575,7 @@ fn suggestion_range(code: &str, range: Range, text: Option<&str>) -> Range {
         return range;
     };
     let start = opentide_core::position_to_offset(text, range.start);
-    let word = text[start..]
+    let word = crate::cut(text, start, text.len())
         .split(|c: char| !(c.is_alphanumeric() || c == '_' || c == '-'))
         .next()
         .unwrap_or_default();
@@ -2724,7 +2725,7 @@ fn handle_prepare_rename(
     let doc = session.docs.get(params.text_document.uri.as_str())?;
     let at = offset(&doc.text, params.position);
     let definition = opentide_analysis::definition(doc.language, &doc.text, at)?;
-    if !doc.text[definition.start..].starts_with('$') {
+    if !crate::cut(&doc.text, definition.start, doc.text.len()).starts_with('$') {
         return None;
     }
     let span = opentide_analysis::references(doc.language, &doc.text, at, true)
@@ -2790,11 +2791,13 @@ fn handle_folding(
                 .map(|s| lsp::FoldingRange {
                     start_line: lines.position(s.start).line,
                     end_line: lines.position(s.end.saturating_sub(1)).line,
-                    kind: Some(if doc.text[s.start..].starts_with("/*") {
-                        lsp::FoldingRangeKind::Comment
-                    } else {
-                        lsp::FoldingRangeKind::Region
-                    }),
+                    kind: Some(
+                        if crate::cut(&doc.text, s.start, doc.text.len()).starts_with("/*") {
+                            lsp::FoldingRangeKind::Comment
+                        } else {
+                            lsp::FoldingRangeKind::Region
+                        },
+                    ),
                     ..Default::default()
                 })
                 .collect(),
@@ -3179,6 +3182,12 @@ mod tests {
         assert_eq!(
             suggestion_range(codes::KQL_UNKNOWN_OPERATOR, stage(4, 20), None),
             stage(4, 20)
+        );
+        // Multi-byte text before and in the word: UTF-16 columns.
+        let text = "é😀 | éà-wy 😀";
+        assert_eq!(
+            suggestion_range(codes::KQL_UNKNOWN_OPERATOR, stage(6, 20), Some(text)),
+            stage(6, 11)
         );
     }
 

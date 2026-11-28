@@ -12,6 +12,11 @@
 //! [`opentide`](https://docs.rs/opentide) crate, its Rust SDK, instead (its
 //! `lsp` feature).
 
+// Slicing a `str` by byte index panics off a char boundary, and this crate
+// reads editors' documents: every slice is checked or says why it is safe
+// (#1946; the lint moves to `[workspace.lints]` once every crate is clean).
+#![warn(clippy::string_slice)]
+
 mod checks;
 mod handlers;
 mod index;
@@ -34,3 +39,13 @@ pub use server::{
 /// ([`opentide_core::VERSION`]): the crate version, or the release
 /// candidate's when the build sets `OPENTIDE_BUILD_VERSION`.
 pub const VERSION: &str = opentide_core::VERSION;
+
+/// `text[start..end]`, a range the server computes or the engines give it:
+/// an offset from a position (`position_to_offset` returns char bounds), or
+/// a span's bound. A range that is not fails a debug assertion and reads as
+/// empty.
+pub(crate) fn cut(text: &str, start: usize, end: usize) -> &str {
+    let piece = text.get(start..end);
+    debug_assert!(piece.is_some(), "{start}..{end} in {} bytes", text.len());
+    piece.unwrap_or_default()
+}
