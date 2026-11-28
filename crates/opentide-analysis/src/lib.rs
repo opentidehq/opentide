@@ -12,6 +12,11 @@
     missing_docs,
     reason = "imported from language-server with public items undocumented: crates/AGENTS.md, Lints"
 )]
+// Slicing a `str` by byte index panics off a char boundary, and this crate
+// analyses user documents: every slice is checked or says why it is safe
+// (#1946; the lint moves to `[workspace.lints]` once every crate is clean).
+#![warn(clippy::string_slice)]
+
 pub use opentide_core::datasets::{
     DatasetKind, Declaration, DeclaredColumn, DeclaredDatasets, DeclaredSource,
 };
@@ -1219,8 +1224,15 @@ configurations:
             files: vec![("objects/rules/rule.yaml".into(), src.to_string())],
         };
         let where_off = src.find("where").expect("where");
-        let line = src[..where_off].bytes().filter(|b| *b == b'\n').count() as u32;
-        let col = src[..where_off]
+        let line = src
+            .get(..where_off)
+            .unwrap()
+            .bytes()
+            .filter(|b| *b == b'\n')
+            .count() as u32;
+        let col = src
+            .get(..where_off)
+            .unwrap()
             .rsplit_once('\n')
             .map(|(_, rest)| rest.len())
             .unwrap_or(where_off) as u32;
@@ -1268,7 +1280,12 @@ detection_model: 00000000-0000-4000-8002-000000000001
             ],
         };
         let desc = src.find("description:").unwrap();
-        let line = src[..desc].bytes().filter(|b| *b == b'\n').count() as u32;
+        let line = src
+            .get(..desc)
+            .unwrap()
+            .bytes()
+            .filter(|b| *b == b'\n')
+            .count() as u32;
         let h = hover(
             &host,
             LanguageId::TideYaml,
@@ -1280,8 +1297,15 @@ detection_model: 00000000-0000-4000-8002-000000000001
             "key hover, got {h:?}"
         );
         let tlp_val = src.find("clear").unwrap();
-        let tlp_line = src[..tlp_val].bytes().filter(|b| *b == b'\n').count() as u32;
-        let col = src[..tlp_val]
+        let tlp_line = src
+            .get(..tlp_val)
+            .unwrap()
+            .bytes()
+            .filter(|b| *b == b'\n')
+            .count() as u32;
+        let col = src
+            .get(..tlp_val)
+            .unwrap()
             .rsplit_once('\n')
             .map(|(_, rest)| rest.len())
             .unwrap_or(tlp_val) as u32;

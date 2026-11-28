@@ -71,11 +71,14 @@ pub struct GravityZoneRule {
     pub kind: Kind,
     /// The GravityZone name.
     pub name: String,
-    /// The description.
+    /// The rule's description, whitespace collapsed and cut at 1024 characters
+    /// ([`derive_description`]).
     pub description: String,
-    /// The tags.
+    /// The block's, ATT&CK, `opentide` and tenant tags, normalised and unique
+    /// ([`derive_tags`]).
     pub tags: Vec<String>,
-    /// `settings`.
+    /// The request's `settings`: status, severity, then the YARA query or the
+    /// detection criteria ([`derive_settings`]).
     pub settings: Object,
     /// `targets`, resolved against the tenant; `None` for the whole company.
     pub targets: Option<Json>,

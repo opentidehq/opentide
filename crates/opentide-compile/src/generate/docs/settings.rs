@@ -43,7 +43,7 @@ pub struct Setting {
 pub struct CodeSetting {
     /// The YAML path.
     pub path: String,
-    /// The code.
+    /// The code, without trailing newlines.
     pub code: String,
     /// Its language, when the platform names one.
     pub language: Option<CodeLanguage>,
@@ -69,7 +69,7 @@ pub struct SettingTable {
 pub struct Settings {
     /// Scalars.
     pub rows: Vec<Setting>,
-    /// Code.
+    /// Settings whose value is code, each a fenced block.
     pub code: Vec<CodeSetting>,
     /// Lists of flat objects.
     pub tables: Vec<SettingTable>,
