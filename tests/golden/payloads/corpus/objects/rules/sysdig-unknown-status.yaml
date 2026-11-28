@@ -1,0 +1,25 @@
+name: Sysdig Unknown Status
+
+metadata:
+  uuid: 00000000-0000-4000-8005-000000000106
+  schema: rule::1.0
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+  author: Detection Team
+
+description: |
+  Sysdig Unknown Status for the compile corpus.
+    Indented second line.
+response:
+  alert_severity: Informational
+
+configurations:
+  sysdig:
+    enabled: true
+    schema: platform::sysdig::1.0
+    status: NOT_A_STATUS
+    source: okta
+    priority: emergency
+    condition: okta.evt.type = user.session.start

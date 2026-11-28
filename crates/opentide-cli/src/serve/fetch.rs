@@ -1,0 +1,684 @@
+//! `opentide/fetch`: tenant HTTP made by the client (W2,
+//! `docs/engine/connector-transport.md`).
+//!
+//! A client that says so at `initialize` (`capabilities.fetch`) makes each
+//! request a run sends to a tenant: the server asks it with an
+//! `opentide/fetch` request of its own, and the client answers with the
+//! tenant's answer, or with why there is none. The WASI build of opentide,
+//! which VS Code's host gives no sockets, reaches tenants only this way; a
+//! native server does it when asked, so the editor's HTTP stack (its proxy
+//! settings, its certificate store) makes the calls.
+//!
+//! The requests are the server's, so their ids are strings, `"h1"`,
+//! `"h2"`…, which no client id takes. A run cancelled while one is pending
+//! sends `$/cancelRequest` for it and stops at once.
+
+use std::collections::HashMap;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Arc, Mutex, PoisonError, Weak};
+use std::time::Duration;
+
+use base64::Engine as _;
+use opentide_connectors::connector::BoxFuture;
+use opentide_connectors::transport::{
+    HeaderMap, HeaderName, HeaderValue, MAX_BODY_BYTES, Request, Response, SetupError, StatusCode,
+    Transport, TransportFactory, TransportFailure, TransportSpec, body_too_large,
+};
+use tokio::sync::oneshot;
+use tokio_util::sync::CancellationToken;
+
+use super::runner::compact;
+use crate::json::Json;
+
+fn int(value: &Json) -> Option<i64> {
+    match value {
+        Json::Int(number) => Some(*number),
+        _ => None,
+    }
+}
+
+fn item(value: &Json, index: usize) -> Option<&Json> {
+    match value {
+        Json::Array(items) => items.get(index),
+        _ => None,
+    }
+}
+
+/// The method of the server's request.
+pub const METHOD: &str = "opentide/fetch";
+
+/// The prefix of the server's request ids.
+pub const ID_PREFIX: &str = "h";
+
+/// How a [`Fetcher`] words its requests to the client: the dialect of the
+/// protocol it speaks. `opentide serve` and `opentide mcp start` (WASI,
+/// `OPENTIDE_FETCH=stdio`) send the same `opentide/fetch`, params and answers;
+/// they differ in the ids of the requests and in how a request is withdrawn.
+#[derive(Debug, Clone, Copy)]
+pub struct Wire {
+    /// The prefix of the request ids (`"h"`: `"h1"`).
+    pub prefix: &'static str,
+    /// Whether each fetcher puts a random per-process token after the prefix
+    /// (`opentide-fetch-<token>-1`), so a peer that can write to the server's
+    /// input cannot guess the id of a request and answer it.
+    pub token: bool,
+    /// The notification that withdraws request *id*.
+    pub withdraw: fn(&str) -> Json,
+    /// Why a request fails when the client has gone.
+    pub gone: &'static str,
+}
+
+impl Wire {
+    /// `opentide serve`: ids `h1`, `h2`…, withdrawn with `$/cancelRequest`.
+    pub const SERVE: Wire = Wire {
+        prefix: ID_PREFIX,
+        token: false,
+        withdraw: serve_withdrawal,
+        gone: "the client that made the tenant's requests has gone",
+    };
+}
+
+fn serve_withdrawal(id: &str) -> Json {
+    Json::object([
+        ("jsonrpc", Json::str("2.0")),
+        ("method", Json::str("$/cancelRequest")),
+        ("params", Json::object([("id", Json::str(id))])),
+    ])
+}
+
+/// How long past a tenant's own limits the server waits for the client's
+/// answer before it reads the request as timed out.
+const GRACE: Duration = Duration::from_secs(5);
+
+/// What the client answered: a result, or a JSON-RPC error object.
+type Reply = Result<Json, Json>;
+
+/// The requests in flight to the client, and how to write one.
+pub struct Fetcher {
+    wire: Wire,
+    /// What every request id starts with: the wire's prefix, and its token.
+    prefix: String,
+    send: Box<dyn Fn(&str) + Send + Sync>,
+    /// The id of the run in progress, named in each request.
+    run: Box<dyn Fn() -> Option<String> + Send + Sync>,
+    pending: Mutex<HashMap<String, oneshot::Sender<Reply>>>,
+    next: AtomicU64,
+    /// Reads the client's next message on this thread, when the server has
+    /// no reading thread (the WASI build): whether one came.
+    pump: Box<dyn Fn() -> bool + Send + Sync>,
+    /// Whether the run in progress was cancelled.
+    cancelled: Box<dyn Fn() -> bool + Send + Sync>,
+}
+
+impl std::fmt::Debug for Fetcher {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Fetcher").finish_non_exhaustive()
+    }
+}
+
+impl Fetcher {
+    /// A fetcher writing through *send*; *run* names the run in progress.
+    pub fn new(
+        send: impl Fn(&str) + Send + Sync + 'static,
+        run: impl Fn() -> Option<String> + Send + Sync + 'static,
+    ) -> Arc<Self> {
+        Self::with_input(send, run, || false, || false)
+    }
+
+    /// A fetcher that, while it waits for an answer, reads the client's
+    /// messages itself with *pump* (`Server::pump`: the WASI build's serve
+    /// loop has no reading thread), and stops waiting once *cancelled* says
+    /// the run was cancelled. A *pump* that reads nothing (a server with a
+    /// reading thread) leaves the answer to that thread.
+    pub fn with_input(
+        send: impl Fn(&str) + Send + Sync + 'static,
+        run: impl Fn() -> Option<String> + Send + Sync + 'static,
+        pump: impl Fn() -> bool + Send + Sync + 'static,
+        cancelled: impl Fn() -> bool + Send + Sync + 'static,
+    ) -> Arc<Self> {
+        Self::with_wire(Wire::SERVE, send, run, pump, cancelled)
+    }
+
+    /// As [`Fetcher::with_input`], in the dialect *wire* speaks.
+    pub fn with_wire(
+        wire: Wire,
+        send: impl Fn(&str) + Send + Sync + 'static,
+        run: impl Fn() -> Option<String> + Send + Sync + 'static,
+        pump: impl Fn() -> bool + Send + Sync + 'static,
+        cancelled: impl Fn() -> bool + Send + Sync + 'static,
+    ) -> Arc<Self> {
+        let prefix = if wire.token {
+            format!("{}{}-", wire.prefix, uuid::Uuid::new_v4().simple())
+        } else {
+            wire.prefix.to_owned()
+        };
+        Arc::new(Self {
+            wire,
+            prefix,
+            send: Box::new(send),
+            run: Box::new(run),
+            pending: Mutex::new(HashMap::new()),
+            next: AtomicU64::new(1),
+            pump: Box::new(pump),
+            cancelled: Box::new(cancelled),
+        })
+    }
+
+    /// Takes the client's answer to request *id*; whether it was one of ours.
+    pub fn deliver(&self, id: &str, reply: Reply) -> bool {
+        let waiting = self
+            .pending
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .remove(id);
+        match waiting {
+            Some(sender) => {
+                let _gone = sender.send(reply);
+                true
+            }
+            None => false,
+        }
+    }
+
+    /// Every request still waiting fails: the client has gone.
+    pub fn close(&self) {
+        self.pending
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .clear();
+    }
+
+    /// What every request id starts with.
+    #[cfg(test)]
+    pub(crate) fn id_prefix(&self) -> &str {
+        &self.prefix
+    }
+
+    /// Sends one `opentide/fetch` with *params*: its id, and the receiver of
+    /// the client's answer.
+    pub(crate) fn ask(&self, params: Json) -> (String, oneshot::Receiver<Reply>) {
+        let id = format!(
+            "{}{}",
+            self.prefix,
+            self.next.fetch_add(1, Ordering::SeqCst)
+        );
+        let (sender, receiver) = oneshot::channel();
+        self.pending
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .insert(id.clone(), sender);
+        let message = Json::object([
+            ("jsonrpc", Json::str("2.0")),
+            ("id", Json::str(&id)),
+            ("method", Json::str(METHOD)),
+            ("params", params),
+        ]);
+        (self.send)(&compact(&message));
+        (id, receiver)
+    }
+
+    pub(crate) fn cancel(&self, id: &str) {
+        let waiting = self
+            .pending
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .remove(id);
+        if waiting.is_some() {
+            (self.send)(&compact(&(self.wire.withdraw)(id)));
+        }
+    }
+}
+
+/// Makes each tenant's transport ask the client.
+#[derive(Debug)]
+pub struct ClientFetch {
+    fetcher: Weak<Fetcher>,
+}
+
+impl ClientFetch {
+    /// The factory of *fetcher*'s transports.
+    pub fn new(fetcher: &Arc<Fetcher>) -> Arc<Self> {
+        Arc::new(Self {
+            fetcher: Arc::downgrade(fetcher),
+        })
+    }
+}
+
+impl TransportFactory for ClientFetch {
+    fn make(&self, spec: &TransportSpec<'_>) -> Result<Arc<dyn Transport>, SetupError> {
+        let settings = spec.settings;
+        // The tenant's own bundle must read; one the environment names is
+        // skipped when it does not, as the native transport does.
+        let own = settings.tls.ca_bundle.clone();
+        let mut bundles = Vec::new();
+        for path in opentide_connectors::tls::bundles(&settings.tls, spec.env) {
+            match std::fs::read_to_string(&path) {
+                Ok(text) => bundles.push(Json::Str(text)),
+                Err(error) if own.as_ref() == Some(&path) => {
+                    return Err(SetupError::CaBundleUnreadable {
+                        path,
+                        reason: error.to_string(),
+                    });
+                }
+                Err(_) => {}
+            }
+        }
+        Ok(Arc::new(ClientTransport {
+            fetcher: self.fetcher.clone(),
+            platform: spec.label.platform.clone(),
+            tenant: spec.label.tenant.clone(),
+            verify: settings.tls.verify,
+            bundles,
+            proxies: spec.proxies.clone(),
+            timeout: settings.timeout,
+        }))
+    }
+}
+
+/// One tenant's transport through the client.
+#[derive(Debug)]
+struct ClientTransport {
+    fetcher: Weak<Fetcher>,
+    platform: String,
+    tenant: String,
+    verify: bool,
+    bundles: Vec<Json>,
+    proxies: opentide_connectors::proxy::ProxySettings,
+    timeout: Duration,
+}
+
+impl ClientTransport {
+    fn params(&self, request: &Request, fetcher: &Fetcher) -> Json {
+        let millis =
+            |duration: Duration| Json::Int(i64::try_from(duration.as_millis()).unwrap_or(i64::MAX));
+        let headers = request
+            .headers()
+            .iter()
+            .map(|(name, value)| {
+                Json::Array(vec![
+                    Json::str(name.as_str()),
+                    Json::Str(String::from_utf8_lossy(value.as_bytes()).into_owned()),
+                ])
+            })
+            .collect();
+        let body = request.body().map_or(Json::Null, |body| {
+            Json::Str(base64::engine::general_purpose::STANDARD.encode(body))
+        });
+        let proxy = self
+            .proxies
+            .proxy_for(request.url())
+            .map_or(Json::Null, Json::Str);
+        Json::object([
+            ("run", (fetcher.run)().map_or(Json::Null, Json::Str)),
+            ("platform", Json::str(&self.platform)),
+            ("tenant", Json::str(&self.tenant)),
+            ("method", Json::str(request.method().as_str())),
+            ("url", Json::str(request.url().as_str())),
+            ("headers", Json::Array(headers)),
+            ("body", body),
+            ("connect_timeout_ms", millis(self.timeout)),
+            (
+                "read_timeout_ms",
+                millis(request.timeout().unwrap_or(self.timeout)),
+            ),
+            (
+                "tls",
+                Json::object([
+                    ("verify", Json::Bool(self.verify)),
+                    ("ca_bundles", Json::Array(self.bundles.clone())),
+                ]),
+            ),
+            ("proxy", proxy),
+        ])
+    }
+}
+
+/// The failure a client's error object names (`data.kind`).
+fn failure(error: &Json) -> TransportFailure {
+    let message = error
+        .get("message")
+        .and_then(Json::as_str)
+        .unwrap_or("the client could not make the request")
+        .to_owned();
+    let kind = error
+        .get("data")
+        .and_then(|data| data.get("kind"))
+        .and_then(Json::as_str)
+        .unwrap_or_default();
+    match kind {
+        "connect" => TransportFailure::Connect { reason: message },
+        "timeout" => TransportFailure::Timeout,
+        "aborted" => TransportFailure::Cancelled,
+        "answer" | "body" => TransportFailure::Answer { reason: message },
+        _ => TransportFailure::Unreachable { reason: message },
+    }
+}
+
+/// The tenant's answer in a client's result, or why it does not read: a
+/// body larger than *max_body* ([`MAX_BODY_BYTES`]) does not.
+fn response(
+    result: &Json,
+    request_url: &url::Url,
+    measured: Duration,
+    max_body: usize,
+) -> Result<Response, TransportFailure> {
+    let unreadable = |what: &str| TransportFailure::Answer {
+        reason: format!("the client's answer to {METHOD} has no valid {what}"),
+    };
+    let status = result
+        .get("status")
+        .and_then(int)
+        .and_then(|status| u16::try_from(status).ok())
+        .and_then(|status| StatusCode::from_u16(status).ok())
+        .ok_or_else(|| unreadable("status"))?;
+    let mut headers = HeaderMap::new();
+    if let Some(Json::Array(pairs)) = result.get("headers") {
+        for pair in pairs {
+            let (Some(name), Some(value)) = (
+                item(pair, 0).and_then(Json::as_str),
+                item(pair, 1).and_then(Json::as_str),
+            ) else {
+                return Err(unreadable("headers"));
+            };
+            let name =
+                HeaderName::from_bytes(name.as_bytes()).map_err(|_| unreadable("headers"))?;
+            let value = HeaderValue::from_str(value).map_err(|_| unreadable("headers"))?;
+            headers.append(name, value);
+        }
+    }
+    let url = match result.get("url").and_then(Json::as_str) {
+        Some(url) => url::Url::parse(url).map_err(|_| unreadable("url"))?,
+        None => request_url.clone(),
+    };
+    let body = match result.get("body") {
+        None | Some(Json::Null) => Vec::new(),
+        Some(Json::Str(text)) => {
+            // Refused before it is decoded when its text is longer than
+            // the cap's base64 (#1999). That bound rounds the cap up to a
+            // multiple of three bytes, so the decoded length is held to the
+            // cap too.
+            if text.len() > max_body.div_ceil(3).saturating_mul(4) {
+                // Padded base64 decodes to at most two bytes fewer than
+                // three for every four characters, a partial group of four
+                // counting as one. Past the bound this is more than the cap.
+                let least = text.len().div_ceil(4).saturating_mul(3).saturating_sub(2);
+                return Err(body_too_large(format!("at least {least}"), max_body));
+            }
+            let body = base64::engine::general_purpose::STANDARD
+                .decode(text)
+                .map_err(|_| unreadable("body"))?;
+            if body.len() > max_body {
+                return Err(body_too_large(body.len(), max_body));
+            }
+            body
+        }
+        Some(_) => return Err(unreadable("body")),
+    };
+    let elapsed = result
+        .get("elapsed_ms")
+        .and_then(int)
+        .and_then(|millis| u64::try_from(millis).ok())
+        .map_or(measured, Duration::from_millis);
+    Ok(Response::new(
+        status,
+        headers,
+        url,
+        (elapsed, Duration::ZERO),
+        Ok(body),
+    ))
+}
+
+/// A request to the client not answered yet: withdrawn (`$/cancelRequest`)
+/// when dropped before its answer came.
+struct Pending<'a> {
+    fetcher: &'a Fetcher,
+    id: &'a str,
+}
+
+impl Drop for Pending<'_> {
+    fn drop(&mut self) {
+        // A no-op once the answer was delivered: it is no longer pending.
+        self.fetcher.cancel(self.id);
+    }
+}
+
+impl Transport for ClientTransport {
+    fn execute<'a>(
+        &'a self,
+        request: Request,
+        cancel: &'a CancellationToken,
+    ) -> BoxFuture<'a, Result<Response, TransportFailure>> {
+        Box::pin(async move {
+            let Some(fetcher) = self.fetcher.upgrade() else {
+                return Err(TransportFailure::Unreachable {
+                    reason: Wire::SERVE.gone.to_owned(),
+                });
+            };
+            // A call that was cancelled sends nothing more: the request
+            // carries the tenant's credentials, and would only be withdrawn.
+            if cancel.is_cancelled() || (fetcher.cancelled)() {
+                return Err(TransportFailure::Cancelled);
+            }
+            let started = std::time::Instant::now();
+            let url = request.url().clone();
+            let read = request.timeout().unwrap_or(self.timeout);
+            let (id, reply) = fetcher.ask(self.params(&request, &fetcher));
+            // Withdrawn however the wait ends early: the run cancelled, the
+            // limit passed, or this future dropped (a run that stops by
+            // dropping its work).
+            let pending = Pending {
+                fetcher: &fetcher,
+                id: &id,
+            };
+            // With no reading thread, the answer comes only as this thread
+            // reads it: pump the client's messages until it is taken. Each
+            // message is handled as the reading thread would handle it (a
+            // cancel reaches the run), so the run's cancellation is checked
+            // after each: the command's own watch cannot run meanwhile.
+            let mut reply = reply;
+            loop {
+                match reply.try_recv() {
+                    Ok(answer) => {
+                        drop(pending);
+                        return match answer {
+                            Err(error) => Err(failure(&error)),
+                            Ok(result) => {
+                                response(&result, &url, started.elapsed(), MAX_BODY_BYTES)
+                            }
+                        };
+                    }
+                    Err(oneshot::error::TryRecvError::Closed) => {
+                        drop(pending);
+                        return Err(TransportFailure::Unreachable {
+                            reason: fetcher.wire.gone.to_owned(),
+                        });
+                    }
+                    Err(oneshot::error::TryRecvError::Empty) => {}
+                }
+                if cancel.is_cancelled() || (fetcher.cancelled)() {
+                    return Err(TransportFailure::Cancelled);
+                }
+                if !(fetcher.pump)() {
+                    break;
+                }
+                tokio::task::yield_now().await;
+            }
+            let limit = self.timeout + read + GRACE;
+            let outcome = tokio::select! {
+                biased;
+                () = cancel.cancelled() => return Err(TransportFailure::Cancelled),
+                outcome = tokio::time::timeout(limit, reply) => outcome,
+            };
+            drop(pending);
+            match outcome {
+                Err(_) => Err(TransportFailure::Deadline { after: limit }),
+                Ok(Err(_)) => Err(TransportFailure::Unreachable {
+                    reason: fetcher.wire.gone.to_owned(),
+                }),
+                Ok(Ok(Err(error))) => Err(failure(&error)),
+                Ok(Ok(Ok(result))) => response(&result, &url, started.elapsed(), MAX_BODY_BYTES),
+            }
+        })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::atomic::AtomicBool;
+
+    use super::*;
+
+    fn transport(fetcher: &Arc<Fetcher>) -> ClientTransport {
+        ClientTransport {
+            fetcher: Arc::downgrade(fetcher),
+            platform: "elastic".to_owned(),
+            tenant: "lab".to_owned(),
+            verify: true,
+            bundles: Vec::new(),
+            proxies: opentide_connectors::proxy::ProxySettings::default(),
+            timeout: Duration::from_secs(1),
+        }
+    }
+
+    fn request() -> Request {
+        let url = url::Url::parse("https://lab.invalid/_query").unwrap();
+        Request::new(opentide_connectors::transport::Method::GET, url)
+    }
+
+    /// The client's answer with *body* (base64) as its body.
+    fn answer(body: &str) -> Json {
+        Json::object([("status", Json::Int(200)), ("body", Json::str(body))])
+    }
+
+    fn read(result: &Json, max_body: usize) -> Result<Response, TransportFailure> {
+        let url = url::Url::parse("https://lab.invalid/_query").unwrap();
+        response(result, &url, Duration::ZERO, max_body)
+    }
+
+    /// #1999: the body a client answers with is held to the cap, as the
+    /// native transport's is: one byte past it is refused, with the native
+    /// transport's words, and a body of exactly the cap is read.
+    #[test]
+    fn a_body_past_the_cap_is_refused_and_one_at_it_is_read() {
+        let engine = base64::engine::general_purpose::STANDARD;
+        // 10 bytes, of which `é` is two and `😀` four.
+        let exact = "é😀abcd".as_bytes();
+        assert_eq!(exact.len(), 10);
+        let read_whole = read(&answer(&engine.encode(exact)), 10);
+        assert!(read_whole.is_ok(), "{read_whole:?}");
+        // One byte past: its base64 is no longer than the cap's (16
+        // characters), so the decoded length refuses it.
+        let past = [exact, b"e"].concat();
+        assert_eq!(engine.encode(&past).len(), 16);
+        assert_eq!(
+            read(&answer(&engine.encode(&past)), 10).unwrap_err(),
+            TransportFailure::Answer {
+                reason: "the answer's body (11 bytes) is larger than 10 bytes".into()
+            }
+        );
+        // Far past: refused from the text's length, before it is decoded
+        // (to 3000 zero bytes).
+        let text = "A".repeat(4000);
+        assert_eq!(
+            read(&answer(&text), 10).unwrap_err(),
+            TransportFailure::Answer {
+                reason: "the answer's body (at least 2998 bytes) is larger than 10 bytes".into()
+            }
+        );
+        // Just past the bound (16 characters for 10 bytes): the text is
+        // read only up to its length, and the least it could decode to is
+        // past the cap, never at it.
+        let at_bound = engine.encode([0_u8; 12]);
+        assert_eq!(at_bound.len(), 16);
+        assert_eq!(
+            read(&answer(&at_bound), 10).unwrap_err(),
+            TransportFailure::Answer {
+                reason: "the answer's body (12 bytes) is larger than 10 bytes".into()
+            }
+        );
+        for extra in 1..=3 {
+            let text = format!("{at_bound}{}", "A".repeat(extra));
+            assert_eq!(
+                read(&answer(&text), 10).unwrap_err(),
+                TransportFailure::Answer {
+                    reason: "the answer's body (at least 13 bytes) is larger than 10 bytes".into()
+                },
+                "{} characters",
+                text.len()
+            );
+        }
+        let real_bound = MAX_BODY_BYTES.div_ceil(3) * 4;
+        for extra in 1..=3 {
+            let Err(TransportFailure::Answer { reason }) =
+                read(&answer(&"A".repeat(real_bound + extra)), MAX_BODY_BYTES)
+            else {
+                panic!("{extra} characters past the bound read");
+            };
+            assert_eq!(
+                reason,
+                "the answer's body (at least 67108867 bytes) is larger than 64 MiB"
+            );
+        }
+        let long = engine.encode([0_u8; 13]);
+        assert_eq!(long.len(), 20);
+        assert_eq!(
+            read(&answer(&long), 10).unwrap_err(),
+            TransportFailure::Answer {
+                reason: "the answer's body (at least 13 bytes) is larger than 10 bytes".into()
+            }
+        );
+        // The real cap is the native transport's, in MiB.
+        assert_eq!(
+            read(&answer(&"A".repeat(90_000_000)), MAX_BODY_BYTES).unwrap_err(),
+            TransportFailure::Answer {
+                reason: "the answer's body (at least 67499998 bytes) is larger than 64 MiB".into()
+            }
+        );
+    }
+
+    /// A call that was cancelled sends nothing more: a request carries the
+    /// tenant's credentials, and would only be withdrawn.
+    #[test]
+    fn a_cancelled_call_writes_no_further_request() {
+        let written = Arc::new(Mutex::new(Vec::<String>::new()));
+        let cancelled = Arc::new(AtomicBool::new(true));
+        let fetcher = Fetcher::with_input(
+            {
+                let written = Arc::clone(&written);
+                move |message: &str| written.lock().unwrap().push(message.to_owned())
+            },
+            || None,
+            || false,
+            {
+                let cancelled = Arc::clone(&cancelled);
+                move || cancelled.load(Ordering::SeqCst)
+            },
+        );
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        let transport = transport(&fetcher);
+        // The run was cancelled (the client's cancellation, noted by the reader).
+        let outcome = runtime.block_on(transport.execute(request(), &CancellationToken::new()));
+        assert!(
+            matches!(outcome, Err(TransportFailure::Cancelled)),
+            "{outcome:?}"
+        );
+        assert!(
+            written.lock().unwrap().is_empty(),
+            "{:?}",
+            written.lock().unwrap()
+        );
+        // So is a request whose token fired.
+        cancelled.store(false, Ordering::SeqCst);
+        let token = CancellationToken::new();
+        token.cancel();
+        let outcome = runtime.block_on(transport.execute(request(), &token));
+        assert!(
+            matches!(outcome, Err(TransportFailure::Cancelled)),
+            "{outcome:?}"
+        );
+        assert!(written.lock().unwrap().is_empty());
+    }
+}

@@ -1,0 +1,4 @@
+// prod:search_query valid
+events:
+  metadata.event_type = "NETWORK_DNS"
+  network.dns.questions.name = /evil\.example$/ nocase

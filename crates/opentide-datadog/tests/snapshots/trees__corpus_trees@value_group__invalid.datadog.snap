@@ -1,0 +1,21 @@
+---
+source: crates/opentide-datadog/tests/trees.rs
+expression: "debug_tree(&body.join(\"\\n\"))"
+input_file: crates/testdata/corpus/datadog/value_group__invalid.datadog
+---
+QUERY@0..20
+  FIELD_CLAUSE@0..20
+    TAG_KEY@0..3
+      WORD@0..3 "env"
+    COLON@3..4 ":"
+    VALUE_GROUP@4..20
+      L_PAREN@4..5 "("
+      VALUE_OR_EXPR@5..20
+        TERM@5..9
+          WORD@5..9 "prod"
+        WHITESPACE@9..10 " "
+        OR_KW@10..12 "OR"
+        WHITESPACE@12..13 " "
+        TERM@13..20
+          WORD@13..20 "staging"
+20..20: missing `)` (expected R_PAREN)

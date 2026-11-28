@@ -31,7 +31,7 @@ Epic: [#60](https://github.com/opentidehq/CoreTide/issues/60) · Agent guide: [`
 | Platform | Deploy | Validate |
 |----------|:------:|:--------:|
 | sentinel | ✅ | ✅ |
-| defender_for_endpoint | ✅ | ✅ |
+| microsoft_defender | ✅ | ✅ |
 | splunk | ✅ | ✅ |
 | sentinel_one | ✅ | ✅ |
 | carbon_black_cloud | ✅ | ✅ |
@@ -82,11 +82,11 @@ Tests: `tests/test_platforms/test_capabilities.py` (Phase 9).
 - `opentide` CLI; 5-platform query validation only
 - **CLI E2E** (`tests/test_cli/e2e/`): Typer `CliRunner` tests backed by `tests/fixtures/tide_corpus/` (threat/objective/rule naming, `*::1.0` baseline)
 - **First-user workflow** (`test_workflow_e2e.py`): CLI-only `setup` → empty `generate` → author tutorial objects (including object `actors` and **unquoted** `metadata.created` / `modified`) → populated `generate` → `validate --strict` → `lint --strict` → `info` → `validate query` → `deploy --dry-run` (no `DEPLOYMENT_PLAN`) → `generate docs` → `setup env`/`hooks`
-- Markers: `cli_e2e` (in-process), `cli_smoke` (console-script subprocess); separate `cli-e2e` CI job on Python 3.14 after unit matrix
+- Markers: `cli_e2e` (in-process), `cli_smoke` (console-script subprocess); run in CI's one `python` job (Python 3.14, with the unit tests and the coverage gate); the `full_set` E2E tests run in `python-matrix` (release pull requests and the nightly)
 - Deploy dry-run returns `plan` + `payloads` (unit golden tests in `tests/test_deployment/test_deploy_payloads.py`)
 - Skill: [`.agents/skills/cli-e2e-testing/SKILL.md`](../../.agents/skills/cli-e2e-testing/SKILL.md)
 - Interactive `setup`: construct real Questionary prompts and mock only `.ask()` (`test_setup_interactive.py`), which keeps catching prompt-kwarg regressions such as #177.
-- Full TTY wizard: `test_setup_tty_e2e.py` spawns the console script on a real PTY through `pexpect` (`tests/test_cli/e2e/pty_driver.py`) and walks the wizard end to end — apply and cancel — plus every `--json` guard. `CliRunner` never presents a TTY, so this is the only path that reaches `run_interactive_setup`. Do not stub `.ask()` there.
+- Full TTY wizard: `crates/opentide-cli/tests/setup_wizard.rs` spawns the `opentide` binary on a real pseudo-terminal through portable-pty and walks the wizard end to end (apply, cancel, Ctrl-C, an emptied name refused), plus every `--json` guard and the bare `opentide` home screen. Do not stub the prompts there.
 - YAML shape guard: `tests/test_cli/test_simulation_yaml_shape.py` fails if tutorial/corpus quote metadata dates
 - **Published commands** (`tests/test_docs/test_docs_commands_golden.py`): extracts every `opentide …` invocation from the shell fences in `docs/` (`tests/docs_commands.py`) and resolves it against the live Typer tree, executes the read-only subset against a scaffolded repo, and runs the command each `output-of="opentide …"` `text`/`json` fence names (deployers stubbed), comparing the sample and its `exit=` code to real output (#299). `state=NAME` edits the repository first, for samples of a failure. A guard fails any fence under `docs/cli/` or `docs/usage/` that reads like CLI output yet carries neither `output-of=` nor `illustrative`, so pairing cannot be skipped. The YAML-fence tutorial test covers the objects; this covers the commands, which is the half that let #247 ship.
 
@@ -119,4 +119,4 @@ Final tree: `tests/{test_core,test_models,test_platforms,test_validation,test_ge
 2. Phase 4+: behaviour inventory is the generator contract.
 3. Phase 9+: pytest primary gate; ≥80% core coverage.
 4. Capability invariants block merge at any phase.
-5. Validate ↔ language-server parity (`tests/test_lsp/test_parity.py`, #678): for every registered schema revision, one-fault variants of a valid object (a required field missing, an unknown key, a field of another revision, a value outside its vocabulary, a malformed UUID). Every object-schema error `opentide validate` reports, the language server (as `opentide tui` runs it) reports on the same field. An intended difference goes in `KNOWN_DIFFERENCES` with its reason; one that disappears fails the test too.
+5. Validate ↔ language-server parity (#678): for every registered schema revision, one-fault variants of a valid object (a required field missing, an unknown key, a field of another revision, a value outside its vocabulary, a malformed UUID). Every object-schema error `opentide validate` reports, the language server (as `opentide tui` runs it) reports on the same field. An intended difference goes in `KNOWN_DIFFERENCES` with its reason; one that disappears fails the test too. Python's `tests/test_lsp/test_parity.py` held this and went with the Python implementation. Rust holds it twice: `cargo xtask lsp parity --corpus faults` (every fault kind `validate` reports, through the engine; its own tests are in `xtask/src/lsp.rs`) and `crates/opentide-cli/tests/validate_lsp_parity.rs` (the binary's `validate --json` against `opentide_lsp::ObjectFindings`, as `opentide tui` reads it, on four one-fault files). The per-schema-revision variants of the Python test are not ported.

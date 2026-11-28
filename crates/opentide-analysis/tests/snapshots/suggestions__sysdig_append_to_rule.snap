@@ -1,0 +1,8 @@
+---
+source: crates/opentide-analysis/tests/suggestions.rs
+expression: "tide(\"  sysdig:\\n    append_to_rule: Terminal shell in containr\\n    condition: proc.name = bash\\n\",\n&[\"falco_unknown_rule\"],)"
+---
+  sysdig:
+    append_to_rule: Terminal shell in containr
+    condition: proc.name = bash
+  warning falco_unknown_rule `append_to_rule` => Terminal shell in container

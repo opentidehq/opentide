@@ -29,18 +29,30 @@ Usage: scripts/ci-local.sh [OPTIONS]
 Run local checks that mirror GitHub CI. Faster than waiting on remote runners.
 
 Options:
-  --quick       Lint + type-check + package build (ruff, ty, cargo clippy, uv build)
-  --test        Lint + unit pytest (excludes cli_e2e/cli_smoke) — default
-  --full        Lint + unit pytest + coverage gate + CLI E2E + GitLab CI lint — pre-push
+  --quick       Lint + type-check + package build (ruff, ty, cargo fmt and clippy,
+                cargo xtask check-layers, engine checks, docs structure, uv build)
+  --test        Lint + cargo test + unit pytest (excludes cli_e2e/cli_smoke) — default
+  --full        Lint + cargo test + unit pytest + coverage gate + CLI E2E +
+                GitLab CI lint, and CI's Rust jobs: cargo nextest (profile
+                ci), doctests, the editor against validate (lsp parity, the
+                nightly's), rustdoc, the crates' package and licence scan;
+                the WebAssembly build, the grammar drift check and the fuzz
+                smoke run when their tools are installed (each says what it
+                skipped and why) — pre-push
   --coverage    Alias for --full
   --store-e2e-durations
                 Re-measure the E2E suite serially and rewrite
-                .test_durations_e2e, which balances the CI shard matrix.
+                .test_durations_e2e, which pytest-split reads (--splits). CI no
+                longer shards the E2E suite: it serves a local split run.
                 Run it after adding or removing slow E2E tests; commit the
                 result. Takes about as long as a serial E2E run (~9 min).
   -h, --help    Show this help
 
 Environment:
+  FUZZ_SMOKE_SECONDS
+                  Seconds per fuzz target in --full's fuzz smoke run (default
+                  60; the nightly's engine-fuzz.yml runs each for 600); 0
+                  skips it.
   PYTEST_WORKERS  xdist worker count for the E2E suite (default: 4, matching
                   ci.yml). 0 runs it serially, which is what you want to read a
                   failure. More is not reliably faster -- each worker holds an
@@ -53,6 +65,89 @@ Examples:
   scripts/ci-local.sh --full       # before opening a PR (unit then E2E)
   PYTEST_WORKERS=0 scripts/ci-local.sh   # serial, readable output
 EOF
+}
+
+skip() { echo "==> SKIPPED: $*"; skipped+=("$1"); }
+skipped=()
+
+# A test writes under a temporary folder, never in the checkout (#931), as
+# ci.yml's `build` job checks: `git status` before and after the tests.
+tree_state() { git status --porcelain --untracked-files=all; }
+tree_unchanged() {
+  local after
+  after="$(tree_state)"
+  if [[ "$after" != "$1" ]]; then
+    echo "A test wrote into the checkout: write under a temporary folder (tempfile::tempdir) instead." >&2
+    diff <(printf '%s\n' "$1") <(printf '%s\n' "$after") >&2 || true
+    exit 1
+  fi
+}
+
+# CI's Rust jobs (engine-lint, build, release-build's crate-packages, wasm,
+# engine-fuzz.yml, briefly) for --full; rustfmt, clippy and the layers ran above.
+rust_jobs() {
+  echo "==> Cargo workspace: nextest (profile ci)"
+  if ! cargo nextest --version >/dev/null 2>&1; then
+    echo "cargo-nextest is not installed: cargo install cargo-nextest --locked" >&2
+    exit 1
+  fi
+  local before
+  before="$(tree_state)"
+  cargo nextest run --workspace --locked --profile ci
+  echo "==> Cargo workspace: doctests"
+  cargo test --workspace --locked --doc --quiet
+  tree_unchanged "$before"
+  echo "==> The editor's diagnostics are validate's (the nightly's lsp-parity job)"
+  cargo xtask lsp parity --corpus faults
+  echo "==> rustdoc (RUSTDOCFLAGS=-D warnings)"
+  RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --workspace --locked --quiet
+  echo "==> Engine crates package and licence scan"
+  # vendor copies each crate's shared assets into it (untracked files, which
+  # a later `git add -A` would commit): `vendor --clean` removes them on any
+  # exit, an interrupted push included.
+  trap 'python3 scripts/engine/release.py vendor --clean >/dev/null' EXIT
+  python3 scripts/engine/release.py vendor
+  # Every crate the release train publishes, from its package, as in ci.yml's
+  # release job (release-pipeline.yml's sources); the unpublished members' sources are scanned, and
+  # opentide-cli, which carries opentide's package data, as a product.
+  cargo package --locked --workspace --exclude opentide-native --exclude xtask --exclude opentide-cassette --exclude opentide-wasm --exclude opentide-node --allow-dirty --quiet
+  find "${CARGO_TARGET_DIR:-target}/package" -maxdepth 1 -name '*.crate' ! -name 'opentide-cli-*' -print0 | xargs -0 bash scripts/engine/license-scan.sh
+  bash scripts/engine/license-scan.sh --product "${CARGO_TARGET_DIR:-target}"/package/opentide-cli-*.crate
+  bash scripts/engine/license-scan.sh crates/opentide-cassette crates/opentide-wasm bindings/node bindings/python
+  python3 scripts/engine/release.py vendor --clean
+  trap - EXIT
+
+  # The rest need tools a contributor may not have: each says what to install.
+  local installed
+  installed="$(rustup target list --installed 2>/dev/null || true)"
+  if ! grep -qx wasm32-unknown-unknown <<<"$installed" || ! grep -qx wasm32-wasip1 <<<"$installed"; then
+    skip "WebAssembly build: rustup target add wasm32-unknown-unknown wasm32-wasip1"
+  elif ! command -v wasm-bindgen >/dev/null || ! command -v node >/dev/null; then
+    skip "WebAssembly build: install node and wasm-bindgen-cli (the version Cargo.lock pins)"
+  else
+    echo "==> WebAssembly engine (browser and WASI), clippy on wasm32, npm packs"
+    RUSTFLAGS="-Dwarnings" bash scripts/engine/build-wasm.sh
+    RUSTFLAGS="-Dwarnings" bash scripts/engine/build-wasm.sh clippy
+    for p in lsp-client lsp-worker wasi-host; do (cd "packages/$p" && npm ci --silent); done
+    node scripts/engine/check-npm-packs.mjs
+    echo "==> wasi-host (opentide/fetch against opentide serve)"
+    cargo build --locked -p opentide-cli
+    OPENTIDE_BIN="${CARGO_TARGET_DIR:-target}/debug/opentide-cli" node --experimental-strip-types --test packages/wasi-host/src/index.test.ts
+  fi
+
+  local seconds="${FUZZ_SMOKE_SECONDS:-60}"
+  if [[ "$seconds" == "0" ]]; then
+    skip "fuzz smoke: FUZZ_SMOKE_SECONDS=0"
+  elif ! rustup run "$(cat fuzz/NIGHTLY)" cargo fuzz --version >/dev/null 2>&1; then
+    skip "fuzz smoke: rustup toolchain install $(cat fuzz/NIGHTLY) && cargo +$(cat fuzz/NIGHTLY) install cargo-fuzz --locked"
+  else
+    local target
+    for target in fuzz/fuzz_targets/*.rs; do
+      target="$(basename "$target" .rs)"
+      echo "==> Fuzz smoke: $target (${seconds}s)"
+      bash scripts/engine/fuzz.sh "$target" "$seconds"
+    done
+  fi
 }
 
 mode="test"
@@ -76,7 +171,7 @@ if [[ "$mode" == "store-e2e-durations" ]]; then
   # Serial on purpose. Durations recorded under xdist absorb worker startup and
   # CPU contention, which skews the per-test weights the shard packer reads and
   # would unbalance CI rather than improve it.
-  uv run pytest tests/ -m "cli_e2e or cli_smoke" -q --no-cov \
+  uv run pytest tests/ -m "(cli_e2e or cli_smoke) and not full_set" -q --no-cov \
     --store-durations --durations-path .test_durations_e2e
   echo "==> Wrote .test_durations_e2e — commit it to keep the CI shards balanced"
   exit 0
@@ -88,22 +183,33 @@ uv run ruff check src/opentide tests scripts
 echo "==> Ruff format"
 uv run ruff format --check src/opentide tests scripts
 
+if command -v actionlint >/dev/null 2>&1; then
+  echo "==> actionlint (the workflows; shellcheck over their scripts when installed)"
+  actionlint
+else
+  echo "==> actionlint not installed: skipped (CI's lint job runs it)"
+fi
+
 echo "==> Ty type check"
 uv run ty check src/opentide
 
-echo "==> Engine bindings (rustfmt, clippy, cargo test)"
-cargo fmt --manifest-path analysis/Cargo.toml -- --check
-cargo clippy --manifest-path analysis/Cargo.toml --all-targets --quiet -- -D warnings
-cargo test --manifest-path analysis/Cargo.toml --quiet
+echo "==> Cargo workspace: rustfmt, clippy, crate layers, deploy cassettes"
+cargo fmt --all --check
+cargo clippy --workspace --all-targets --locked --quiet -- -D warnings
+cargo xtask check-layers
+cargo xtask cassettes check
 
-echo "==> The engine crates come from one source"
-uv run python scripts/build/check_engine_pin.py
+echo "==> Engine invariants (I/O-free crates, names, skills, generated highlights)"
+bash scripts/engine/check-io-free.sh
+bash scripts/engine/check-names.sh
+bash scripts/engine/validate-skills.sh
+cargo run --quiet --locked -p opentide-lsp -- generate-highlights --check
 
-echo "==> The Bitdefender criteria catalogue matches the pinned engine's"
-uv run python scripts/build/check_bitdefender_catalogue.py
+echo "==> Docs structure (validate-docs.sh, as ci.yml's docs job runs it)"
+bash scripts/validate-docs.sh
 
-echo "==> The engine's bundled catalogs match the models"
-uv run python scripts/build/check_engine_catalog.py
+echo "==> The engine's bundled Tide catalog and the generated artifacts match the models"
+cargo xtask codegen --check
 
 echo "==> uv build (sdist + wheel)"
 rm -rf dist
@@ -115,6 +221,20 @@ if [[ "$mode" == "quick" ]]; then
   echo "==> Quick checks passed"
   exit 0
 fi
+
+# One engine test compares with Python's difflib (.venv, synced above).
+# As in CI: insta compares snapshots and never writes one.
+export INSTA_UPDATE=no
+if [[ "$mode" == "full" ]]; then
+  rust_jobs
+else
+  echo "==> Cargo workspace: tests"
+  before="$(tree_state)"
+  cargo test --workspace --locked --quiet
+  tree_unchanged "$before"
+fi
+echo "==> The engine release script's tests"
+uv run python -m unittest discover -s scripts/engine -p "test_*.py"
 
 echo "==> Pytest"
 unit_marker='not cli_e2e and not cli_smoke and not gitlab_ci_lint'
@@ -151,7 +271,7 @@ fi
 if [[ "$mode" == "full" ]]; then
   "${cov_env[@]}" uv run pytest tests/ -q "${parallel[@]}" -m "$unit_marker"
   uv run coverage report
-  echo "==> E2E pytest (CLI + MCP stdio)"
+  echo "==> E2E pytest (console script, MCP and LSP stdio; the full set's too)"
   uv run pytest tests/ -m "cli_e2e or cli_smoke" -q "${parallel[@]}" --no-cov
   echo "==> Generated GitLab CI lint (glint + gitlab-ci-verify)"
   linters="$ROOT/.cache/gitlab-ci-linters"
@@ -162,4 +282,7 @@ else
   uv run pytest tests/ --no-cov -q "${parallel[@]}" -m "$unit_marker"
 fi
 
+if [[ ${#skipped[@]} -gt 0 ]]; then
+  echo "==> Skipped (CI runs them): ${skipped[*]}"
+fi
 echo "==> All checks passed ($mode)"

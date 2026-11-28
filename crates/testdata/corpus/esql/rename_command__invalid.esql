@@ -1,0 +1,3 @@
+// prod:rename_command invalid
+FROM logs-* METADATA _id
+| RENAME user.name AS

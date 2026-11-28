@@ -1,0 +1,100 @@
+---
+source: crates/opentide-falco/tests/trees.rs
+expression: "debug_parse(&body.join(\"\\n\"))"
+input_file: crates/testdata/corpus/falco/transformer_list__valid.falco
+---
+source_file@0..160
+  and_expression@0..160
+    comparison@0..50
+      field_transformer@0..42
+        transformer_name@0..5 "join("
+        quoted_string@5..8 "\",\""
+        ,@8..9 ","
+        whitespace@9..10 " "
+        transformer_list@10..41
+          (@10..11 "("
+          field@11..20
+            field_name@11..20 "proc.name"
+          ,@20..21 ","
+          whitespace@21..22 " "
+          field@22..32
+            field_name@22..32 "proc.pname"
+          ,@32..33 ","
+          whitespace@33..34 " "
+          quoted_string@34..37 "\"x\""
+          ,@37..38 ","
+          whitespace@38..39 " "
+          number@39..40 "1"
+          )@40..41 ")"
+        )@41..42 ")"
+      whitespace@42..43 " "
+      comparison_operator@43..44
+        =@43..44 "="
+      whitespace@44..45 " "
+      quoted_string@45..50 "\"a,b\""
+    whitespace@50..51 " "
+    and@51..54 "and"
+    whitespace@54..55 " "
+    comparison@55..104
+      field_transformer@55..98
+        transformer_name@55..62 "concat("
+        field@62..71
+          field_name@62..71 "proc.name"
+        ,@71..72 ","
+        whitespace@72..73 " "
+        quoted_string@73..76 "\"-\""
+        ,@76..77 ","
+        whitespace@77..78 " "
+        field_transformer@78..97
+          transformer_name@78..86 "toupper("
+          field@86..96
+            field_name@86..96 "proc.pname"
+          )@96..97 ")"
+        )@97..98 ")"
+      whitespace@98..99 " "
+      comparison_operator@99..100
+        =@99..100 "="
+      whitespace@100..101 " "
+      bare_string@101..104
+        identifier@101..102 "a"
+        other@102..103 "-"
+        identifier@103..104 "B"
+    whitespace@104..105 " "
+    and@105..108 "and"
+    whitespace@108..109 " "
+    comparison@109..144
+      field_transformer@109..136
+        transformer_name@109..116 "getopt("
+        field@116..125
+          field_name@116..125 "proc.args"
+        ,@125..126 ","
+        whitespace@126..127 " "
+        quoted_string@127..132 "\"nt:\""
+        )@132..133 ")"
+        field_argument@133..136
+          [@133..134 "["
+          argument_value@134..135
+            identifier@134..135 "t"
+          ]@135..136 "]"
+      whitespace@136..137 " "
+      comparison_operator@137..138
+        =@137..138 "="
+      whitespace@138..139 " "
+      bare_string@139..144
+        identifier@139..144 "value"
+    whitespace@144..145 " "
+    and@145..148 "and"
+    whitespace@148..149 " "
+    comparison@149..160
+      field_transformer@149..156
+        transformer_name@149..153 "len("
+        transformer_list@153..155
+          (@153..154 "("
+          )@154..155 ")"
+        )@155..156 ")"
+      whitespace@156..157 " "
+      comparison_operator@157..158
+        =@157..158 "="
+      whitespace@158..159 " "
+      bare_string@159..160
+        number@159..160 "0"

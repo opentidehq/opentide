@@ -19,7 +19,7 @@ opentide setup --plan --platform sentinel --ci github --mcp vscode --hooks --env
 
 The interactive wizard opens with the opentide logo and the tagline (the one-line pill in a terminal narrower than 82 columns, and no mark with `--no-color` or `NO_COLOR`), then uses arrow-key menus and checkboxes for platforms, CI, MCP hosts, workflow features, and agent targets. An empty repository name is refused on screen. It shows a setup plan before writing. No platform, CI provider, editor, or agent environment is selected implicitly.
 
-Every `setup` command, scripted or interactive, ends the same way: the files it wrote, its warnings (each once), one outcome line, and numbered next steps when it created a repository:
+Every `setup` command, scripted or interactive, ends the same way: the files it wrote, one outcome line, numbered next steps when it created a repository, and its warnings (each once, on stderr):
 
 ```text illustrative
   objects/{threats,objectives,rules}/                your detection catalogue
@@ -28,13 +28,13 @@ Every `setup` command, scripted or interactive, ends the same way: the files it 
   .opentide/configurations/platforms/sentinel.toml   platform configuration
   .github/workflows/opentide.yml                     GitHub Actions pipeline
 
-warning: This folder is not a git repository yet, so the pipeline targets 'main'; create it on that branch with 'git init -b main', or write the pipeline for another one with 'opentide setup ci <provider> --default-branch <branch>'.
 ✓ Created Tutorial Detections in ./tutorial-detections
 
 Next steps
   1  cd tutorial-detections
   2  opentide generate · schemas, templates and editor snippets
   3  opentide validate · check every object before you commit
+warning: This folder is not a git repository yet, so the pipeline targets "main"; create it on that branch with 'git init -b main', or write the pipeline for another one with 'opentide setup ci <provider> --default-branch <branch>'.
 ```
 
 This is `opentide setup --yes --name "Tutorial Detections" --platform sentinel --ci github --path tutorial-detections` outside a git repository; it is not captured by the docs harness, which runs no `setup`. `--json` returns the same facts: the outcome under `message`, each step's `files`, and the next steps under `next_actions`.
@@ -46,7 +46,8 @@ The wizard needs a terminal and a stdout it can draw on, so it is incompatible w
 | Flag | Purpose |
 |------|---------|
 | `--path` / `-C` | Repository directory. The default `.` is the working directory; an explicit `--repo` replaces `.` |
-| `--name`, `--org`, `--description` | README metadata |
+| `--name`, `--description` | README metadata. `--name` is kept without its surrounding spaces; an empty or all-space `--name` or `--org` exits `2` (`usage_invalid_value`). Leave `--name` out for the folder name |
+| `--org` | The organisation, in the README and in `.opentide/configurations/organisation.toml` (a fresh `uuid` and the `name`), which [`opentide new`](./new.md#what-the-new-file-holds) writes as `metadata.organisation`: the only place it comes from. A rerun with the same `--org` changes nothing, with another one renames the organisation and keeps its `uuid`, and a rerun without `--org` leaves the file as it is. Edit the `uuid` in the file to your organisation's own. A `uuid` you wrote that is not a UUID is kept, with a warning. An existing README is still left as it is; `--org` reaches `organisation.toml` all the same |
 | `--platform` | Detection platforms — runs the `setup platforms` step when set (repeatable) |
 | `--ci` | `github`, `gitlab`, `azure`, or `none` |
 | `--staging` / `--no-staging` | CI staging stage (default: on) |
@@ -54,12 +55,15 @@ The wizard needs a terminal and a stdout it can draw on, so it is incompatible w
 | `--sharing` / `--no-sharing` | Share changed objects on the default branch (default: off) |
 | `--lint-changed` / `--lint-all` | Gate `opentide lint` on the object files each run changed, or on every file (default) |
 | `--promotion` / `--no-promotion` | Status promotion in `opentide deploy`. Omit the flag to keep the repository's setting; `--no-promotion` writes `[promotion] enabled = false` (see [setup ci](#setup-ci)) |
-| `--explorer-pages` / `--no-explorer-pages` | Include GitHub Pages explorer jobs |
+| `--explorer-pages` / `--no-explorer-pages` | Include GitHub Pages explorer jobs: after the documentation job, an `explorer` job installs the pinned opentide release, runs `opentide --json generate explorer`, builds the site from the `opentidehq/explorer` release this opentide pins (`v0.6.0`, checked out by its commit, not from `main`) and uploads it, and `deploy-explorer` publishes it to GitHub Pages from the default branch. Enable Pages with **GitHub Actions** as the source; no secret is needed |
 | `--promotion-target` | Status `deploy` promotes rules to. Omit the flag to keep the repository's setting; another status is written as `[promotion] promotion_target` |
-| `--python-version` | CI Python version (default `3.12`) |
+| `--python-version` | CI Python version (default `3.12`): `3.<minor>` or `3.<minor>.<patch>`, 3.10 or later, or `3.x` (the latest 3) on GitHub and Azure; GitLab's job image needs a version. Any other value exits `2` and writes nothing |
+| `--variable-group` | Azure only, repeatable: link this Azure DevOps Library variable group in `variables:` (see [setup ci](#setup-ci)); github and gitlab warn that it is ignored |
+| `--prune` / `--no-prune` | `--prune`: the production job's `RELEASE` preview and deploy pass `deploy --prune`, retiring the rules whose file the push deleted. `--no-prune` writes them without it, so the deploy only warns; the header records it, and a regenerate keeps it until `--prune`. Omit to keep what the existing pipeline has (`--prune` for a new one) |
+| `--app-token` / `--no-app-token` | GitHub only: the jobs that push to the default branch use a GitHub App token instead of `GITHUB_TOKEN` (see [setup ci](#setup-ci)); omit to keep what the existing pipeline has; gitlab and azure warn that `--app-token` is ignored |
 | `--default-branch` | Branch that deploys and receives inflight shards (see [setup ci](#setup-ci)) |
-| `--vscode-setup` | Deprecated `setup vscode`: recommend the opentide extension, write snippets (generate-first) |
-| `--mcp` | MCP configuration for `vscode`, `cursor`, `claude-code`, `claude-desktop` or `generic` (repeatable): the [setup mcp](#setup-mcp) step |
+| `--vscode-setup` | Run [`setup vscode`](#setup-vscode): recommend the opentide extension, write snippets (generate-first) |
+| `--mcp` | MCP configuration for `vscode`, `cursor`, `claude-code` or `generic` (repeatable): the [setup mcp](#setup-mcp) step |
 | `--skills` | Agent skills for `claude-code`, `cursor`, `github-copilot` or `generic` (repeatable): the [setup skills](#setup-skills) step, with its default skills |
 | `--plugin` | Register the opentidehq/skills Agent Plugin for Claude Code, as `setup skills --plugin` |
 | `--hooks` | Validate-on-commit hooks: the [setup hooks](#setup-hooks) step |
@@ -131,7 +135,7 @@ Given before the subcommand, `--path` and `--yes` still apply to it: `opentide s
 
 ### setup repo
 
-Scaffold directory layout, README, and `.gitignore`. `--platform` writes and enables the matching `.opentide/configurations/platforms/*.toml` files (same as `setup platforms`).
+Scaffold directory layout, README, and `.gitignore`. `--platform` writes and enables the matching `.opentide/configurations/platforms/*.toml` files (same as `setup platforms`). `--org` also writes `.opentide/configurations/organisation.toml`, listed under `files` when it is created or renamed and under `skipped` when it already says the same; a file that is not valid TOML, is not UTF-8, or has a `uuid` that is not a UUID is left alone, with a warning.
 
 On an existing repository the command keeps what is there. A `README.md` is left as it is (`skipped`). An existing `.gitignore` keeps its content, byte-order mark and line endings and gains only the lines opentide needs that it lacks: `.opentide/exports/*.export.json`, `.opentide/states/sharing.jsonl` (the sharing cache; `.opentide/states/deployment/` must be committed) and `opentide-reports/`. A line counts as present with or without a leading or trailing `/` (`/opentide-reports` does). The Python lines a new `.gitignore` starts with (`build/`, `dist/`, ...) are not added to an existing one. `--json` lists the lines added under `gitignore_added`, and `.gitignore` under `files` when it changed, under `skipped` when it did not; a rerun adds nothing. A `.gitignore` that is not UTF-8 is left alone with a warning naming the lines to add.
 
@@ -141,10 +145,12 @@ opentide setup repo --yes --name SOC --platform sentinel
 
 ### setup platforms
 
-Create and enable platform configuration templates under `.opentide/configurations/platforms/`.
+Create and enable platform configuration templates under `.opentide/configurations/platforms/`. When `README.md` ends with the `## Platforms` list `setup repo` wrote (only `- <platform>` lines), the platforms it enables are added to that list, and `README.md` is listed under `updated`; a section you have edited is left alone.
+
+A platform file that already exists is kept: your values, comments and tenants stay, and only `enabled` is set to `true`. When the bundled template has keys your file lacks, or your file has keys the template no longer has, the step warns (in the text output, and in `--json` `warnings`) naming them as dotted paths, for example `.opentide/configurations/platforms/sentinel.toml was kept with your values: the new template removes platform.legacy_mode. Add or delete those keys by hand.` Nothing is added or deleted for you. A key the model gives a default (`platform.enabled`, `platform.name`, `platform.description`) is never reported as added, so a file without one gets no warning. `tenants` and `modifiers` are your entries, in either TOML form (`[[tenants]]` or `tenants = [...]`), and are not compared. `setup repo --platform` reports the same warnings.
 
 ```bash
-opentide setup platforms --sentinel --defender-for-endpoint --yes
+opentide setup platforms --sentinel --microsoft-defender --yes
 ```
 
 | Flag | Platform |
@@ -152,7 +158,7 @@ opentide setup platforms --sentinel --defender-for-endpoint --yes
 | `--sentinel` | Microsoft Sentinel |
 | `--splunk` | Splunk |
 | `--crowdstrike` | CrowdStrike |
-| `--defender-for-endpoint` | Microsoft Defender for Endpoint |
+| `--microsoft-defender` | Microsoft Defender |
 | `--sentinel-one` | SentinelOne |
 | `--carbon-black-cloud` | Carbon Black Cloud |
 | `--harfanglab` | HarfangLab |
@@ -162,16 +168,17 @@ opentide setup platforms --sentinel --defender-for-endpoint --yes
 | `--graylog` | Graylog |
 | `--exabeam` | Exabeam New-Scale SIEM |
 | `--google-secops` | Google Security Operations (YARA-L) |
+| `--datadog` | Datadog Cloud SIEM (Datadog search syntax) |
 
 ### setup ci
 
 Generate CI/CD pipeline files. **CI provider** is the positional argument (`github`, `gitlab`, or `azure`). Detection platforms are **not** passed here — they are discovered from enabled `.opentide/configurations/platforms/*.toml` files written by `setup platforms`.
 
-Run `setup platforms` before `setup ci` so `validate query` jobs are included. If none are enabled, `setup ci` still writes the pipeline and prints a `WARNING` line (a `warnings` entry in JSON mode).
+Run `setup platforms` before `setup ci` so `validate query` jobs are included and its credentials are mapped; after enabling a platform later, run `setup ci` again, or its deploy fails with `credential_unset`. If none are enabled, `setup ci` still writes the pipeline and prints a `WARNING` line (a `warnings` entry in JSON mode).
 
 Generated pipelines set `OPENTIDE_REPO_ROOT` at workflow (GitHub), `variables` (GitLab), or pipeline (Azure) scope so `opentide` commands resolve the detection repository in CI. Re-run `setup ci` to refresh existing pipeline files.
 
-The validate job runs `opentide validate --strict` and `opentide lint --strict`, each writing its findings as a report under `opentide-reports/`: SARIF on GitHub (kept as an artifact, and sent to code scanning on a public repository by a `code_scanning` job that holds only `security-events: write`) and Azure (the `CodeAnalysisLogs` artifact), Code Quality on GitLab (merged by `after_script` into `opentide-reports/codequality.json`, the one file `artifacts:reports:codequality` declares). Annotations and job summaries need no step; see [CI/CD](../usage/workflows/ci-cd.md#annotations-summaries-and-reports). Each enabled platform that supports query validation also runs `opentide validate query --live --changed`, which checks only the rule files the run's pull request, merge request or push changed (see [validate](./validate.md#which-rules-are-checked)), and skips that step when any required credential for the platform is unset. GitHub runs those checks in the validate job. GitLab and Azure run one job per platform in that stage, and generate does not start until they succeed. CrowdStrike and HarfangLab have no query job. Live query validation and the staging deploy first replace the repository root's `.opentide/configurations` with the default branch's copy, so a pull request cannot send a credential to a tenant it added or changed there. A platform with no tenant there yet skips its live query step with exit 0; see [CI/CD](../usage/workflows/ci-cd.md#tenant-configuration-on-pull-requests). The staging job runs a dry-run and then `opentide deploy --strategy PREVIEW --skip-unconfigured`; the production job does the same with `--strategy RELEASE` ([Statuses, strategies and tenants](../usage/concepts/statuses-and-strategies.md#the-two-generated-jobs)). `--skip-unconfigured` exits 0 when every platform with rules to deploy still has the commented-out `[[tenants]]` block `setup` writes. A `RELEASE` run also disables or deletes changed rules whose status maps to `DISABLEMENT` or `DELETION`. The production job then commits what the deploy wrote back (promoted rule statuses and `.opentide/states/deployment/`) to the default branch with a `[skip ci]` message, also after a deploy that failed part way; see [CI/CD](../usage/workflows/ci-cd.md#production-write-back). The file header lists the credential variables from the bundled platform files. GitHub deploy jobs map each of those names to `secrets.<NAME>`. The GitLab file sets `workflow:rules` so pipelines run for merge requests and the default branch, which every job needs to run in a merge request pipeline. Proxies and private certificate authorities are runner settings, not part of the generated file; see [CI/CD](../usage/workflows/ci-cd.md#behind-a-proxy-or-a-private-ca). A change marked `[skip deploy]` (commit message or request title) or labelled `skip-deploy` runs no live query check, deploy or share, for a migration or reformat that touches every rule; see [CI/CD](../usage/workflows/ci-cd.md#skipping-deploys-for-a-catalogue-wide-change). Every job installs `opentide==$OPENTIDE_VERSION`, set once at the top of the file. GitLab write-backs push to `OPENTIDE_PUSH_URL` when that CI/CD variable is set, and can push and sign with an SSH key; see [GitLab write-back credentials](../usage/workflows/ci-cd.md#gitlab-write-back-credentials).
+The validate job runs `opentide validate --strict` and `opentide lint --strict`, each writing its findings as a report under `opentide-reports/`: SARIF on GitHub (kept as an artifact, and sent to code scanning on a public repository by a `code_scanning` job that holds only `security-events: write`) and Azure (the `CodeAnalysisLogs` artifact), Code Quality on GitLab (merged by `after_script` into `opentide-reports/codequality.json`, the one file `artifacts:reports:codequality` declares). Annotations and job summaries need no step; see [CI/CD](../usage/workflows/ci-cd.md#annotations-summaries-and-reports). Each enabled platform that supports query validation also runs `opentide validate query --live --changed`, which checks only the rule files the run's pull request, merge request or push changed (see [validate](./validate.md#which-rules-are-checked)), and skips that step when any required credential for the platform is unset. GitHub runs those checks in the validate job. GitLab and Azure run one job per platform in that stage, and generate does not start until they succeed. CrowdStrike and HarfangLab have no query job. Live query validation and the staging deploy first replace the repository root's `.opentide/configurations` with the default branch's copy, so a pull request cannot send a credential to a tenant it added or changed there. A platform with no tenant there yet skips its live query step with exit 0; see [CI/CD](../usage/workflows/ci-cd.md#tenant-configuration-on-pull-requests). The staging job runs a dry-run and then `opentide deploy --strategy PREVIEW --skip-unconfigured`; the production job does the same with `--strategy RELEASE --prune`, which also retires the rules whose file the push deleted ([Deleted rule files](./deploy.md#deleted-rule-files); [Statuses, strategies and tenants](../usage/concepts/statuses-and-strategies.md#the-two-generated-jobs)). `--skip-unconfigured` exits 0 when every platform with rules to deploy still has the commented-out `[[tenants]]` block `setup` writes. A `RELEASE` run also disables or deletes changed rules whose status maps to `DISABLEMENT` or `DELETION`. The production job then commits what the deploy wrote back (promoted rule statuses and `.opentide/states/deployment/`) to the default branch with a `[skip ci]` message, also after a deploy that failed part way; see [CI/CD](../usage/workflows/ci-cd.md#production-write-back). Each environment runs one deploy at a time, and a queued deploy is never dropped: on GitHub the staging and production jobs have the `concurrency` groups `opentide-deploy-staging` and `opentide-deploy-production` (`cancel-in-progress: false`, `queue: max`), on GitLab the resource groups `opentide-staging` and `opentide-production`, and on Azure `lockBehavior: sequential` with an **Exclusive lock** check you add; see [CI/CD](../usage/workflows/ci-cd.md#production-write-back). On a GitHub Enterprise Server that does not know `queue: max`, delete both `concurrency:` blocks after each regenerate; see the same section. The file header lists the credential variables the pipeline reads: for each enabled platform, exactly the `$VAR`s its tenants name (a platform with no tenant configured yet is listed with the names its bundled platform file references). Each platform's live query step maps only that platform's names, and the deploy steps the enabled platforms' names: to `secrets.<NAME>` on GitHub, and on Azure from the pipeline's variables in the step's `env:`. The share job maps the variables `sharing.toml` names. A name the runner sets itself (`PATH`, `CI`, `GITHUB_*`, …) is not mapped, with a warning. The GitLab file sets `workflow:rules` so pipelines run for merge requests and the default branch, which every job needs to run in a merge request pipeline. Proxies and private certificate authorities are runner settings, not part of the generated file; see [CI/CD](../usage/workflows/ci-cd.md#behind-a-proxy-or-a-private-ca). A change marked `[skip deploy]` (commit message or request title) or labelled `skip-deploy` runs no live query check, deploy or share, for a migration or reformat that touches every rule; see [CI/CD](../usage/workflows/ci-cd.md#skipping-deploys-for-a-catalogue-wide-change). Every job installs `opentide==$OPENTIDE_VERSION`, set once at the top of the file. GitLab write-backs push to `OPENTIDE_PUSH_URL` when that CI/CD variable is set, and can push and sign with an SSH key; see [GitLab write-back credentials](../usage/workflows/ci-cd.md#gitlab-write-back-credentials).
 
 The Azure pipeline sets `pool.vmImage` to `ubuntu-latest` and triggers on every branch so a topic-branch push still validates. `pr:` is kept for Azure Pipelines hosted on GitHub or Bitbucket. Azure Repos Git ignores `pr:`; add a build validation policy on the default branch so a pull request sets `Build.Reason` to `PullRequest`. Staging deploy stays gated on that reason.
 
@@ -185,11 +192,23 @@ opentide setup --ci azure --default-branch development --yes
 
 Positional argument: `github`, `gitlab`, or `azure` (CI **provider**, not Sentinel/Splunk/etc.).
 
-`setup ci` accepts the same CI flags as the [default callback](#default-callback-flags) (`--staging`, `--inflight`, `--sharing`, `--lint-changed`, `--promotion`, `--promotion-target`, `--python-version`, `--explorer-pages`, `--default-branch`, `--path`, `--yes`), so `opentide setup --ci github --default-branch trunk --yes` and `opentide setup ci github --default-branch trunk --yes` write the same pipeline and print the same `WARNING` lines. The one-shot JSON result lists each step's warnings under `steps[].warnings` and again in the top-level `warnings`.
+`setup ci` accepts the same CI flags as the [default callback](#default-callback-flags) (`--staging`, `--inflight`, `--sharing`, `--lint-changed`, `--promotion`, `--promotion-target`, `--python-version`, `--explorer-pages`, `--variable-group`, `--app-token`, `--prune`, `--default-branch`, `--path`, `--yes`), plus `--stdout`, which only `setup ci` takes, so `opentide setup --ci github --default-branch trunk --yes` and `opentide setup ci github --default-branch trunk --yes` write the same pipeline and print the same `WARNING` lines. The one-shot JSON result lists each step's warnings under `steps[].warnings` and again in the top-level `warnings`.
+
+Running `setup ci` again regenerates the pipeline: the file is replaced whole, and when it differs from what the run generates (a hand edit, other flags, or a pipeline an older opentide wrote) the run warns that hand edits in it are replaced, so review `git diff` before you commit. When the old file holds top-level jobs the new one lacks (a job you added under `jobs:` on GitHub, a top-level job on GitLab, a stage or job on Azure), the warning also names them, as `replacing azure-pipelines.yml drops stage Intel (job intel_sources) that this run does not generate`; it is in `warnings` of the `--json` result too. A job or stage a flag turned off (`--no-sharing`) is named the same way. Azure entries are compared as stage and name, and named by kind: `drops job Deploy/approve_prod`, `drops deployment Deploy/approve_prod`, `drops template Deploy/extra.yml`. Put a job of your own between the `# opentide:user-begin` and `# opentide:user-end` markers at the end of the generated jobs (see [your own jobs](#your-own-jobs-the-user-owned-region)): a regenerate copies that region verbatim and does not name its jobs; or use a separate workflow or pipeline file. A file at the pipeline's path that does not start with `# Generated by opentide` (in any case, so an older `# Generated by OpenTide` pipeline is regenerated), or that is not UTF-8 text, is your own: `setup ci` and `setup --ci` keep it, warn, and write nothing there (`--plan` lists it as `skip`). To replace it with opentide's pipeline, move or delete it and run the command again.
 
 `--lint-changed` gates `opentide lint` on the object files each run changed, `opentide lint --strict --changed`, the diff the deploy job of the same run reads ([linting what changed](./lint.md)), so a catalogue with inherited lint findings (objects without `author`, old query style) can adopt the gate the day it moves to opentide and fix the rest file by file. `opentide validate --strict` still checks every file. The validate job then checks out full history, and on GitLab installs `git`. `--lint-all`, the default, keeps the whole-catalogue lint gate.
 
 `--sharing` adds one job, `share`, that runs `opentide share push --changed` on a push to the default branch, after the production deploy job and on a checkout of the default branch's tip, so the rules that deploy promoted are shared in the same run ([sharing in CI](../usage/workflows/ci-cd.md)). It runs after a failed deploy too, and a share failure does not affect deploy. The flag does not write `sharing.toml` and does not ask for a URL, API key, or block name. The wizard checkbox is "Sharing on the default branch", and it stays unchecked. `--sharing` with `--ci none`, or with no `--ci`, warns and writes no pipeline. A later `setup ci` that leaves the flag off removes the job when it rewrites the pipeline.
+
+`--variable-group <name>` (Azure, repeatable) links an Azure DevOps Library variable group. Azure forbids a `- group:` entry in a map-form `variables:`, so with the option the pipeline writes `variables:` as a list: a `- group:` entry per name, then `OPENTIDE_REPO_ROOT` and `OPENTIDE_VERSION`. Use it when the Library group holds the tenant secrets (`AZURE_CLIENT_ID` and the rest). Names are trimmed and each is written once, in the order given. When you regenerate an Azure pipeline without the option, the groups the old file links in its top-level `variables:` list (written by hand or by an earlier run) are kept, read as plain `- group: <name>` entries only (a group inside a `${{ if }}` block, a `- template:` entry or a name that is not a string is not kept, so add it with `--variable-group`; a name with a control character is dropped, with a warning), and the run warns `keeping variable group tenants from azure-pipelines.yml; pass --variable-group to replace it`; an explicit `--variable-group` replaces them. The header's `regenerate with` line records only the groups (and `--app-token` and `--no-prune`), not the other flags, so it is not a full command line. GitHub and GitLab ignore the option and warn. An empty name, or one with a control character, is rejected with exit code 2.
+
+`--app-token` (GitHub) adds an `actions/create-github-app-token` step to the jobs that push to the default branch (the production job and, with inflight on, `inflight_prune`), reading the repository variable `OPENTIDE_APP_CLIENT_ID` and the secret `OPENTIDE_APP_PRIVATE_KEY` and limiting the token to `contents: write`; those jobs check out and push with that token instead of `GITHUB_TOKEN`, and the header lists the variable and the secret. The header's `regenerate with` line records the flag, a regenerate without it keeps it and warns `keeping --app-token from .github/workflows/opentide.yml`, and `--no-app-token` turns it off. GitLab and Azure ignore `--app-token` and warn. Store the key as an environment secret, not a repository secret: see [Pushing with a GitHub App](../usage/workflows/ci-cd.md#pushing-with-a-github-app).
+
+`--no-prune` writes the production job's `RELEASE` preview and deploy without `--prune`, so a rule file the push deletes is only warned about (`retirable` in `--json`) and stays on its tenants ([Deleted rule files](./deploy.md#deleted-rule-files)). The header's `regenerate with` line records the flag, a regenerate without it keeps it and warns `keeping --no-prune from <pipeline>`, and `--prune` turns it back on. The staging job never passes `--prune`, whichever you choose.
+
+`--stdout` prints the pipeline the run would write to stdout and writes nothing, asking for no confirmation, so you can diff it against a pipeline you adapted (`opentide setup ci azure --stdout | diff - azure-pipelines.yml`). It reads the existing file as a regenerate does (kept variable groups, `--app-token`, `--no-prune` and the user-owned region are in the output), and warnings go to stderr. `--stdout` with `--json`, or with `--plan`, is a usage error (exit 2).
+
+Every pipeline ends its jobs with a user-owned region between `# opentide:user-begin` and `# opentide:user-end`, where jobs (on Azure, stages) of your own survive `setup ci --yes`; a file whose markers cannot be read is kept as it is, with a warning; see [your own jobs](../usage/workflows/ci-cd.md#your-own-jobs-the-user-owned-region). On Azure, the jobs that read a push's changed files also find the push's base commit (`OPENTIDE_PUSH_BASE`); see [which commits an Azure push deploys](../usage/workflows/ci-cd.md#which-commits-an-azure-push-deploys).
 
 `--default-branch` names the branch that triggers deploys and receives inflight shards. It applies to GitHub and Azure; GitLab pipelines always use `$CI_DEFAULT_BRANCH` and warn that the flag is ignored.
 
@@ -199,6 +218,8 @@ Without `--default-branch`, GitHub and Azure pipelines target the first of:
 2. the checked-out branch, so a repository created with `git init -b trunk` targets `trunk`;
 3. the `init.defaultBranch` Git setting, for a target outside any Git repository or on a detached `HEAD`;
 4. `main`.
+
+opentide reads these from the repository and the Git configuration files itself, so the `git` program need not be installed. It finds the configuration files as Git does, from `HOME`, `XDG_CONFIG_HOME`, `GIT_CONFIG_GLOBAL`, `GIT_CONFIG_SYSTEM` and `GIT_CONFIG_NOSYSTEM`, and applies `GIT_CONFIG_COUNT` overrides. Conditional includes (`includeIf`) are not followed.
 
 The JSON result reports the branch used as `default_branch`. It adds a `warnings` entry, and logs a warning, when the pipeline falls back to a `main` branch the repository does not have, or targets the checked-out branch while other local branches exist. Pass `--default-branch` in either case. A name the pipelines cannot hold unquoted (spaces, shell characters, or a value YAML reads as a number or boolean such as `2024` or `on`) is rejected with exit code 2.
 
@@ -230,20 +251,30 @@ Copy `.env.example` to `.env` and adjust the path if the working directory is no
 
 Configure validate-on-commit hooks. Writes `.pre-commit-config.yaml` (a local `opentide-validate` hook) and a versioned script at `.opentide/hooks/pre-commit`. When the path is inside a Git repository, copies that script into the repository's hooks directory (`.git/hooks/pre-commit`, the shared directory for a linked worktree, or a `core.hooksPath` inside the repository) unless a third-party hook is already there. A `core.hooksPath` outside the repository, such as a user-wide one, serves every repository on the machine, so setup leaves it alone and warns; call `.opentide/hooks/pre-commit` from that shared hook yourself.
 
+opentide finds the repository, its hooks directory and `core.hooksPath` itself, so the `git` program need not be installed to set the hooks up (the hooks themselves run git). `core.hooksPath` is read from the Git configuration files as [`setup ci`](#setup-ci) reads `init.defaultBranch`; a leading `~/` is the home folder and a relative path is taken from the repository's top level, as Git takes it. A linked worktree's own `core.hooksPath` (`git config --worktree`, with `extensions.worktreeConfig` on) is read too. The repository is found as Git finds it, `GIT_DIR`, `GIT_WORK_TREE` and `GIT_CEILING_DIRECTORIES` included; inside the `.git` folder, or inside a bare repository nested in the checkout, there is no work tree to set up, as with Git.
+
 ```bash
 opentide setup hooks --yes
 opentide setup hooks --path ./detection-repo --yes --no-install
 ```
 
-The hook runs `opentide --repo "$(git rev-parse --show-toplevel)" validate --strict`, so it always validates the worktree being committed. Pinning `--repo` matters because `OPENTIDE_REPO_ROOT` takes precedence over directory discovery: with that variable exported to another detection repository — which `.env.example` and the MCP/CI guides encourage — an unpinned hook validated the other tree and let broken YAML through.
+The hook validates what the commit holds: it copies each workspace's staged files out of Git's index (`git checkout-index`) into a folder of its own under a temporary folder, removed when the hook ends, and runs `validate --strict --allow-empty` from inside that copy, so findings name files as they are in the workspace. A broken file that is staged is refused even when the copy on disk has been fixed since, and a change on disk that is not staged does not block the commit. On a refusal the hook says that the staged files failed and how to see where they differ from the files on disk (`git diff -- <workspace>`), which a plain `opentide validate` reads; fix the files and `git add` them. The pre-commit entry runs `opentide --repo "$(git rev-parse --show-toplevel)" validate --strict --allow-empty`; pre-commit stashes unstaged changes before it runs, so it too sees the staged content of tracked files, but an untracked file in the workspace is still validated. `--allow-empty` lets a workspace with no detection object yet commit (the first commit after `opentide setup`), which `--strict` alone fails; the CI pipelines setup writes keep `--strict` alone, so an empty workspace fails there. Re-run `opentide setup hooks` to refresh a hook written by an earlier release. Everyone whose commits run the hook needs a release with `--allow-empty` first: an older `opentide` refuses the option (exit `2`) and so every commit, so upgrade before committing the refreshed `.pre-commit-config.yaml` and `.opentide/hooks/pre-commit`. Pinning `--repo` matters because `OPENTIDE_REPO_ROOT` takes precedence over directory discovery: with that variable exported to another detection repository — which `.env.example` and the MCP/CI guides encourage — an unpinned hook validated the other tree and let broken YAML through.
 
-`validate --strict` passes on a directory with no `.opentide/`, so both the hook and the pre-commit entry first check that the pinned workspace still has one. After a workspace is moved or renamed they fail and ask you to re-run `opentide setup hooks` (or bypass with `OPENTIDE_SKIP_HOOKS=1`, or `SKIP=opentide-validate` under pre-commit) instead of passing every commit.
+Both the hook and the pre-commit entry first check that the pinned workspace still has its `.opentide/`: `validate --strict --allow-empty` fails a folder that is not a workspace, but this names the cause. After a workspace is moved or renamed they fail and ask you to re-run `opentide setup hooks` (or bypass with `OPENTIDE_SKIP_HOOKS=1`, or `SKIP=opentide-validate` under pre-commit) instead of passing every commit.
 
 A workspace in a subdirectory of a larger repository (for example `security/detections/` in a monorepo) is pinned by its path below the Git root: `--repo "$(git rev-parse --show-toplevel)"/security/detections`. pre-commit only reads `.pre-commit-config.yaml` at the repository root. When that file already has an `opentide-validate` hook pinned to the root (which holds no objects) or written by an older release, setup repoints it at the workspace and lists it under `files`; when it pins another workspace that still exists, setup leaves it alone and warns that pre-commit does not validate this one. When the root file has no such hook, setup warns and leaves copying it there to you.
 
 A repository has a single Git `pre-commit` hook, so running `setup hooks` for a second workspace in the same repository adds it to the installed hook rather than replacing the first. The hook lists its workspaces on `# opentide-workspace:` lines, validates every one of them even after a failure, and blocks the commit if any fails. Re-running setup drops, with a warning, a listed workspace that no longer has `.opentide/`. The versioned copy under each workspace's `.opentide/hooks/` validates that workspace only.
 
-Set `OPENTIDE_SKIP_HOOKS=1` to bypass the hook for a single commit. Existing `.pre-commit-config.yaml` files keep other repos; the opentide hook is appended when missing, and an `entry:` written by an older release is refreshed in place.
+**In the VS Code extension** (the WASI build of opentide, which cannot set file permissions), the hooks are written without their executable bit, and git skips a hook that is not executable. The run warns and prints the line that fixes it, as in this sample (illustrative: only the WASI build prints it, so the docs' output check, which runs the native command line, cannot capture it):
+
+```text illustrative
+warning: This build of opentide cannot set file permissions (WASI), so the hook is not executable and git will skip it; make it executable: chmod +x .opentide/hooks/pre-commit
+```
+
+Run that line in the repository once (or run `opentide setup hooks` from the opentide CLI).
+
+Set `OPENTIDE_SKIP_HOOKS=1` to bypass the hook for a single commit. Existing `.pre-commit-config.yaml` files keep other repos and their line endings (a CRLF file gets CRLF lines); the opentide hook is appended when missing, and an `entry:` written by an older release is refreshed in place.
 
 ### setup mcp
 
@@ -258,34 +289,15 @@ opentide setup mcp --cursor --vscode --yes
 | `--vscode` | `.vscode/mcp.json` | `${workspaceFolder}` |
 | `--cursor` | `.cursor/mcp.json` | `${workspaceFolder}` |
 | `--claude-code` | `.mcp.json` | `${CLAUDE_PROJECT_DIR}` |
-| `--claude-desktop` | Claude Desktop's `claude_desktop_config.json`, outside the repository (see below) | the workspace's absolute path |
 | `--generic` | `opentide.mcp.json` | omitted (cwd discovery) |
+
+Every file runs a bare `opentide`, which the editor looks up on its `PATH`. When `opentide` is not on the `PATH` setup runs with (an install in a virtual environment that is not activated, for instance), the files are still written, and setup warns that the editor cannot start the server: JSON output has `"mcp_available": false` and the warning in `warnings`. Put `opentide` on `PATH`, or set its full path as the server `command`. [`opentide doctor`](./doctor.md) checks the same for the configurations already written.
 
 The opentide VS Code extension (`opentidehq.opentide`) provides the opentide MCP server to VS Code itself. When `.vscode/extensions.json` recommends it, `setup mcp --vscode` still writes `.vscode/mcp.json`, for teammates without the extension, and says so: JSON output has `"extension_mcp": true` and a `detail` sentence, printed as a note.
 
+An existing file is merged in place (comments, layout, line endings and a byte-order mark stay). An `opentide` server it already has is yours: setup adds the fields and `env` entries it lacks and keeps the ones it has, so a customised `command`, `args` or `env` survives a re-run. When a kept field differs from what setup writes, a warning names it; remove the entry and re-run to reset it.
+
 VS Code and Cursor expand `${workspaceFolder}`. Claude Code expands `${CLAUDE_PROJECT_DIR}`. Generic hosts that do not interpolate editor placeholders should omit the variable so the server discovers the detection workspace from cwd, or set an absolute path. See [MCP configuration](../mcp/configuration.md).
-
-#### Claude Desktop
-
-Claude Desktop's chat does not start a plugin's local MCP servers, and it reads one configuration file per user rather than one per project. `--claude-desktop` adds an `opentide` server to that file:
-
-```bash
-opentide setup mcp --claude-desktop --yes --path ~/detections
-```
-
-| OS | File |
-|----|------|
-| macOS | `~/Library/Application Support/Claude/claude_desktop_config.json` |
-| Windows | `%APPDATA%\Claude\claude_desktop_config.json` (`~/AppData/Roaming` when `APPDATA` is unset) |
-| Linux and others | `$XDG_CONFIG_HOME/Claude/claude_desktop_config.json` (`~/.config` when `XDG_CONFIG_HOME` is unset) |
-
-- **Absolute command.** Claude Desktop started from the Dock or the Start menu does not have your shell's `PATH`, so the entry's `command` is the absolute path of the `opentide` that ran setup: the one installed beside its Python, else the one on `PATH`, else that Python with `-m opentide`.
-- **Workspace.** Claude Desktop has no project directory, so the entry sets `OPENTIDE_REPO_ROOT` to the absolute path of the detection workspace (`--path`, default `.`).
-- **Merged.** Every other server and setting in the file stays; an existing `opentide` entry is replaced, so the file serves one workspace at a time. A file that is not a JSON object is left unchanged, with a warning. The folders are created when Claude Desktop has never written the file, and a file that is a link is written through, not replaced.
-- **Output.** `files` and `claude_desktop_config` name the absolute path written, and `advice` says to restart Claude Desktop, or to choose **Developer → Reload MCP Configuration**.
-- **`--plan`** lists the file by its absolute path (`create`, `merge`, or `skip` when it cannot be merged) and writes nothing to it.
-
-`opentide doctor` counts Claude Desktop among the hosts of `mcp_config` when the file's opentide server names this workspace in `OPENTIDE_REPO_ROOT`.
 
 ### setup skills
 
@@ -326,7 +338,7 @@ opentide setup skills --yes --all --cursor
 opentide setup skills --yes --generic --path /path/to/repo
 ```
 
-Use `--path` / `-C` for the repository root on install, `discover`, and `show`. Do not pass a positional path to `opentide setup skills` itself — Click would treat `discover` / `show` as that path and skip the subcommands.
+Use `--path` / `-C` for the repository root on install, `discover`, and `show`. `opentide setup skills` takes no positional path: a word after it is read as a subcommand (`discover`, `show`).
 
 Installing `--github-copilot` without `--generic` also applies the generic layout; JSON output includes `"also_applied": ["generic"]`.
 
@@ -337,7 +349,7 @@ Installing `--github-copilot` without `--generic` also applies the generic layou
 | Flag | Purpose |
 |------|---------|
 | `--path` / `-C` | Repository path (install, discover, show) |
-| `--cursor` | Copy the skills to `.cursor/skills/`, keeping files you added there |
+| `--cursor` | Copy the skills to `.cursor/skills/`, keeping files you added there; they are also installed under `.agents/skills/` |
 | `--claude-code` | Write `CLAUDE.md` and copy the skills to `.claude/skills/`, keeping files you added there |
 | `--generic` | Write `AGENTS.md` for any agent that reads `.agents/skills/` |
 | `--github-copilot` | Write `.github/copilot-instructions.md`, and `AGENTS.md` as `--generic` does |
@@ -352,7 +364,7 @@ Installing `--github-copilot` without `--generic` also applies the generic layou
 
 `--cursor` and `--claude-code` never write through a link: a link in a skill's folder at a path the skill ships is replaced by the skill's file, and a skill folder that links out of the repository is left as it is. Each is reported in `warnings`.
 
-Catalogue discovery fetches `manifest.json` from [opentidehq/skills](https://github.com/opentidehq/skills) on `main`. `AGENTS.md` is rendered from the package template and is not copied from that repository. `opentide-detection-rule`, `opentide-detection-objective`, `opentide-threat-vector`, and `detection-engineering` are installed from the package. Other slugs, including those selected with `--install` or `--all`, are the full GitHub tree under `skills/<slug>/`. A truncated or unreadable tree fails that skill instead of installing a partial copy.
+Catalogue discovery fetches `manifest.json` from [opentidehq/skills](https://github.com/opentidehq/skills) on `main`. `AGENTS.md` is rendered from the package template and is not copied from that repository. `opentide-detection-rule`, `opentide-detection-objective` and `opentide-threat-vector` are installed from the package. `detection-engineering`, which the catalogue also lists, installs the catalogue's copy (the one `discover` and `show` describe), and the package's short copy only when its files cannot be downloaded (the catalogue itself must load) and nothing is installed yet, keeping an installed copy otherwise; the result warns in both cases. Other slugs, including those selected with `--install` or `--all`, are the full GitHub tree under `skills/<slug>/`. A truncated or unreadable tree fails that skill instead of installing a partial copy.
 
 #### The Agent Plugin
 
@@ -363,15 +375,21 @@ opentide setup skills --plugin --yes
 opentide setup skills --plugin --claude-code --yes
 ```
 
-`--plugin` adds the `opentide` marketplace (`extraKnownMarketplaces`, from GitHub `opentidehq/skills`) and enables `opentide@opentide` (`enabledPlugins`) in `.claude/settings.json`, keeping every other setting there. Claude Code offers the marketplace and the plugin to whoever opens the project. With `--claude-code`, `CLAUDE.md` is written as usual but the skills are not copied to `.claude/skills/`: the plugin carries them, and a copy would load each skill twice. On its own, `--plugin` downloads nothing. JSON output has `"plugin": "opentide@opentide"`, and `advice` names the install command of each other agent (Cursor, VS Code, Copilot CLI), which install plugins from their own command or menu rather than a project file. A `.claude/settings.json` that is not a JSON object is left unchanged, with a warning.
+`--plugin` adds the `opentide` marketplace (`extraKnownMarketplaces`, from GitHub `opentidehq/skills`) and enables `opentide@opentide` (`enabledPlugins`) in `.claude/settings.json`, keeping every other setting there. The file is edited in place: only those two members change, so its comments, layout, line endings and a byte-order mark stay. Claude Code offers the marketplace and the plugin to whoever opens the project. With `--claude-code`, `CLAUDE.md` is written as usual but the skills are not copied to `.claude/skills/`: the plugin carries them, and a copy would load each skill twice. On its own, `--plugin` downloads nothing. JSON output has `"plugin": "opentide@opentide"`, and `advice` names the install command of each other agent (Cursor, VS Code, Copilot CLI), which install plugins from their own command or menu rather than a project file. A `.claude/settings.json` that is not a JSON object is left unchanged, with a warning.
 
 The plugin starts the MCP server in its own folder; [Agent Plugins](../mcp/configuration.md#agent-plugins) says how the server finds the detection workspace from there (in Claude Code, `CLAUDE_PROJECT_DIR`). Do not also run `opentide setup mcp --claude-code`, or Claude Code starts two opentide servers.
 
 The full wizard checks skill availability before writing repository files. If the catalogue or a requested slug cannot be fetched, the standalone skills command fails without installing a partial tree. The full `opentide setup` wizard omits the skills step with a warning so the rest of the scaffold can still apply.
 
-### setup vscode (deprecated)
+### setup vscode
 
-Recommends the opentide VS Code extension and writes the object snippets. By default the command generates templates and JSON schemas into `.opentide/`, then writes `.vscode/extensions.json` and the snippets. A missing target path is created first so generate-first setup does not `chdir` into a nonexistent directory. Deprecation is logged once per invocation.
+**The recommended way to use opentide in VS Code is the opentide VS Code extension**, `opentidehq.opentide`, on the [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=opentidehq.opentide) and on Open VSX. It bundles opentide, so there is nothing else to install:
+
+```bash
+code --install-extension opentidehq.opentide
+```
+
+`setup vscode` stays as an alternative, for a repository whose editors do not have the extension yet. It recommends the extension to the team and writes the object snippets. The command prints one `note:` line with the install command above (the `--json` result carries no such field). By default the command generates templates and JSON schemas into `.opentide/`, then writes `.vscode/extensions.json` and the snippets. A missing target path is created first so generate-first setup does not `chdir` into a nonexistent directory.
 
 `.vscode/extensions.json` recommends `opentidehq.opentide`, the opentide extension: its language server checks object files, and it bundles the templates and the MCP server. Recommendations already there are kept, and the extension is not added when the file lists it under `unwantedRecommendations`.
 
@@ -410,7 +428,7 @@ Interactive setup requires a TTY. In CI or an agent subprocess, provide explicit
 
 ## Source
 
-`src/opentide/cli/setup_app.py`
+`crates/opentide-cli/src/commands/setup/`
 
 ## Usage guide
 

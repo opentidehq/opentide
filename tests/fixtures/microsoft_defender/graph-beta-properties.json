@@ -1,0 +1,752 @@
+{
+  "enums": {
+    "alertTemplate.severity": [
+      "informational",
+      "low",
+      "medium",
+      "high"
+    ],
+    "detectionRuleStatus": [
+      "enabled",
+      "disabled",
+      "autoDisabled",
+      "unknownFutureValue"
+    ],
+    "eventGroupingKind": [
+      "alertPerEvent",
+      "singleAlert",
+      "unknownFutureValue"
+    ],
+    "isolationType": [
+      "full",
+      "selective",
+      "unknownFutureValue"
+    ]
+  },
+  "note": "Every property of the custom detection rule types, as the Graph beta docs' Properties tables list them. readOnly: the description says Read-only. deprecated: marked (deprecated) or **Deprecated.**",
+  "read": "2026-11-25",
+  "source": "https://github.com/microsoftgraph/microsoft-graph-docs-contrib/tree/main/api-reference/beta/resources",
+  "types": {
+    "accountEntityMapping": {
+      "aadUserIdColumn": {
+        "deprecated": false,
+        "readOnly": false,
+        "type": "String"
+      },
+      "dnsDomainColumn": {
+        "deprecated": false,
+        "readOnly": false,
+        "type": "String"
+      },
+      "nameColumn": {
+        "deprecated": false,
+        "readOnly": false,
+        "type": "String"
+      },
+      "ntDomainColumn": {
+        "deprecated": false,
+        "readOnly": false,
+        "type": "String"
+      },
+      "sidColumn": {
+        "deprecated": false,
+        "readOnly": false,
+        "type": "String"
+      },
+      "upnColumn": {
+        "deprecated": false,
+        "readOnly": false,
+        "type": "String"
+      },
+      "upnSuffixColumn": {
+        "deprecated": false,
+        "readOnly": false,
+        "type": "String"
+      }
+    },
+    "accountObjectIdAction": {
+      "accountObjectIdColumn": {
+        "deprecated": false,
+        "readOnly": false,
+        "type": "String"
+      }
+    },
+    "accountSidAction": {
+      "accountSidColumn": {
+        "deprecated": false,
+        "readOnly": false,
+        "type": "String"
+      }
+    },
+    "alertCustomDetails": {},
+    "alertTemplate": {
+      "category": {
+        "deprecated": true,
+        "readOnly": false,
+        "type": "String"
+      },
+      "customDetails": {
+        "deprecated": false,
+        "readOnly": false,
+        "type": "microsoft.graph.security.alertCustomDetails"
+      },
+      "description": {
+        "deprecated": false,
+        "readOnly": false,
+        "type": "String"
+      },
+      "entityMappings": {
+        "deprecated": false,
+        "readOnly": false,
+        "type": "microsoft.graph.security.entityMappingConfiguration"
+      },
+      "eventGroupingKind": {
+        "deprecated": false,
+        "readOnly": false,
+        "type": "microsoft.graph.security.eventGroupingKind"
+      },
+      "impactedAssets": {
+        "deprecated": true,
+        "readOnly": false,
+        "type": "microsoft.graph.security.impactedAsset collection"
+      },
+      "mitreTechniques": {
+        "deprecated": true,
+        "readOnly": false,
+        "type": "String collection"
+      },
+      "recommendedActions": {
+        "deprecated": false,
+        "readOnly": false,
+        "type": "String"
+      },
+      "severity": {
+        "deprecated": false,
+        "readOnly": false,
+        "type": "microsoft.graph.security.alertSeverity"
+      },
+      "tactics": {
+        "deprecated": false,
+        "readOnly": false,
+        "type": "microsoft.graph.security.mitreTactic collection"
+      },
+      "title": {
+        "deprecated": false,
+        "readOnly": false,
+        "type": "String"
+      }
+    },
+    "amazonResourceEntityMapping": {
+      "amazonResourceIdColumn": {
+        "deprecated": false,
+        "readOnly": false,
+        "type": "String"
+      }
+    },
+    "automatedActionSet": {
+      "allowFiles": {
+        "deprecated": false,
+        "readOnly": false,
+        "type": "microsoft.graph.security.fileAction collection"
+      },
+      "blockFiles": {
+        "deprecated": false,
+        "readOnly": false,
+        "type": "microsoft.graph.security.fileAction collection"
+      },
+      "collectInvestigationPackages": {
+        "deprecated": false,
+        "readOnly": false,
+        "type": "microsoft.graph.security.deviceAction collection"
+      },
+      "disableUsers": {
+        "deprecated": false,
+        "readOnly": false,
+        "type": "microsoft.graph.security.accountSidAction collection"
+      },
+      "forceUserPasswordResets": {
+        "deprecated": false,
+        "readOnly": false,
+        "type": "microsoft.graph.security.accountSidAction collection"
+      },
+      "hardDeleteEmails": {
+        "deprecated": false,
+        "readOnly": false,
+        "type": "microsoft.graph.security.emailAction collection"
+      },
+      "initiateInvestigations": {
+        "deprecated": false,
+        "readOnly": false,
+        "type": "microsoft.graph.security.deviceAction collection"
+      },
+      "isolateDevices": {
+        "deprecated": false,
+        "readOnly": false,
+        "type": "microsoft.graph.security.isolateDeviceAction collection"
+      },
+      "markUsersAsCompromised": {
+        "deprecated": false,
+        "readOnly": false,
+        "type": "microsoft.graph.security.accountObjectIdAction collection"
+      },
+      "moveEmailsToDeletedItems": {
+        "deprecated": false,
+        "readOnly": false,
+        "type": "microsoft.graph.security.emailAction collection"
+      },
+      "moveEmailsToInbox": {
+        "deprecated": false,
+        "readOnly": false,
+        "type": "microsoft.graph.security.emailAction collection"
+      },
+      "moveEmailsToJunk": {
+        "deprecated": false,
+        "readOnly": false,
+        "type": "microsoft.graph.security.emailAction collection"
+      },
+      "restrictAppExecutions": {
+        "deprecated": false,
+        "readOnly": false,
+        "type": "microsoft.graph.security.deviceAction collection"
+      },
+      "runAntivirusScans": {
+        "deprecated": false,
+        "readOnly": false,
+        "type": "microsoft.graph.security.deviceAction collection"
+      },
+      "softDeleteEmails": {
+        "deprecated": false,
+        "readOnly": false,
+        "type": "microsoft.graph.security.emailAction collection"
+      },
+      "stopAndQuarantineFiles": {
+        "deprecated": false,
+        "readOnly": false,
+        "type": "microsoft.graph.security.stopAndQuarantineFileAction collection"
+      }
+    },
+    "azureResourceEntityMapping": {
+      "resourceIdColumn": {
+        "deprecated": false,
+        "readOnly": false,
+        "type": "String"
+      }
+    },
+    "cloudApplicationEntityMapping": {
+      "appIdColumn": {
+        "deprecated": false,
+        "readOnly": false,
+        "type": "String"
+      },
+      "nameColumn": {
+        "deprecated": false,
+        "readOnly": false,
+        "type": "String"
+      }
+    },
+    "detectionAction": {
+      "alertTemplate": {
+        "deprecated": false,
+        "readOnly": false,
+        "type": "microsoft.graph.security.alertTemplate"
+      },
+      "automatedActions": {
+        "deprecated": false,
+        "readOnly": false,
+        "type": "microsoft.graph.security.automatedActionSet"
+      },
+      "incidentConfiguration": {
+        "deprecated": false,
+        "readOnly": false,
+        "type": "microsoft.graph.security.incidentConfiguration"
+      },
+      "organizationalScope": {
+        "deprecated": false,
+        "readOnly": false,
+        "type": "microsoft.graph.security.organizationalScope"
+      },
+      "responseActions": {
+        "deprecated": true,
+        "readOnly": false,
+        "type": "microsoft.graph.security.responseAction collection"
+      }
+    },
+    "detectionRule": {
+      "createdBy": {
+        "deprecated": false,
+        "readOnly": true,
+        "type": "String"
+      },
+      "createdDateTime": {
+        "deprecated": false,
+        "readOnly": true,
+        "type": "DateTimeOffset"
+      },
+      "description": {
+        "deprecated": false,
+        "readOnly": false,
+        "type": "String"
+      },
+      "detectionAction": {
+        "deprecated": false,
+        "readOnly": false,
+        "type": "microsoft.graph.security.detectionAction"
+      },
+      "detectorId": {
+        "deprecated": true,
+        "readOnly": false,
+        "type": "String"
+      },
+      "displayName": {
+        "deprecated": false,
+        "readOnly": false,
+        "type": "String"
+      },
+      "id": {
+        "deprecated": false,
+        "readOnly": false,
+        "type": "String"
+      },
+      "isEnabled": {
+        "deprecated": true,
+        "readOnly": false,
+        "type": "Boolean"
+      },
+      "lastModifiedBy": {
+        "deprecated": false,
+        "readOnly": true,
+        "type": "String"
+      },
+      "lastModifiedDateTime": {
+        "deprecated": false,
+        "readOnly": true,
+        "type": "DateTimeOffset"
+      },
+      "lastRunDetails": {
+        "deprecated": true,
+        "readOnly": false,
+        "type": "microsoft.graph.security.runDetails"
+      },
+      "queryCondition": {
+        "deprecated": false,
+        "readOnly": false,
+        "type": "microsoft.graph.security.queryCondition"
+      },
+      "schedule": {
+        "deprecated": false,
+        "readOnly": false,
+        "type": "microsoft.graph.security.ruleSchedule"
+      },
+      "status": {
+        "deprecated": false,
+        "readOnly": false,
+        "type": "microsoft.graph.security.detectionRuleStatus"
+      }
+    },
+    "deviceAction": {
+      "deviceIdColumn": {
+        "deprecated": false,
+        "readOnly": false,
+        "type": "String"
+      }
+    },
+    "dnsEntityMapping": {
+      "domainNameColumn": {
+        "deprecated": false,
+        "readOnly": false,
+        "type": "String"
+      },
+      "hostIpAddressColumn": {
+        "deprecated": false,
+        "readOnly": false,
+        "type": "String"
+      },
+      "serverIpColumn": {
+        "deprecated": false,
+        "readOnly": false,
+        "type": "String"
+      }
+    },
+    "emailAction": {
+      "networkMessageIdColumn": {
+        "deprecated": false,
+        "readOnly": false,
+        "type": "String"
+      },
+      "recipientColumn": {
+        "deprecated": false,
+        "readOnly": false,
+        "type": "String"
+      }
+    },
+    "entityMappingConfiguration": {
+      "accounts": {
+        "deprecated": false,
+        "readOnly": false,
+        "type": "microsoft.graph.security.accountEntityMapping collection"
+      },
+      "amazonResources": {
+        "deprecated": false,
+        "readOnly": false,
+        "type": "microsoft.graph.security.amazonResourceEntityMapping collection"
+      },
+      "azureResources": {
+        "deprecated": false,
+        "readOnly": false,
+        "type": "microsoft.graph.security.azureResourceEntityMapping collection"
+      },
+      "cloudApplications": {
+        "deprecated": false,
+        "readOnly": false,
+        "type": "microsoft.graph.security.cloudApplicationEntityMapping collection"
+      },
+      "dns": {
+        "deprecated": false,
+        "readOnly": false,
+        "type": "microsoft.graph.security.dnsEntityMapping collection"
+      },
+      "files": {
+        "deprecated": false,
+        "readOnly": false,
+        "type": "microsoft.graph.security.fileEntityMapping collection"
+      },
+      "googleCloudResources": {
+        "deprecated": false,
+        "readOnly": false,
+        "type": "microsoft.graph.security.googleCloudResourceEntityMapping collection"
+      },
+      "hosts": {
+        "deprecated": false,
+        "readOnly": false,
+        "type": "microsoft.graph.security.hostEntityMapping collection"
+      },
+      "ips": {
+        "deprecated": false,
+        "readOnly": false,
+        "type": "microsoft.graph.security.ipEntityMapping collection"
+      },
+      "mailClusters": {
+        "deprecated": false,
+        "readOnly": false,
+        "type": "microsoft.graph.security.mailClusterEntityMapping collection"
+      },
+      "mailMessages": {
+        "deprecated": false,
+        "readOnly": false,
+        "type": "microsoft.graph.security.mailMessageEntityMapping collection"
+      },
+      "mailboxes": {
+        "deprecated": false,
+        "readOnly": false,
+        "type": "microsoft.graph.security.mailboxEntityMapping collection"
+      },
+      "oAuthApplications": {
+        "deprecated": false,
+        "readOnly": false,
+        "type": "microsoft.graph.security.oAuthApplicationEntityMapping collection"
+      },
+      "processes": {
+        "deprecated": false,
+        "readOnly": false,
+        "type": "microsoft.graph.security.processEntityMapping collection"
+      },
+      "registryValues": {
+        "deprecated": false,
+        "readOnly": false,
+        "type": "microsoft.graph.security.registryValueEntityMapping collection"
+      },
+      "securityGroups": {
+        "deprecated": false,
+        "readOnly": false,
+        "type": "microsoft.graph.security.securityGroupEntityMapping collection"
+      },
+      "urls": {
+        "deprecated": false,
+        "readOnly": false,
+        "type": "microsoft.graph.security.urlEntityMapping collection"
+      }
+    },
+    "fileAction": {
+      "deviceGroupNames": {
+        "deprecated": false,
+        "readOnly": false,
+        "type": "String collection"
+      },
+      "sha1Column": {
+        "deprecated": false,
+        "readOnly": false,
+        "type": "String"
+      },
+      "sha256Column": {
+        "deprecated": false,
+        "readOnly": false,
+        "type": "String"
+      }
+    },
+    "fileEntityMapping": {
+      "nameColumn": {
+        "deprecated": false,
+        "readOnly": false,
+        "type": "String"
+      },
+      "sha1Column": {
+        "deprecated": false,
+        "readOnly": false,
+        "type": "String"
+      },
+      "sha256Column": {
+        "deprecated": false,
+        "readOnly": false,
+        "type": "String"
+      }
+    },
+    "googleCloudResourceEntityMapping": {
+      "fullResourceNameColumn": {
+        "deprecated": false,
+        "readOnly": false,
+        "type": "String"
+      }
+    },
+    "hostEntityMapping": {
+      "deviceIdColumn": {
+        "deprecated": false,
+        "readOnly": false,
+        "type": "String"
+      },
+      "dnsDomainColumn": {
+        "deprecated": false,
+        "readOnly": false,
+        "type": "String"
+      },
+      "nameColumn": {
+        "deprecated": false,
+        "readOnly": false,
+        "type": "String"
+      },
+      "netBiosNameColumn": {
+        "deprecated": false,
+        "readOnly": false,
+        "type": "String"
+      },
+      "ntDomainColumn": {
+        "deprecated": false,
+        "readOnly": false,
+        "type": "String"
+      }
+    },
+    "incidentConfiguration": {
+      "isExcludedFromIncidentCorrelation": {
+        "deprecated": false,
+        "readOnly": false,
+        "type": "Boolean"
+      }
+    },
+    "ipEntityMapping": {
+      "addressColumn": {
+        "deprecated": false,
+        "readOnly": false,
+        "type": "String"
+      },
+      "scopeColumn": {
+        "deprecated": false,
+        "readOnly": false,
+        "type": "String"
+      }
+    },
+    "isolateDeviceAction": {
+      "deviceIdColumn": {
+        "deprecated": false,
+        "readOnly": false,
+        "type": "String"
+      },
+      "isolationType": {
+        "deprecated": false,
+        "readOnly": false,
+        "type": "microsoft.graph.security.isolationType"
+      }
+    },
+    "mailClusterEntityMapping": {
+      "queryColumn": {
+        "deprecated": false,
+        "readOnly": false,
+        "type": "String"
+      },
+      "sourceColumn": {
+        "deprecated": false,
+        "readOnly": false,
+        "type": "String"
+      }
+    },
+    "mailMessageEntityMapping": {
+      "networkMessageIdColumn": {
+        "deprecated": false,
+        "readOnly": false,
+        "type": "String"
+      },
+      "recipientColumn": {
+        "deprecated": false,
+        "readOnly": false,
+        "type": "String"
+      },
+      "senderColumn": {
+        "deprecated": false,
+        "readOnly": false,
+        "type": "String"
+      },
+      "subjectColumn": {
+        "deprecated": false,
+        "readOnly": false,
+        "type": "String"
+      }
+    },
+    "mailboxEntityMapping": {
+      "primaryAddressColumn": {
+        "deprecated": false,
+        "readOnly": false,
+        "type": "String"
+      }
+    },
+    "mitreTactic": {
+      "tactic": {
+        "deprecated": false,
+        "readOnly": false,
+        "type": "String"
+      },
+      "techniques": {
+        "deprecated": false,
+        "readOnly": false,
+        "type": "microsoft.graph.security.mitreTechnique collection"
+      }
+    },
+    "mitreTechnique": {
+      "subTechniques": {
+        "deprecated": false,
+        "readOnly": false,
+        "type": "String collection"
+      },
+      "technique": {
+        "deprecated": false,
+        "readOnly": false,
+        "type": "String"
+      }
+    },
+    "oAuthApplicationEntityMapping": {
+      "oAuthAppIdColumn": {
+        "deprecated": false,
+        "readOnly": false,
+        "type": "String"
+      }
+    },
+    "organizationalScope": {
+      "deviceGroups": {
+        "deprecated": false,
+        "readOnly": false,
+        "type": "String collection"
+      },
+      "scopeNames": {
+        "deprecated": true,
+        "readOnly": false,
+        "type": "String collection"
+      },
+      "scopeType": {
+        "deprecated": true,
+        "readOnly": false,
+        "type": "microsoft.graph.security.scopeType"
+      }
+    },
+    "processEntityMapping": {
+      "sha1Column": {
+        "deprecated": false,
+        "readOnly": false,
+        "type": "String"
+      },
+      "sha256Column": {
+        "deprecated": false,
+        "readOnly": false,
+        "type": "String"
+      }
+    },
+    "queryCondition": {
+      "lastModifiedDateTime": {
+        "deprecated": true,
+        "readOnly": false,
+        "type": "DateTimeOffset"
+      },
+      "queryText": {
+        "deprecated": false,
+        "readOnly": false,
+        "type": "String"
+      }
+    },
+    "registryValueEntityMapping": {
+      "keyColumn": {
+        "deprecated": false,
+        "readOnly": false,
+        "type": "String"
+      },
+      "valueNameColumn": {
+        "deprecated": false,
+        "readOnly": false,
+        "type": "String"
+      }
+    },
+    "ruleSchedule": {
+      "frequency": {
+        "deprecated": false,
+        "readOnly": false,
+        "type": "Duration"
+      },
+      "lookback": {
+        "deprecated": false,
+        "readOnly": false,
+        "type": "Duration"
+      },
+      "nextRunDateTime": {
+        "deprecated": true,
+        "readOnly": false,
+        "type": "DateTimeOffset"
+      },
+      "period": {
+        "deprecated": true,
+        "readOnly": false,
+        "type": "String"
+      }
+    },
+    "securityGroupEntityMapping": {
+      "distinguishedNameColumn": {
+        "deprecated": false,
+        "readOnly": false,
+        "type": "String"
+      },
+      "objectIdColumn": {
+        "deprecated": false,
+        "readOnly": false,
+        "type": "String"
+      },
+      "sidColumn": {
+        "deprecated": false,
+        "readOnly": false,
+        "type": "String"
+      }
+    },
+    "stopAndQuarantineFileAction": {
+      "deviceIdColumn": {
+        "deprecated": false,
+        "readOnly": false,
+        "type": "String"
+      },
+      "sha1Column": {
+        "deprecated": false,
+        "readOnly": false,
+        "type": "String"
+      }
+    },
+    "urlEntityMapping": {
+      "addressColumn": {
+        "deprecated": false,
+        "readOnly": false,
+        "type": "String"
+      }
+    }
+  }
+}

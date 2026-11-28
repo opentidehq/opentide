@@ -1,0 +1,211 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: validate/json/defender-output/defender-output
+---
+args: opentide --json validate --check queries
+exit: 1
+
+━━━ stdout · json, 1 lines
+{
+  "check": "queries",
+  "checks": {
+    "queries": {
+      "check": "queries",
+      "status": "failed"
+    }
+  },
+  "command": "validate",
+  "duration_ms": 0,
+  "error": "Validation failed",
+  "exit_code": 1,
+  "failure": {
+    "argument": null,
+    "code": "issues_found",
+    "crash_log": null,
+    "message": "Validation failed",
+    "suggestion": null
+  },
+  "message": "Validation failed",
+  "next_actions": [
+    {
+      "command": "opentide --json explain microsoft_defender_required_columns",
+      "reason": "how to fix it"
+    },
+    {
+      "command": "opentide --json validate --check queries",
+      "reason": "check again"
+    }
+  ],
+  "ok": false,
+  "report": {
+    "issues": [
+      {
+        "code": "microsoft_defender_required_columns",
+        "column": 9,
+        "context": {
+          "language": "kql",
+          "platform": "microsoft_defender",
+          "position": {
+            "column": 9,
+            "end_column": 65,
+            "end_line": 18,
+            "line": 18
+          },
+          "source": "engine"
+        },
+        "end_column": 65,
+        "end_line": 18,
+        "explain": "opentide explain microsoft_defender_required_columns",
+        "field_path": [
+          "configurations",
+          "microsoft_defender",
+          "query"
+        ],
+        "file_path": "<WS>/objects/rules/defender-columns-not-returned.yaml",
+        "fix": null,
+        "help": "opentide explain microsoft_defender_required_columns describes it",
+        "line": 18,
+        "message": "the query's output lacks a column a custom detection needs: DeviceId; ReportId",
+        "object_type": "rule",
+        "object_uuid": "00000000-0000-4000-8185-000000000001",
+        "path": "objects/rules/defender-columns-not-returned.yaml",
+        "severity": "error",
+        "suggestion": null,
+        "yaml_line": 17
+      },
+      {
+        "code": "microsoft_defender_column_not_in_output",
+        "column": 30,
+        "context": {
+          "language": "kql",
+          "platform": "microsoft_defender",
+          "position": {
+            "column": 30,
+            "end_column": 40,
+            "end_line": 22,
+            "line": 22
+          },
+          "source": "engine"
+        },
+        "end_column": 40,
+        "end_line": 22,
+        "explain": "opentide explain microsoft_defender_column_not_in_output",
+        "field_path": [
+          "configurations",
+          "microsoft_defender",
+          "alert",
+          "title"
+        ],
+        "file_path": "<WS>/objects/rules/defender-columns-not-returned.yaml",
+        "fix": null,
+        "help": "opentide explain microsoft_defender_column_not_in_output describes it",
+        "line": 22,
+        "message": "alert.title's placeholder {{DeviceName}} names the unknown column 'DeviceName': the query's output has no such column",
+        "object_type": "rule",
+        "object_uuid": "00000000-0000-4000-8185-000000000001",
+        "path": "objects/rules/defender-columns-not-returned.yaml",
+        "severity": "error",
+        "suggestion": null,
+        "yaml_line": 21
+      },
+      {
+        "code": "microsoft_defender_column_not_in_output",
+        "column": 17,
+        "context": {
+          "language": "kql",
+          "platform": "microsoft_defender",
+          "position": {
+            "column": 17,
+            "end_column": 27,
+            "end_line": 24,
+            "line": 24
+          },
+          "source": "engine"
+        },
+        "end_column": 27,
+        "end_line": 24,
+        "explain": "opentide explain microsoft_defender_column_not_in_output",
+        "field_path": [
+          "configurations",
+          "microsoft_defender",
+          "alert",
+          "custom_details",
+          "Folder"
+        ],
+        "file_path": "<WS>/objects/rules/defender-columns-not-returned.yaml",
+        "fix": null,
+        "help": "opentide explain microsoft_defender_column_not_in_output describes it",
+        "line": 24,
+        "message": "custom detail 'Folder' names the unknown column 'FolderPath': the query's output has no such column",
+        "object_type": "rule",
+        "object_uuid": "00000000-0000-4000-8185-000000000001",
+        "path": "objects/rules/defender-columns-not-returned.yaml",
+        "severity": "error",
+        "suggestion": null,
+        "yaml_line": 23
+      },
+      {
+        "code": "microsoft_defender_column_not_in_output",
+        "column": 22,
+        "context": {
+          "language": "kql",
+          "platform": "microsoft_defender",
+          "position": {
+            "column": 22,
+            "end_column": 29,
+            "end_line": 27,
+            "line": 27
+          },
+          "source": "engine"
+        },
+        "end_column": 29,
+        "end_line": 27,
+        "explain": "opentide explain microsoft_defender_column_not_in_output",
+        "field_path": [
+          "configurations",
+          "microsoft_defender",
+          "entities",
+          "hosts",
+          "0",
+          "device_id"
+        ],
+        "file_path": "<WS>/objects/rules/defender-columns-not-returned.yaml",
+        "fix": null,
+        "help": "opentide explain microsoft_defender_column_not_in_output describes it",
+        "line": 27,
+        "message": "entities.hosts[0].device_id names the unknown column 'DevicId': the query's output has no such column",
+        "object_type": "rule",
+        "object_uuid": "00000000-0000-4000-8185-000000000001",
+        "path": "objects/rules/defender-columns-not-returned.yaml",
+        "severity": "error",
+        "suggestion": null,
+        "yaml_line": 26
+      }
+    ],
+    "ok": false,
+    "stats": {
+      "id_workers": "<CORES>",
+      "object_workers": "<CORES>",
+      "objects_checked": 3,
+      "parallel": "<CORES>",
+      "queries_checked": 3,
+      "wall_ms": 0.0,
+      "workers": "<CORES>"
+    },
+    "warnings": []
+  },
+  "schema_version": 1,
+  "status": "failed",
+  "summary": {
+    "errors": 4,
+    "files": 1,
+    "fixable": 0,
+    "objects": 3,
+    "queries": 3,
+    "warning_files": 0,
+    "warnings": 0
+  },
+  "workspace": "<WS>"
+}
+
+━━━ stderr · empty

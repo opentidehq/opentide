@@ -1,0 +1,547 @@
+//! A Tide workspace, opened once: validate, lint, info, the catalogue and
+//! coverage on it.
+
+use std::path::{Path, PathBuf};
+use std::sync::Arc;
+
+use opentide_workspace::lint::LintCheck;
+use opentide_workspace::validate::{
+    Check, PlatformConfigurations, QueriesMode, Selection, Validation,
+};
+use opentide_workspace::{FileSystem, MemoryFs, OsFs, RootOptions};
+use serde::Serialize;
+
+use crate::catalog::{Catalogue, Coverage, ObjectRow, PlatformInfo, Row};
+use crate::lint::LintReport;
+use crate::{Error, queries};
+
+/// How [`Workspace::open`] opens a workspace.
+///
+/// ```
+/// let options = opentide::Options::default().cwd("/repo");
+/// assert_eq!(options.cwd.as_deref(), Some(std::path::Path::new("/repo")));
+/// ```
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct Options {
+    /// The folder paths in findings are shown from, as the command line
+    /// shows them from its working directory. Default: the workspace's own
+    /// folder.
+    pub cwd: Option<PathBuf>,
+}
+
+impl Options {
+    /// Shows paths from `cwd`.
+    pub fn cwd(mut self, cwd: impl Into<PathBuf>) -> Self {
+        self.cwd = Some(cwd.into());
+        self
+    }
+}
+
+/// A Tide workspace: its configuration, resolved once, and every object file,
+/// read and parsed once (in parallel) into one index.
+///
+/// Opening is the expensive step; each operation then reads the index, so
+/// one `Workspace` serves many of them. It is `Clone` (the index is shared)
+/// and `Send + Sync`.
+///
+/// ```
+/// let ws = opentide::Workspace::from_files(
+///     "/ws",
+///     [(
+///         "objects/rules/example.yaml",
+///         "name: Example\nmetadata:\n  uuid: 11111111-1111-4111-8111-111111111111\n  schema: rule::1.1\n",
+///     )],
+/// )?;
+/// assert_eq!(ws.info().counts.rules, 1);
+/// # Ok::<(), opentide::Error>(())
+/// ```
+#[derive(Clone, Debug)]
+pub struct Workspace {
+    inner: opentide_workspace::Workspace,
+}
+
+impl Workspace {
+    /// Opens the workspace at `path` on disk: a repository holding
+    /// `.opentide/` or `objects/`, or a folder inside one.
+    ///
+    /// # Errors
+    ///
+    /// [`Error::Usage`] (`usage_invalid_value`) when `path` is not a folder,
+    /// as the command line's `--repo` refuses it; [`Error::Io`] when `path`
+    /// cannot be made absolute; [`Error::Configuration`] when the
+    /// configuration does not resolve.
+    pub fn open(path: impl AsRef<Path>, options: &Options) -> Result<Self, Error> {
+        let path = path.as_ref();
+        let absolute = std::path::absolute(path).map_err(|error| Error::Io {
+            path: path.to_path_buf(),
+            message: error.to_string(),
+        })?;
+        if !absolute.is_dir() {
+            let problem = if absolute.exists() {
+                "is not a directory"
+            } else {
+                "does not exist"
+            };
+            return Err(Error::Usage {
+                code: "usage_invalid_value",
+                message: format!("{} {problem}", path.display()),
+            });
+        }
+        let cwd = match &options.cwd {
+            Some(cwd) => std::path::absolute(cwd).map_err(|error| Error::Io {
+                path: cwd.clone(),
+                message: error.to_string(),
+            })?,
+            None => absolute.clone(),
+        };
+        Self::open_on(Arc::new(OsFs), absolute, cwd)
+    }
+
+    /// Opens a workspace held in memory, rooted at `root`: each of `files` is
+    /// a path (relative to `root`, or absolute) and its bytes. Nothing is read
+    /// from or written to the disk: an editor's buffers, a browser, a test.
+    ///
+    /// # Errors
+    ///
+    /// [`Error::Configuration`] when the configuration among `files` does not
+    /// resolve.
+    pub fn from_files<P, B>(
+        root: impl AsRef<Path>,
+        files: impl IntoIterator<Item = (P, B)>,
+    ) -> Result<Self, Error>
+    where
+        P: AsRef<Path>,
+        B: Into<Vec<u8>>,
+    {
+        let root = root.as_ref().to_path_buf();
+        let fs = MemoryFs::new();
+        fs.create_dir(&root);
+        for (path, bytes) in files {
+            fs.write(root.join(path), bytes);
+        }
+        Self::open_on(Arc::new(fs), root.clone(), root)
+    }
+
+    fn open_on(fs: Arc<dyn FileSystem>, repo: PathBuf, cwd: PathBuf) -> Result<Self, Error> {
+        let inner = opentide_workspace::Workspace::open(
+            fs,
+            opentide_workspace::Options {
+                roots: RootOptions {
+                    repo: Some(repo),
+                    cwd,
+                    ..RootOptions::default()
+                },
+            },
+        )?;
+        Ok(Self { inner })
+    }
+
+    /// The workspace folder: the one that holds `.opentide/` and `objects/`.
+    pub fn root(&self) -> &Path {
+        self.inner.root()
+    }
+
+    /// Runs every check of `opentide validate` (`validate --json`'s `checks`,
+    /// `report` and `summary`): each finding a [`crate::Diagnostic`] with its
+    /// place.
+    ///
+    /// The queries check runs on the query engines with the `queries`
+    /// feature; without it, it reports one `engine_unavailable` error unless
+    /// [`ValidateOptions::queries`] turns it off. With the `compile` feature
+    /// the `schema` check also compiles each rule a deploy would compile, once
+    /// nothing else failed, and reports what the platform's offline compiler
+    /// refuses (`compile_missing_field`, ...), as `opentide validate` does.
+    ///
+    /// An option the command line refuses before it runs (an object type
+    /// that is not `rule`, `threat` or `objective`) checks nothing: the
+    /// result's `refused` holds its usage failure (`usage_invalid_choice`),
+    /// and its exit code is 2, as `validate --type` exits.
+    ///
+    /// ```
+    /// use opentide::validate::QueriesMode;
+    ///
+    /// let ws = opentide::Workspace::from_files(
+    ///     "/ws",
+    ///     [("objects/rules/a.yaml", "name: A\nmetadata:\n  uuid: not-a-uuid\n")],
+    /// )?;
+    /// let options = opentide::ValidateOptions::default().queries(QueriesMode::Off);
+    /// let validation = ws.validate(&options);
+    /// assert!(validation.failed);
+    /// assert!(validation.report.issues.iter().any(|d| d.code == "invalid_uuid"));
+    ///
+    /// let refused = ws.validate(&opentide::ValidateOptions::default().object_type("rules"));
+    /// assert_eq!(refused.exit_code(), 2);
+    /// assert_eq!(refused.refused.unwrap().code, "usage_invalid_choice");
+    /// # Ok::<(), opentide::Error>(())
+    /// ```
+    pub fn validate(&self, options: &ValidateOptions) -> Validation {
+        self.run_validate(options, None)
+    }
+
+    /// [`validate`](Self::validate), with the configuration blocks of
+    /// platform plugins checked by `platforms` (UC-4.5b, #835): a rule's
+    /// `configurations.<platform>` block for a platform it names is not an
+    /// extra key, and each finding it reports is a `schema_validation`
+    /// finding inside the block. The Python package passes its plugins' own
+    /// checks; [`validate`](Self::validate) knows the built-in platforms
+    /// alone.
+    pub fn validate_with_platforms(
+        &self,
+        options: &ValidateOptions,
+        platforms: &dyn PlatformConfigurations,
+    ) -> Validation {
+        self.run_validate(options, Some(platforms))
+    }
+
+    fn run_validate(
+        &self,
+        options: &ValidateOptions,
+        platforms: Option<&dyn PlatformConfigurations>,
+    ) -> Validation {
+        let selection = Selection {
+            files: options.files.clone(),
+            uuids: options.uuids.clone(),
+            types: options.types.clone(),
+        };
+        self.inner.validate(&opentide_workspace::validate::Options {
+            check: options.check,
+            selection: Some(&selection),
+            strict: options.strict,
+            queries: options.queries,
+            query_check: Some(queries::validate_check()),
+            cve_check: None,
+            platform_configurations: platforms,
+            compile_check: compile_check(),
+            memo: None,
+            stop: None,
+        })
+    }
+
+    /// Runs `opentide lint` (its `lint.toml`, or the checks `options` names)
+    /// without fixing anything: lint's `--fix` renames files, which is the
+    /// command line's to do.
+    ///
+    /// The queries check runs on the query engines with the `queries`
+    /// feature; without it a lint that runs it fails with `engine_unavailable`
+    /// (its [`LintReport::failure_code`]).
+    pub fn lint(&self, options: &LintOptions) -> LintReport {
+        queries::with_lint_check(&self.inner, |check| {
+            self.inner.lint(
+                None,
+                &opentide_workspace::lint::LintOptions {
+                    checks: options.checks.clone(),
+                    fix: false,
+                    strict: options.strict,
+                    files: options.files.clone(),
+                    changed: None,
+                    cwd: self.inner.cwd().to_path_buf(),
+                    query_check: Some(check),
+                    selected: None,
+                },
+            )
+        })
+    }
+
+    /// What `opentide info` reports: the object counts, the files that did
+    /// not load and each platform with its tenants. A tenant names the
+    /// environment variables it reads and whether each is set in this
+    /// process, never their values; [`Workspace::info_in`] looks them up in
+    /// another environment.
+    pub fn info(&self) -> Info {
+        self.info_with(None)
+    }
+
+    /// [`Workspace::info`], each tenant's variables looked up in `vars` (as
+    /// `ConnectOptions::environment` names the environment a connection
+    /// reads) instead of the process's.
+    pub fn info_in<K: Into<String>, V: Into<String>>(
+        &self,
+        vars: impl IntoIterator<Item = (K, V)>,
+    ) -> Info {
+        let vars: std::collections::BTreeMap<String, String> = vars
+            .into_iter()
+            .map(|(key, value)| (key.into(), value.into()))
+            .collect();
+        self.info_with(Some(&vars))
+    }
+
+    fn info_with(&self, environment: Option<&std::collections::BTreeMap<String, String>>) -> Info {
+        let index = self.inner.index();
+        let count = |family: &str| index.objects.get(family).map_or(0, |objects| objects.len());
+        let is_set = |name: &str| is_set(environment, name);
+        Info {
+            root: self.root().to_path_buf(),
+            counts: Counts {
+                rules: count("rule"),
+                threats: count("threat"),
+                objectives: count("objective"),
+            },
+            load_errors: index.load_errors.len() + index.duplicates.len(),
+            platforms: opentide_workspace::info::platforms(
+                self.inner.configuration().resolved.platforms(),
+                None,
+                &is_set,
+            ),
+        }
+    }
+
+    /// The catalogue (`opentide info catalog`): every object with its
+    /// techniques and platforms, every edge between objects, the signals and
+    /// the ATT&CK matrix.
+    pub fn catalog(&self) -> Catalogue {
+        opentide_workspace::catalogue::build(&self.inner)
+    }
+
+    /// The detection rules: their rows of the catalogue's `objects`, in the
+    /// order the index met them (UC-5.2).
+    ///
+    /// ```
+    /// let ws = opentide::Workspace::from_files(
+    ///     "/ws",
+    ///     [(
+    ///         "objects/rules/example.yaml",
+    ///         "name: Example\nmetadata:\n  uuid: 11111111-1111-4111-8111-111111111111\n  schema: rule::1.1\n",
+    ///     )],
+    /// )?;
+    /// let rules = ws.rules();
+    /// assert_eq!(rules[0].name, "Example");
+    /// assert!(ws.threats().is_empty());
+    /// # Ok::<(), opentide::Error>(())
+    /// ```
+    pub fn rules(&self) -> Vec<ObjectRow> {
+        self.objects("rule")
+    }
+
+    /// The detection objectives: their rows of the catalogue's `objects`.
+    pub fn objectives(&self) -> Vec<ObjectRow> {
+        self.objects("objective")
+    }
+
+    /// The threat vectors: their rows of the catalogue's `objects`.
+    pub fn threats(&self) -> Vec<ObjectRow> {
+        self.objects("threat")
+    }
+
+    fn objects(&self, family: &str) -> Vec<ObjectRow> {
+        self.catalog()
+            .objects
+            .into_iter()
+            .filter_map(|row| match row {
+                Row::Object(row) if row.family == family => Some(*row),
+                _ => None,
+            })
+            .collect()
+    }
+
+    /// The rules that cover the ATT&CK `technique` (`opentide info coverage
+    /// --technique`), their own techniques or ones they inherit from their
+    /// objective and its threats. A technique covers its sub-techniques.
+    pub fn coverage(&self, technique: &str) -> Coverage {
+        opentide_workspace::coverage::match_technique(
+            technique,
+            &opentide_workspace::coverage::rule_technique_index(self.inner.index()),
+        )
+    }
+
+    /// The workspace the domain crates load, for the facade's other modules.
+    #[cfg_attr(
+        all(not(feature = "compile"), not(test)),
+        expect(dead_code, reason = "deploy_plan's")
+    )]
+    pub(crate) fn inner(&self) -> &opentide_workspace::Workspace {
+        &self.inner
+    }
+}
+
+/// What [`Workspace::validate`] runs: `opentide validate`'s options.
+///
+/// ```
+/// use opentide::validate::{Check, QueriesMode};
+///
+/// let options = opentide::ValidateOptions::default()
+///     .check(Check::Schema)
+///     .file("objects/rules/a.yaml")
+///     .strict(true)
+///     .queries(QueriesMode::Warn);
+/// assert_eq!(options.files, ["objects/rules/a.yaml"]);
+/// ```
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct ValidateOptions {
+    /// `--check`: one check, else the default ones.
+    pub check: Option<Check>,
+    /// `--file`: object files, by path or by name.
+    pub files: Vec<String>,
+    /// `--uuid`: objects by UUID.
+    pub uuids: Vec<String>,
+    /// `--type`: object families (`rule`, `threat`, `objective`).
+    pub types: Vec<String>,
+    /// `--strict`: a warning fails the run too.
+    pub strict: bool,
+    /// `--queries`: a query the engine rejects as an error (the default), a
+    /// warning, or not checked.
+    pub queries: QueriesMode,
+}
+
+impl ValidateOptions {
+    /// Runs `check` alone.
+    pub fn check(mut self, check: Check) -> Self {
+        self.check = Some(check);
+        self
+    }
+
+    /// Narrows the run to the object file `file` (repeatable).
+    pub fn file(mut self, file: impl Into<String>) -> Self {
+        self.files.push(file.into());
+        self
+    }
+
+    /// Narrows the run to the object `uuid` (repeatable).
+    pub fn uuid(mut self, uuid: impl Into<String>) -> Self {
+        self.uuids.push(uuid.into());
+        self
+    }
+
+    /// Narrows the run to the family `family` (repeatable).
+    pub fn object_type(mut self, family: impl Into<String>) -> Self {
+        self.types.push(family.into());
+        self
+    }
+
+    /// Whether a warning fails the run.
+    pub fn strict(mut self, strict: bool) -> Self {
+        self.strict = strict;
+        self
+    }
+
+    /// How the queries check reports a query the engine rejects.
+    pub fn queries(mut self, queries: QueriesMode) -> Self {
+        self.queries = queries;
+        self
+    }
+}
+
+/// Refuses `platform` unless the command line's `--platform` takes it: a
+/// built-in platform, or (with the `plugins` feature) one a loaded platform
+/// plugin adds. A plan or a tenant lookup for any other name would find
+/// nothing and say so only by being empty.
+#[cfg_attr(
+    all(not(feature = "compile"), not(test)),
+    expect(dead_code, reason = "deploy_plan's and tenants'")
+)]
+pub(crate) fn known_platform(platform: &str) -> Result<(), Error> {
+    if opentide_schema::platforms::get(platform).is_some() {
+        return Ok(());
+    }
+    #[cfg(feature = "plugins")]
+    if crate::plugins::configurations()
+        .is_some_and(|plugins| plugins.platforms().iter().any(|name| name == platform))
+    {
+        return Ok(());
+    }
+    let known: Vec<&str> = opentide_schema::platforms::PLATFORMS
+        .iter()
+        .map(|known| known.id)
+        .collect();
+    Err(Error::Usage {
+        code: "usage_invalid_choice",
+        message: format!(
+            "platform: {platform:?} is not a platform: choose {}, or a platform plugin's",
+            known.join(", ")
+        ),
+    })
+}
+
+/// What [`Workspace::lint`] runs: `opentide lint`'s options, without `--fix`
+/// and `--changed` (the command line's).
+///
+/// ```
+/// use opentide::lint::LintCheck;
+///
+/// let options = opentide::LintOptions::default().check(LintCheck::Metadata).strict(true);
+/// assert_eq!(options.checks, [LintCheck::Metadata]);
+/// ```
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct LintOptions {
+    /// `--check`; empty runs the checks `lint.toml` enables.
+    pub checks: Vec<LintCheck>,
+    /// `--strict`: any finding fails the run.
+    pub strict: bool,
+    /// `--file`: object files, by path or by name.
+    pub files: Vec<String>,
+}
+
+impl LintOptions {
+    /// Runs `check` (repeatable).
+    pub fn check(mut self, check: LintCheck) -> Self {
+        self.checks.push(check);
+        self
+    }
+
+    /// Whether any finding fails the run.
+    pub fn strict(mut self, strict: bool) -> Self {
+        self.strict = strict;
+        self
+    }
+
+    /// Narrows the run to the object file `file` (repeatable).
+    pub fn file(mut self, file: impl Into<String>) -> Self {
+        self.files.push(file.into());
+        self
+    }
+}
+
+/// What [`Workspace::info`] reports.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[non_exhaustive]
+pub struct Info {
+    /// The workspace folder.
+    pub root: PathBuf,
+    /// Objects by family.
+    pub counts: Counts,
+    /// Files that did not load, and duplicated UUIDs.
+    pub load_errors: usize,
+    /// Every platform, with its tenants.
+    pub platforms: Vec<PlatformInfo>,
+}
+
+/// Objects by family.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[non_exhaustive]
+pub struct Counts {
+    /// Detection rules.
+    pub rules: usize,
+    /// Threat vectors.
+    pub threats: usize,
+    /// Detection objectives.
+    pub objectives: usize,
+}
+
+/// `validate`'s compile check: the platforms' offline compilers, with the
+/// `compile` feature (UC-2.2, #817); without it nothing is compiled.
+#[cfg(feature = "compile")]
+fn compile_check() -> Option<&'static dyn opentide_workspace::validate::CompileCheck> {
+    Some(&opentide_compile::validate::Compilers)
+}
+
+/// `validate`'s compile check: none without the `compile` feature.
+#[cfg(not(feature = "compile"))]
+fn compile_check() -> Option<&'static dyn opentide_workspace::validate::CompileCheck> {
+    None
+}
+
+/// Whether the variable `name` is set and not blank, as a connection reads
+/// it: in `environment`, else in the process's.
+pub(crate) fn is_set(
+    environment: Option<&std::collections::BTreeMap<String, String>>,
+    name: &str,
+) -> bool {
+    match environment {
+        Some(vars) => vars.get(name).is_some_and(|value| !value.trim().is_empty()),
+        None => {
+            std::env::var_os(name).is_some_and(|value| !value.to_string_lossy().trim().is_empty())
+        }
+    }
+}

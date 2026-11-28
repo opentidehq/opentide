@@ -1,0 +1,1 @@
+FROM logs-*, (FROM logs-* | WHERE process.pid > 1) | LIMIT 1

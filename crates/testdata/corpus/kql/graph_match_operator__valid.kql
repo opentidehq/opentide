@@ -1,0 +1,2 @@
+// prod:graph_match_operator prod:graph_pattern prod:graph_path prod:graph_node prod:graph_edge prod:graph_range prod:graph_project valid
+DeviceNetworkEvents | make-graph DeviceName --> RemoteIP | graph-match cycles=none (a)-[e*1..3]->(b)<-[f]-(c), ()-->(d)--(g)<--(h) where a.DeviceName == "x" and e.Port > 80 project src = a.DeviceName, c.DeviceName

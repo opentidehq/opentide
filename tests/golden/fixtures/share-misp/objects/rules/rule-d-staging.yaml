@@ -1,0 +1,36 @@
+name: Rule still in staging
+
+metadata:
+  uuid: 00000000-0000-4000-8048-000000000014
+  schema: rule::1.0
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: green
+
+description: |
+  A rule the MISP stand-in receives.
+severity: High
+techniques:
+  - T1059
+detection_model: 00000000-0000-4000-8048-000000000002
+
+response:
+  alert_severity: High
+
+configurations:
+  sentinel:
+    enabled: true
+    status: STAGING
+    query: |
+      SecurityEvent
+      | take 1
+    scheduling:
+      frequency: PT1H
+      lookback: PT2H
+    alert:
+      title: Rule still in staging
+    grouping:
+      event: SingleAlert
+      alert:
+        enabled: false

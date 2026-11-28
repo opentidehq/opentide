@@ -1,0 +1,38 @@
+# Converted from the Falco default rule "Netcat Remote Code Execution in
+# Container" (falcosecurity/rules, rules/falco_rules.yaml, Apache-2.0).
+# Unmodified.
+name: Netcat Remote Code Execution in Container
+metadata:
+  uuid: fa00be97-45bc-45b3-a6e4-5561d5372fa0
+  schema: rule::1.0
+  version: 1
+  created: '2026-11-02'
+  modified: '2026-11-02'
+  tlp: clear
+  author: Detection Engineering
+  organisation:
+    uuid: 5f3c2a10-7b6e-4c1d-9a8f-2e4b6d0c1a73
+    name: Detection Engineering
+description: |
+  Netcat runs inside a container with options that allow remote code
+  execution, as reverse shell payloads do.
+techniques:
+- T1059
+response:
+  alert_severity: Medium
+configurations:
+  sysdig:
+    enabled: true
+    schema: platform::sysdig::1.0
+    status: PRODUCTION
+    condition: |
+      spawned_process and container and ((proc.name = "nc" and (proc.cmdline contains " -e" or
+                                  proc.cmdline contains " -c")) or
+           (proc.name = "ncat" and (proc.args contains "--sh-exec" or
+                                    proc.args contains "--exec" or proc.args contains "-e " or
+                                    proc.args contains "-c " or proc.args contains "--lua-exec"))
+           )
+    output: >-
+      Netcat runs inside container that allows remote code execution |
+      evt_type=%evt.type user=%user.name process=%proc.name parent=%proc.pname
+      command=%proc.cmdline exe_flags=%evt.arg.flags

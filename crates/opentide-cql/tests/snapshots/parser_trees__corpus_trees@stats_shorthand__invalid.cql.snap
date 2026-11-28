@@ -1,0 +1,32 @@
+---
+source: crates/opentide-cql/tests/parser_trees.rs
+expression: debug_parse(query(&file))
+input_file: crates/testdata/corpus/cql/stats_shorthand__invalid.cql
+---
+SOURCE_FILE@0..16
+  PIPELINE@0..15
+    STATS_SHORTHAND@0..15
+      L_BRACK@0..1 "["
+      FUNCTION_CALL@1..7
+        FUNCTION_NAME@1..4
+          FUNCTION_NAME_TOKEN@1..4 "min"
+        L_PAREN@4..5 "("
+        ARGUMENT_LIST@5..6
+          ARGUMENT@5..6
+            FIELD_NAME@5..6
+              WORD@5..6 "x"
+        R_PAREN@6..7 ")"
+      COMMA@7..8 ","
+      WHITESPACE@8..9 " "
+      FUNCTION_CALL@9..15
+        FUNCTION_NAME@9..12
+          FUNCTION_NAME_TOKEN@9..12 "max"
+        L_PAREN@12..13 "("
+        ARGUMENT_LIST@13..14
+          ARGUMENT@13..14
+            FIELD_NAME@13..14
+              WORD@13..14 "x"
+        R_PAREN@14..15 ")"
+  WHITESPACE@15..16 "\n"
+
+15..16: missing `]` (expected R_BRACK, COMMA)

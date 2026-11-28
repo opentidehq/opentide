@@ -1,0 +1,66 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: validate.query/json/live-tenants/live-carbon-black
+---
+args: opentide --json validate query --live --platform carbon_black_cloud
+exit: 1
+
+━━━ stdout · json, 1 lines
+{
+  "command": "validate query",
+  "duration_ms": 0,
+  "error": "Queries rejected on carbon_black_cloud · 2 checked on 1 tenant",
+  "exit_code": 1,
+  "failure": {
+    "argument": null,
+    "code": "query_rejected",
+    "crash_log": null,
+    "message": "Queries rejected on carbon_black_cloud · 2 checked on 1 tenant",
+    "suggestion": null
+  },
+  "message": "Queries rejected on carbon_black_cloud · 2 checked on 1 tenant",
+  "mode": "live",
+  "next_actions": [],
+  "ok": false,
+  "platform": "carbon_black_cloud",
+  "queries_per_tenant": {
+    "lab": 2
+  },
+  "queries_validated": 2,
+  "rejected": [
+    {
+      "errors": [
+        "Carbon Black Cloud refused the query on lab: ensure each term has a value, and escape slashes, colons and spaces"
+      ],
+      "file": "objects/rules/carbon-black-refused.yaml",
+      "line": 15,
+      "message": "Carbon Black Cloud refused the query on lab: ensure each term has a value, and escape slashes, colons and spaces",
+      "name": "Carbon Black refused rule",
+      "platform": "carbon_black_cloud",
+      "rule": "00000000-0000-4000-8046-000000000005",
+      "status": "failed",
+      "tenant": "lab",
+      "warnings": []
+    }
+  ],
+  "schema_version": 1,
+  "status": "failed",
+  "strategies": [
+    "PREVIEW",
+    "RELEASE"
+  ],
+  "summary": {
+    "queries": 2,
+    "tenants": 1
+  },
+  "supported": true
+}
+
+━━━ stderr · json, 1 lines
+{
+  "detail": "Carbon Black refused rule (00000000-0000-4000-8046-000000000005) on carbon_black_cloud tenant ***",
+  "event": "query_rejected",
+  "level": "critical",
+  "reason": "Carbon Black Cloud refused the query on ***: ensure each term has a value, and escape slashes, colons and spaces",
+  "timestamp": "0000-00-00 00:00:00"
+}

@@ -1,0 +1,1 @@
+index=a | sistats | stats count by host

@@ -1,0 +1,1 @@
+is_gcs_service  and proc.name in (oops and gcp.methodName="storage.objects.update"  and is_binded_delta_to_public

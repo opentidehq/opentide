@@ -1,0 +1,61 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: query/json/tide-corpus/elastic-eql
+---
+args: opentide --json query --platform elastic --language eql --index 'logs-*' 'process where process.name == "cmd.exe"'
+exit: 1
+
+━━━ stdout · json, 1 lines
+{
+  "command": "query",
+  "duration_ms": 0,
+  "error": "1 of 1 queries failed on 1 elastic tenant: staging: Elastic credentials are unset ($ELASTIC_API_KEY). Set those environment variables, then run the command again.",
+  "exit_code": 1,
+  "failure": {
+    "argument": null,
+    "code": "command_failed",
+    "crash_log": null,
+    "message": "1 of 1 queries failed on 1 elastic tenant: staging: Elastic credentials are unset ($ELASTIC_API_KEY). Set those environment variables, then run the command again.",
+    "suggestion": null
+  },
+  "limit": 100,
+  "message": "1 of 1 queries failed on 1 elastic tenant: staging: Elastic credentials are unset ($ELASTIC_API_KEY). Set those environment variables, then run the command again.",
+  "next_actions": [],
+  "ok": false,
+  "platform": "elastic",
+  "query": "process where process.name == \"cmd.exe\"",
+  "results": [
+    {
+      "elapsed_ms": 0,
+      "error": "Elastic credentials are unset ($ELASTIC_API_KEY). Set those environment variables, then run the command again.",
+      "status": "failed",
+      "tenant": "staging",
+      "warnings": []
+    }
+  ],
+  "row_count": 0,
+  "schema_version": 1,
+  "source": "query",
+  "status": "failed",
+  "summary": {
+    "failed": 1,
+    "rows": 0,
+    "tenants": 1
+  },
+  "tenants": [
+    "staging"
+  ],
+  "window": {
+    "from": "0000-00-00T00:00:00.000Z",
+    "to": "0000-00-00T00:00:00.000Z"
+  }
+}
+
+━━━ stderr · json, 1 lines
+{
+  "advice": "Set those environment variables before a query.",
+  "detail": "Unset configuration variables: $ELASTIC_API_KEY",
+  "event": "environment_variable_missing",
+  "level": "critical",
+  "timestamp": "0000-00-00 00:00:00"
+}

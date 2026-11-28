@@ -1,0 +1,37 @@
+---
+source: crates/opentide-eql/tests/parser_trees.rs
+expression: "parser::debug(&source)"
+input_file: crates/testdata/corpus/eql/join__valid.eql
+---
+SOURCE_FILE@0..63
+  LINE_COMMENT@0..18 "// prod:join valid"
+  WHITESPACE@18..19 "\n"
+  JOIN@19..62
+    JOIN_KW@19..23 "join"
+    WHITESPACE@23..24 " "
+    JOIN_TERM@24..44
+      SUBQUERY@24..44
+        L_BRACK@24..25 "["
+        EVENT_CATEGORY@25..32
+          IDENTIFIER@25..32
+            WORD@25..32 "process"
+        WHITESPACE@32..33 " "
+        WHERE_KW@33..38 "where"
+        WHITESPACE@38..39 " "
+        BOOLEAN@39..43
+          TRUE_KW@39..43 "true"
+        R_BRACK@43..44 "]"
+    WHITESPACE@44..45 " "
+    JOIN_TERM@45..62
+      SUBQUERY@45..62
+        L_BRACK@45..46 "["
+        EVENT_CATEGORY@46..50
+          IDENTIFIER@46..50
+            WORD@46..50 "file"
+        WHITESPACE@50..51 " "
+        WHERE_KW@51..56 "where"
+        WHITESPACE@56..57 " "
+        BOOLEAN@57..61
+          TRUE_KW@57..61 "true"
+        R_BRACK@61..62 "]"
+  WHITESPACE@62..63 "\n"

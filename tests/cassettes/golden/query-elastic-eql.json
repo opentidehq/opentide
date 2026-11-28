@@ -1,0 +1,62 @@
+{
+  "format": 1,
+  "scenario": "golden/query-elastic-eql",
+  "recorded_from": [
+    "{oracle}/opentide",
+    "--repo",
+    "tests/golden/fixtures/tenants",
+    "--json",
+    "query",
+    "--platform",
+    "elastic",
+    "--from",
+    "2099-01-01T00:00:00Z",
+    "--to",
+    "2099-01-01T01:00:00Z",
+    "--language",
+    "eql",
+    "sequence [process where true] [process where true]"
+  ],
+  "digest": "sha256:5cca655d52d13af1218cdc396697013e5201f72378f0e46c1c7d64daedb3d478",
+  "interactions": [
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://es.elastic.invalid/logs-*/_eql/search",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "ApiKey REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ],
+          [
+            "elastic-api-version",
+            "2023-10-31"
+          ]
+        ],
+        "body": "{\"query\": \"sequence [process where true] [process where true]\", \"size\": 101, \"filter\": {\"range\": {\"@timestamp\": {\"gte\": \"2099-01-01T00:00:00.000Z\", \"lte\": \"2099-01-01T01:00:00.000Z\", \"format\": \"strict_date_optional_time\"}}}}"
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "elastic-tenant"
+          ],
+          [
+            "content-type",
+            "application/json; charset=utf-8"
+          ]
+        ],
+        "body": "{\"is_partial\": false, \"timed_out\": false, \"hits\": {\"total\": {\"value\": 1, \"relation\": \"eq\"}, \"sequences\": [{\"events\": [{\"_index\": \"logs-1\", \"_source\": {\"process\": {\"name\": \"cmd.exe\"}}}, {\"_index\": \"logs-1\", \"_source\": {\"process\": {\"name\": \"whoami.exe\"}}}]}]}}"
+      }
+    }
+  ]
+}

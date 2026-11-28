@@ -1,0 +1,76 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: generate.exports.navigator/json/tide-corpus/default
+---
+args: opentide --json generate exports navigator
+exit: 0
+
+━━━ stdout · json, 1 lines
+{
+  "command": "generate exports navigator",
+  "duration_ms": 0,
+  "exit_code": 0,
+  "failure": null,
+  "message": "Generated 1 file in <SECONDS> · exports navigator",
+  "next_actions": [],
+  "ok": true,
+  "schema_version": 1,
+  "status": "completed",
+  "steps": [
+    {
+      "count": 1,
+      "name": "exports navigator",
+      "seconds": 0.0,
+      "status": "ok",
+      "unit": "file",
+      "where": ".opentide/exports/"
+    }
+  ],
+  "summary": {
+    "files": 1,
+    "phases": 1,
+    "removed": 0,
+    "seconds": 0.0
+  },
+  "target": "navigator"
+}
+
+━━━ stderr · empty
+
+━━━ ws/.opentide/exports/attack-navigator.json · created 0644
+{
+    "versions": {
+        "layer": "4.5"
+    },
+    "techniques": [
+        {
+            "techniqueID": "T1059",
+            "color": "#74c476",
+            "comment": "[THREAT] Simulated Actor, [RULE] Carbon Black Lucene Rule, [RULE] CrowdStrike Deploy Rule, [RULE] Defender KQL Rule, [RULE] Elastic KQL Rule, [RULE] HarfangLab Deploy Rule, [RULE] Sentinel KQL Rule, [RULE] SentinelOne S1QL Rule, [RULE] Splunk SPL Rule, [RULE] Staging Promote Rule, [RULE] Sysdig Falco Rule",
+            "enabled": true
+        },
+        {
+            "techniqueID": "T1059.004",
+            "color": "#6baed6",
+            "comment": "[RULE] Sysdig Falco Rule",
+            "enabled": true
+        }
+    ],
+    "name": "layer",
+    "domain": "enterprise-attack",
+    "hideDisabled": false,
+    "legendItems": [
+        {
+            "label": "TVM Only",
+            "color": "#fc6b6b"
+        },
+        {
+            "label": "Full Coverage",
+            "color": "#74c476"
+        },
+        {
+            "label": "Rule Only - Needs to be checked",
+            "color": "#6baed6"
+        }
+    ]
+}

@@ -1,0 +1,15 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/oracles/elasticsearch/esql-reference/016_now_d.esql
+---
+SOURCE_FILE@0..20
+  QUERY@0..19
+    FROM_COMMAND@0..19
+      FROM_KW@0..4 "FROM"
+      WHITESPACE@4..5 " "
+      INDEX_PATTERN@5..19
+        INDEX_NAME@5..19
+          SOURCE_TEXT@5..19 "<logs-{now/d}>"
+  WHITESPACE@19..20 "\n"
+--- errors

@@ -1,0 +1,30 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: query/json/vscode/defender-file
+---
+args: opentide --json query --platform microsoft_defender --file objects/rules/suspicious-lsass.yaml
+exit: 2
+
+━━━ stdout · json, 1 lines
+{
+  "command": "query",
+  "duration_ms": 0,
+  "error": "no rule file at objects/rules/suspicious-lsass.yaml",
+  "exit_code": 2,
+  "failure": {
+    "argument": "--file",
+    "code": "usage_invalid_value",
+    "crash_log": null,
+    "message": "no rule file at objects/rules/suspicious-lsass.yaml",
+    "suggestion": null
+  },
+  "message": "no rule file at objects/rules/suspicious-lsass.yaml",
+  "next_actions": [],
+  "ok": false,
+  "platform": "microsoft_defender",
+  "schema_version": 1,
+  "status": "failed",
+  "summary": {}
+}
+
+━━━ stderr · empty

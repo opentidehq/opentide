@@ -1,0 +1,1 @@
+_Im_NetworkSession | where DstPortNumbr == 22

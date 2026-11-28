@@ -1,0 +1,29 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/oracles/elasticsearch/esql-reference/135_drop_a_b.esql
+---
+SOURCE_FILE@0..23
+  QUERY@0..22
+    FROM_COMMAND@0..9
+      FROM_KW@0..4 "FROM"
+      WHITESPACE@4..5 " "
+      INDEX_PATTERN@5..9
+        INDEX_NAME@5..9
+          SOURCE_TEXT@5..9 "logs"
+    WHITESPACE@9..10 " "
+    PIPE@10..11 "|"
+    WHITESPACE@11..12 " "
+    DROP_COMMAND@12..22
+      DROP_KW@12..16 "DROP"
+      WHITESPACE@16..17 " "
+      NAME_PATTERN@17..19
+        ID_PATTERN@17..19
+          ID_PATTERN_TEXT@17..19 "a*"
+      COMMA@19..20 ","
+      WHITESPACE@20..21 " "
+      NAME_PATTERN@21..22
+        ID_PATTERN@21..22
+          ID_PATTERN_TEXT@21..22 "b"
+  WHITESPACE@22..23 "\n"
+--- errors

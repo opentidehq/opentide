@@ -1,0 +1,2 @@
+``` prod:fields_command valid
+index=main | fields host, source

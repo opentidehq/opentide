@@ -1,0 +1,29 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/oracles/elasticsearch/esql-reference/108_stats_count.esql
+---
+SOURCE_FILE@0..27
+  QUERY@0..26
+    FROM_COMMAND@0..9
+      FROM_KW@0..4 "FROM"
+      WHITESPACE@4..5 " "
+      INDEX_PATTERN@5..9
+        INDEX_NAME@5..9
+          SOURCE_TEXT@5..9 "logs"
+    WHITESPACE@9..10 " "
+    PIPE@10..11 "|"
+    WHITESPACE@11..12 " "
+    STATS_COMMAND@12..26
+      STATS_KW@12..17 "STATS"
+      WHITESPACE@17..18 " "
+      AGGREGATE_FIELD@18..26
+        FUNCTION_CALL@18..26
+          IDENTIFIER@18..23
+            IDENT@18..23 "COUNT"
+          L_PAREN@23..24 "("
+          STAR@24..25
+            STAR_TOKEN@24..25 "*"
+          R_PAREN@25..26 ")"
+  WHITESPACE@26..27 "\n"
+--- errors

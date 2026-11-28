@@ -1,0 +1,354 @@
+//! Carbon Black Cloud against the cassettes recorded from the Python client
+//! (cbc_sdk; `tests/cassettes/carbon_black/`, `cargo xtask cassettes record
+//! carbon_black/<scenario>`): every request the connector sends must be the
+//! Python client's, in order (a JSON body as the same data), and the answers must read as
+//! Python read them (the outcomes `client.py` printed).
+
+#![expect(clippy::unwrap_used, reason = "a test: a failed set-up is a failure")]
+
+mod support;
+
+use std::time::Duration;
+
+use opentide_compile::json::Json;
+use opentide_connectors::ConnectorError;
+use opentide_connectors::carbon_black::{self, CarbonBlack, ReportChange, ReportDeploy};
+use opentide_connectors::connector::QueryRequest;
+use opentide_connectors::runtime::block_on;
+use support::{Replayed, fixture, items, text, window};
+
+const SETUP: &str = r#"
+ssl = true
+url = "https://cbc.invalid"
+org_key = "ORGKEY01"
+token = "$CBC_TOKEN"
+watchlist = "opentide"
+"#;
+
+fn replay(scenario: &str) -> Replayed {
+    Replayed::start(
+        scenario,
+        carbon_black::PLATFORM,
+        SETUP,
+        "CBC_TOKEN",
+        &carbon_black::http_settings(Duration::from_secs(120)),
+    )
+}
+
+/// What `_deploy_to_org` works out for one step of `client.py`: tags are
+/// the status and the block's own (the rules have no detection model).
+fn plan(step: &Json, now: i64) -> ReportDeploy {
+    let status = text(step.get("status").unwrap());
+    let name = text(step.get("name").unwrap()).trim().to_owned();
+    let mut tags = vec![status.to_owned()];
+    if let Some(Json::Array(extra)) = step.get("tags") {
+        tags.extend(extra.iter().map(|tag| text(tag).to_owned()));
+    }
+    let severity = match text(step.get("alert_severity").unwrap()) {
+        "High" => 8,
+        other => panic!("{other}"),
+    };
+    ReportDeploy {
+        uuid: text(step.get("uuid").unwrap()).to_owned(),
+        description: text(step.get("description").unwrap()).trim().to_owned(),
+        query: text(step.get("query").unwrap()).to_owned(),
+        deployment: !matches!(status, "DISABLED" | "REMOVED"),
+        tags,
+        severity,
+        watchlist: text(step.get("watchlist").unwrap()).to_owned(),
+        report: step
+            .get("report")
+            .and_then(Json::as_str)
+            .map_or_else(|| name.clone(), str::to_owned),
+        name,
+        now,
+    }
+}
+
+#[test]
+fn carbon_black_deploy_sends_what_the_python_deployer_sent() {
+    let inputs = fixture("carbon_black");
+    let Json::Int(now) = inputs.get("now").unwrap() else {
+        panic!("now is a number")
+    };
+    let tenant = replay("carbon_black/deploy");
+    let connector = CarbonBlack;
+    let outcomes = block_on(async {
+        let mut outcomes = Vec::new();
+        for step in items(inputs.get("deploy").unwrap()) {
+            outcomes.push(
+                connector
+                    .deploy_report(tenant.cx(), &plan(step, *now))
+                    .await,
+            );
+        }
+        outcomes
+    })
+    .unwrap();
+    assert_eq!(tenant.verify(), Vec::new());
+    let changes: Vec<Option<ReportChange>> = outcomes[..5]
+        .iter()
+        .map(|outcome| outcome.as_ref().ok().copied())
+        .collect();
+    assert_eq!(
+        changes,
+        [
+            Some(ReportChange::Created),
+            Some(ReportChange::Updated),
+            Some(ReportChange::Updated),
+            Some(ReportChange::IocRemoved),
+            Some(ReportChange::Deleted),
+        ]
+    );
+    match &outcomes[5] {
+        Err(error @ ConnectorError::Refused { .. }) => assert_eq!(
+            error.text(),
+            "The CBC Deployer cannot create a detection in a nonexistent Watchlist: absent. \
+             Create it on the console before retriggering deployment."
+        ),
+        other => panic!("{other:?}"),
+    }
+}
+
+#[test]
+fn carbon_black_a_single_byte_off_fails() {
+    let inputs = fixture("carbon_black");
+    // The report stamped one second later: the create's body differs.
+    let step = plan(&items(inputs.get("deploy").unwrap())[0], 1_793_088_001);
+    let tenant = replay("carbon_black/deploy");
+    let _ = block_on(async { CarbonBlack.deploy_report(tenant.cx(), &step).await });
+    let mismatches = tenant.verify();
+    assert_eq!(
+        mismatches.first().map(|m| m.index),
+        Some(2),
+        "{mismatches:?}"
+    );
+    assert!(mismatches[0].detail.starts_with("bodies differ at byte "));
+}
+
+#[test]
+fn carbon_black_query_sends_what_the_python_runner_sent() {
+    let inputs = fixture("carbon_black");
+    let query = inputs.get("query").unwrap();
+    let window = window(query.get("window").unwrap());
+    let tenant = replay("carbon_black/query");
+    let outcomes = block_on(async {
+        let mut outcomes = Vec::new();
+        for item in items(query.get("queries").unwrap()) {
+            let mut request = QueryRequest::new(text(item.get("text").unwrap()), "lucene", window);
+            request.limit = usize::try_from(match item.get("limit").unwrap() {
+                Json::Int(limit) => *limit,
+                _ => 100,
+            })
+            .unwrap();
+            outcomes.push(CarbonBlack.run(tenant.cx(), &request).await);
+        }
+        outcomes
+    })
+    .unwrap();
+    assert_eq!(tenant.verify(), Vec::new());
+    let first = outcomes[0].as_ref().unwrap();
+    assert_eq!(
+        first
+            .columns
+            .iter()
+            .map(|c| c.name.as_str())
+            .collect::<Vec<_>>(),
+        [
+            "process_name",
+            "process_pid",
+            "device_name",
+            "device_timestamp",
+            "process_guid",
+            "backend_timestamp",
+            "process_hash",
+            "parent.name",
+            "parent.pid"
+        ]
+    );
+    assert_eq!(first.rows.len(), 2);
+    assert!(first.truncated);
+    assert_eq!(first.rows[1].get("parent.pid"), Some(&Json::Int(102)));
+    let empty = outcomes[1].as_ref().unwrap();
+    assert!(empty.rows.is_empty() && empty.columns.is_empty() && !empty.truncated);
+    let refusals: Vec<String> = outcomes[2..]
+        .iter()
+        .map(|outcome| match outcome {
+            Err(error @ ConnectorError::Refused { .. }) => error.text(),
+            other => panic!("{other:?}"),
+        })
+        .collect();
+    assert_eq!(
+        refusals,
+        [
+            "Carbon Black Cloud refused the query on replayed: Invalid query: \
+             {\"query\":\"process_name:(cmd.exe\",\"sort\":null,\"time_range\":\
+             {\"end\":\"2026-10-27T08:00:00.000Z\",\"start\":\"2026-10-26T08:00:00.000Z\"}}: \
+             unbalanced parenthesis",
+            "Carbon Black Cloud refused the query on replayed: Carbon Black Cloud answered HTTP \
+             403 Forbidden to POST \
+             https://cbc.invalid/api/investigate/v2/orgs/ORGKEY01/processes/search_jobs: \
+             {\"error_code\": \"FORBIDDEN\", \"message\": \"Access denied to process search\"}",
+        ]
+    );
+}
+
+#[test]
+fn carbon_black_validate_asks_search_validation() {
+    let inputs = fixture("carbon_black");
+    let validate = inputs.get("validate").unwrap();
+    let window = window(validate.get("window").unwrap());
+    let tenant = replay("carbon_black/validate");
+    let outcomes = block_on(async {
+        let mut outcomes = Vec::new();
+        for query in items(validate.get("queries").unwrap()) {
+            let request = QueryRequest::new(text(query), "lucene", window).for_check();
+            outcomes.push(CarbonBlack.check(tenant.cx(), &request).await);
+        }
+        outcomes
+    })
+    .unwrap();
+    assert_eq!(tenant.verify(), Vec::new());
+    assert!(outcomes[0].is_ok());
+    match &outcomes[1] {
+        Err(error @ ConnectorError::Refused { .. }) => assert_eq!(
+            error.text(),
+            "Carbon Black Cloud refused the query on replayed: ensure each term has a value, and \
+             escape slashes, colons and spaces"
+        ),
+        other => panic!("{other:?}"),
+    }
+}
+
+/// The same steps through the `Deployer`, as `opentide deploy` sends them:
+/// the report's fields as the body, a retirement as a delete, the request's
+/// clock as the report's timestamp. The requests are the recording's, and a
+/// deleted report is said (`report_deleted_with_rule`), not raised.
+#[test]
+fn carbon_black_the_deployer_sends_what_the_python_deployer_sent() {
+    use opentide_connectors::connector::{
+        DeployRequest, DeployScope, DeployWarning, Deployer, Operation,
+    };
+    let inputs = fixture("carbon_black");
+    let Json::Int(now) = inputs.get("now").unwrap() else {
+        panic!("now is a number")
+    };
+    let now = jiff::Timestamp::from_second(*now).unwrap();
+    let tenant = replay("carbon_black/deploy");
+    let outcomes = block_on(async {
+        let mut outcomes = Vec::new();
+        for step in items(inputs.get("deploy").unwrap()) {
+            let plan = plan(step, 0);
+            let body = serde_json::json!({
+                "uuid": plan.uuid,
+                "name": plan.name,
+                "description": plan.description,
+                "query": plan.query,
+                "tags": plan.tags,
+                "severity": plan.severity,
+                "watchlist": plan.watchlist,
+                "report": plan.report,
+            });
+            let operation = if plan.deployment {
+                Operation::Update
+            } else {
+                Operation::Delete
+            };
+            let request = DeployRequest::new(
+                plan.uuid.clone(),
+                operation,
+                serde_json::to_vec(&body).unwrap(),
+            )
+            .at(now);
+            outcomes.push(CarbonBlack.deploy(tenant.cx(), &request).await);
+        }
+        outcomes
+    })
+    .unwrap();
+    assert_eq!(tenant.verify(), Vec::new());
+    let warnings: Vec<Vec<DeployWarning>> = outcomes[..5]
+        .iter()
+        .map(|outcome| outcome.as_ref().unwrap().warnings.clone())
+        .collect();
+    let deleted = warnings[4].first().unwrap();
+    assert_eq!(deleted.code, "report_deleted_with_rule");
+    // It names the report, as the command line logs it.
+    let fifth = &items(inputs.get("deploy").unwrap())[4];
+    assert_eq!(deleted.message, plan(fifth, 0).report);
+    assert!(!deleted.raised);
+    assert!(warnings[..4].iter().all(Vec::is_empty), "{warnings:?}");
+    // The watchlist that does not exist fails the rule.
+    let refused = outcomes[5].as_ref().unwrap_err();
+    assert_eq!(refused.scope, DeployScope::Rule);
+    assert_eq!(refused.failure.code, "tenant_refused");
+}
+
+/// The first step (a new report) reads the watchlists once: the Python
+/// client's `watchlist_list or []` read them twice and dropped the first
+/// answer (#1932).
+#[test]
+fn carbon_black_reads_the_watchlists_once() {
+    let inputs = fixture("carbon_black");
+    let Json::Int(now) = inputs.get("now").unwrap() else {
+        panic!("now is a number")
+    };
+    let step = plan(&items(inputs.get("deploy").unwrap())[0], *now);
+    let mut cassette = support::cassette("carbon_black/deploy");
+    cassette.interactions.truncate(4);
+    let tenant = Replayed::start_with(
+        cassette,
+        carbon_black::PLATFORM,
+        SETUP,
+        "CBC_TOKEN",
+        &carbon_black::http_settings(Duration::from_secs(120)),
+    );
+    let change = block_on(async { CarbonBlack.deploy_report(tenant.cx(), &step).await }).unwrap();
+    assert_eq!(change.ok(), Some(ReportChange::Created));
+    assert_eq!(tenant.verify(), Vec::new());
+    let watchlist_reads = tenant
+        .proxy
+        .requests()
+        .iter()
+        .filter(|request| request.method == "GET" && request.url.ends_with("/watchlists"))
+        .count();
+    assert_eq!(watchlist_reads, 1);
+}
+
+/// A create answered without a report id fails the rule and leaves the
+/// watchlist alone: an empty id is never added to it (#1932).
+#[test]
+fn carbon_black_refuses_a_created_report_without_an_id() {
+    use opentide_cassette::cassette::Body;
+    let inputs = fixture("carbon_black");
+    let Json::Int(now) = inputs.get("now").unwrap() else {
+        panic!("now is a number")
+    };
+    let step = plan(&items(inputs.get("deploy").unwrap())[0], *now);
+    for answer in [r#"{"title": "Carbon Black Lucene Rule"}"#, r#"{"id": ""}"#] {
+        let mut cassette = support::cassette("carbon_black/deploy");
+        // The watchlists, the other rule's report, the create: no watchlist PUT.
+        cassette.interactions.truncate(3);
+        assert_eq!(cassette.interactions[2].request.method, "POST");
+        cassette.interactions[2].response.body = Body::Text(answer.to_owned());
+        let tenant = Replayed::start_with(
+            cassette,
+            carbon_black::PLATFORM,
+            SETUP,
+            "CBC_TOKEN",
+            &carbon_black::http_settings(Duration::from_secs(120)),
+        );
+        let outcome =
+            block_on(async { CarbonBlack.deploy_report(tenant.cx(), &step).await }).unwrap();
+        match outcome {
+            Err(error @ ConnectorError::Refused { .. }) => assert_eq!(
+                error.text(),
+                "Carbon Black created the report \"Carbon Black Lucene Rule\" but its answer \
+                 carries no id, so it was not added to the watchlist opentide: delete the report \
+                 in the console before retriggering deployment."
+            ),
+            other => panic!("{other:?}"),
+        }
+        assert_eq!(tenant.verify(), Vec::new());
+        assert_eq!(tenant.proxy.requests().len(), 3);
+    }
+}

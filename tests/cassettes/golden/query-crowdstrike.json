@@ -1,0 +1,153 @@
+{
+  "format": 1,
+  "scenario": "golden/query-crowdstrike",
+  "recorded_from": [
+    "{oracle}/opentide",
+    "--repo",
+    "tests/golden/fixtures/tenants",
+    "--json",
+    "query",
+    "--platform",
+    "crowdstrike",
+    "--from",
+    "2099-01-01T00:00:00Z",
+    "--to",
+    "2099-01-01T01:00:00Z",
+    "#event_simpleName=ProcessRollup2"
+  ],
+  "digest": "sha256:57232a9899c967dcb70a316103694217c86c292b0a018c7d87350bd5f3cc3d84",
+  "interactions": [
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://api.eu-1.crowdstrike.com/oauth2/token",
+        "headers": [
+          [
+            "content-type",
+            "application/x-www-form-urlencoded"
+          ]
+        ],
+        "body": "client_id=golden-client-id&client_secret=REDACTED"
+      },
+      "response": {
+        "status": 201,
+        "headers": [
+          [
+            "server",
+            "falcon-stand-in"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"access_token\": \"REDACTED\", \"token_type\": \"REDACTED\", \"expires_in\": 1799}"
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://api.eu-1.crowdstrike.com/humio/api/v1/repositories/search-all/queryjobs",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "Bearer REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"queryString\": \"#event_simpleName=ProcessRollup2\\n| head(limit=101)\", \"start\": 4070908800000, \"end\": 4070912400000, \"isLive\": false}"
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "falcon-stand-in"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"id\": \"search-all-job-1\", \"hashedQueryOnView\": \"f00d\"}"
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://api.eu-1.crowdstrike.com/humio/api/v1/repositories/search-all/queryjobs/search-all-job-1",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "Bearer REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "falcon-stand-in"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"done\": false, \"events\": [], \"metaData\": {\"eventCount\": 0}}"
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://api.eu-1.crowdstrike.com/humio/api/v1/repositories/search-all/queryjobs/search-all-job-1",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "Bearer REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "falcon-stand-in"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"done\": true, \"cancelled\": false, \"events\": [{\"ComputerName\": \"ws-01\", \"aid\": {\"id\": \"a1\", \"cid\": \"c1\"}, \"@timestamp\": 1761465600000}, {\"ComputerName\": \"ws-02\", \"aid\": {\"id\": \"a2\"}, \"UserName\": \"\\u00dcn\\u00efcode\", \"tags\": [\"x\", 1]}, \"not an event\"], \"messages\": [{\"message\": \"the search hit a limit\"}, \"plain warning\"], \"metaData\": {\"eventCount\": 3}}"
+      }
+    }
+  ]
+}

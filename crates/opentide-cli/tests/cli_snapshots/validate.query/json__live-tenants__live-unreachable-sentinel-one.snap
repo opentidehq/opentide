@@ -1,0 +1,35 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: validate.query/json/live-tenants/live-unreachable-sentinel-one
+---
+args: opentide --json validate query --live --platform sentinel_one
+exit: 1
+
+━━━ stdout · json, 1 lines
+{
+  "advice": "check the 'lab' tenant in .opentide/configurations/platforms/sentinel_one.toml and the network path to https://s1.invalid; behind a proxy, pass opentide --proxy",
+  "command": "validate query",
+  "duration_ms": 0,
+  "error": "Cannot reach sentinel_one tenant 'lab' at https://s1.invalid: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error <ECONNREFUSED>)",
+  "exit_code": 1,
+  "failure": {
+    "argument": null,
+    "code": "tenant_unreachable",
+    "crash_log": null,
+    "message": "Cannot reach sentinel_one tenant 'lab' at https://s1.invalid: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error <ECONNREFUSED>)",
+    "suggestion": null
+  },
+  "host": "https://s1.invalid",
+  "message": "Cannot reach sentinel_one tenant 'lab' at https://s1.invalid: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error <ECONNREFUSED>)",
+  "mode": "live",
+  "next_actions": [],
+  "ok": false,
+  "platform": "sentinel_one",
+  "schema_version": 1,
+  "status": "failed",
+  "summary": {},
+  "supported": true,
+  "tenant": "lab"
+}
+
+━━━ stderr · empty

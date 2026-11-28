@@ -1,0 +1,23 @@
+---
+source: crates/opentide-cql/tests/parser_trees.rs
+expression: debug_parse(query(&file))
+input_file: crates/testdata/corpus/cql/query_parameter__invalid.cql
+---
+SOURCE_FILE@0..15
+  PIPELINE@0..14
+    FIELD_FILTER@0..14
+      FIELD_NAME@0..4
+        WORD@0..4 "host"
+      WHITESPACE@4..5 " "
+      EQ@5..6 "="
+      WHITESPACE@6..7 " "
+      QUERY_PARAMETER@7..14
+        QUESTION_L_BRACE@7..9 "?{"
+        PARAMETER_NAME@9..13
+          WORD@9..13 "host"
+        PARAMETER_DEFAULT@13..14
+          R_BRACE@13..14 "}"
+  WHITESPACE@14..15 "\n"
+
+13..13: expected `=` and a default value (expected EQ)
+13..13: expected a value (expected EQ)

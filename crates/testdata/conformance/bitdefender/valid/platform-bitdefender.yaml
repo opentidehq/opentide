@@ -1,0 +1,25 @@
+name: Bitdefender GravityZone platform block
+metadata:
+  uuid: 00000000-0000-4000-8003-000000000050
+  schema: rule::1.0
+  version: 1
+  created: "2026-01-01"
+  modified: "2026-01-02"
+  tlp: clear
+  author: Detection Engineering
+description: |
+  GravityZone Basic detection rule: the smallest useful block.
+status: STAGING
+severity: Medium
+response:
+  alert_severity: Medium
+configurations:
+  bitdefender:
+    enabled: true
+    schema: platform::bitdefender::1.0
+    status: STAGING
+    detection:
+      target: process
+      criteria:
+        - field: Process.Name
+          is: mshta.exe

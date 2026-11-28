@@ -1,0 +1,28 @@
+name: mshta runs a remote script
+metadata:
+  uuid: 00000000-0000-4000-8003-000000000061
+  schema: rule::1.1
+  version: 1
+  created: "2026-01-01"
+  modified: "2026-01-02"
+  tlp: clear
+description: |
+  mshta.exe ran a script fetched from a URL.
+status: STAGING
+severity: Informational
+techniques:
+  - T1218.005
+response:
+  alert_severity: Informational
+configurations:
+  graylog:
+    enabled: true
+    schema: platform::graylog::1.0
+    status: STAGING
+    name: mshta remote script
+    schedule: {cron: "0 */10 * * * ?", window: 10m, timezone: Europe/Paris}
+    event_limit: 50
+    event_fields:
+      host: source
+      technique_family: {template: LOLBin}
+    query: 'EventID:1 AND image_lc:/.*\\mshta\.exe/ AND command_line_lc:/.*https?:\/\/.*/'

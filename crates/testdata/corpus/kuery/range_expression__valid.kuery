@@ -1,0 +1,2 @@
+# prod:range_expression valid
+event.code >= 4624 and bytes < 100

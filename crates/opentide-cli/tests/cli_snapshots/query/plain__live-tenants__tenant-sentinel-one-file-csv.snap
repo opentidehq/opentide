@@ -1,0 +1,15 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: query/plain/live-tenants/tenant-sentinel-one-file-csv
+---
+args: opentide query --platform sentinel_one --file objects/rules/sentinel-one-process.yaml --from 2099-01-01T00:00:00Z --to 2099-01-01T01:00:00Z --format csv
+exit: 0
+
+━━━ stdout
+_tenant,_label,src.process.name,endpoint.name
+lab,sub-query 1,cmd.exe,ws-1
+lab,sub-query 1,powershell.exe,ws-2
+lab,sub-query 2,cmd.exe,ws-1
+lab,sub-query 2,powershell.exe,ws-2
+
+━━━ stderr · empty

@@ -1,0 +1,153 @@
+[package]
+name = "opentide"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+description = "The opentide Rust SDK: open a Tide workspace, validate and lint it, read its catalogue and coverage, plan a deploy, run the command line. The only opentide crate with a stability promise."
+readme = "README.md"
+documentation = "https://docs.rs/opentide"
+keywords = ["opentide", "detection-as-code", "security", "sigma", "siem"]
+categories = ["development-tools", "command-line-utilities"]
+# Published by the release train (publish.yml, UC-5.5) with the engine crates it
+# wraps, at the product version: `cargo install opentide --features cli`.
+# crates.io's `opentide` 0.0.0 was the name's placeholder
+# (publishing/placeholders/crates/opentide).
+
+[lints]
+workspace = true
+
+[package.metadata.docs.rs]
+# Every feature's API on docs.rs (UC-5.1, #836).
+all-features = true
+
+[lib]
+name = "opentide"
+path = "src/lib.rs"
+
+# The command line, as the opentide-cli crate's own binary and the PyPI and
+# npm launchers run it: one `main(argv)` (ADR 0003). Only with `cli`: the
+# library alone carries no binary.
+[[bin]]
+name = "opentide"
+path = "src/bin/opentide.rs"
+required-features = ["cli"]
+# The library's documentation is the crate's; the binary has none of its own.
+doc = false
+
+# The four examples of the Rust page in docs/sdk (the sdist ships
+# examples/, so these entries parse there). Each is also compiled into
+# tests/examples.rs, which runs it on a workspace, so CI runs them with the
+# tests (`cargo nextest run --workspace`).
+[[example]]
+name = "validate"
+required-features = ["workspace"]
+
+[[example]]
+name = "catalog"
+required-features = ["workspace"]
+
+[[example]]
+name = "deploy_plan"
+required-features = ["compile"]
+
+[[example]]
+name = "query"
+required-features = ["connectors"]
+
+# The integration tests gate themselves on the features they need
+# (`#![cfg(feature = "...")]` at each file's top), as cargo discovers them:
+# an explicit `[[test]]` would name a file the Python sdist leaves out
+# (`/crates/*/tests`, pyproject.toml), and the sdist's manifest would not
+# parse. tests/cli.rs and tests/lsp.rs run with every feature (CI's `facade`
+# job: `cargo test -p opentide --all-features`).
+
+[features]
+# `queries` is a default feature: validate's and lint's queries checks are on by
+# default (`ValidateOptions::default()`), so a build without the engines fails
+# every workspace with `engine_unavailable`. A build that wants fewer
+# dependencies turns the defaults off (`default-features = false`).
+default = ["schema", "workspace", "compile", "queries"]
+# The Tide models: threat vectors, detection objectives, detection rules, each
+# revision, the schema identifiers (`opentide::models`).
+schema = ["dep:opentide-schema"]
+# The analysis engine (`opentide::analysis`): check one query on its own and
+# highlight a text in any query language, without a workspace. The bindings'
+# `analyze_query` and `highlight` build on it (UC-5.1, #836).
+analysis = ["dep:opentide-analysis"]
+# The platform plugin host (`opentide::plugins`, UC-4.5, #835): the connectors'
+# traits a platform plugin implements, and the process's plugin host the Python
+# package installs so a run reaches the platforms its entry points register.
+# The host is the connectors' (`opentide_connectors::plugin::host`), which the
+# command line reads too: this feature does not build the command line (#1966).
+plugins = ["connectors"]
+# The Tide models as Python classes (`opentide::python`, UC-1.9, #815): the
+# `opentide._native.models` registration the Python package compiles in. Brings
+# PyO3 (opentide-schema's `python`).
+python = ["schema", "opentide-schema/python"]
+# PyO3's introspection data behind `python`, from which `cargo xtask stubs`
+# writes the generated stubs. Only that build turns it on.
+stubs = ["python", "opentide-schema/stubs"]
+# Opening a workspace, validate, lint, info, the catalogue and coverage.
+workspace = ["schema", "dep:opentide-workspace"]
+# The deploy plan: what `opentide deploy --dry-run` would send.
+compile = ["workspace", "dep:opentide-compile"]
+# The offline query engines (KQL, SPL, ES|QL, EQL, Kibana KQL, Lucene, Falco,
+# CQL) behind validate's and lint's queries checks. Without them a queries
+# check reports `engine_unavailable`, never a skipped check. They are the
+# domain layer's (`opentide_analysis::queries`): the command line is not built.
+queries = ["workspace", "analysis", "opentide-analysis/queries"]
+# The command line: `opentide::cli::main(argv)`, `opentide::cli::run_json`,
+# and the `opentide` binary (`cargo install opentide --features cli`). The
+# only feature that brings the command line's terminal UI and prompts
+# (opentide-cli's `terminal`).
+cli = ["cli-core", "opentide-cli/terminal"]
+# The command line without its terminal UI and prompts (`opentide tui` and the
+# `setup` wizard's questions refuse, as they do under WASI): the same
+# `opentide::cli` module, and no `crossterm`.
+cli-core = ["compile", "queries", "dep:opentide-cli"]
+# The language server (`opentide::lsp`): stdio, or one message at a time.
+lsp = ["workspace", "dep:opentide-lsp"]
+# Tenant operations (`opentide::connectors`): a query run, a live query check
+# and a rule deploy on the tenants a workspace configures, through the
+# platform connectors (tokio, reqwest on rustls). Async; not for wasm32.
+connectors = [
+    "compile",
+    "dep:opentide-connectors",
+    "dep:tokio",
+    "dep:tokio-util",
+    "dep:jiff",
+]
+
+[dependencies]
+opentide-schema = { workspace = true, optional = true }
+opentide-analysis = { workspace = true, optional = true }
+opentide-workspace = { workspace = true, optional = true }
+opentide-compile = { workspace = true, optional = true }
+opentide-cli = { workspace = true, optional = true }
+opentide-lsp = { workspace = true, optional = true }
+opentide-connectors = { workspace = true, optional = true }
+# `connectors`: a connection's cancellation, a window's time
+# (`connectors::Timestamp`).
+tokio-util = { workspace = true, optional = true }
+# `connectors`: the process's runtime the bindings run their operations on.
+tokio = { workspace = true, optional = true, features = ["rt"] }
+jiff = { workspace = true, optional = true }
+# The documents the facade hands back as JSON: the deploy plan's payload,
+# `cli::run_json`'s envelope.
+serde_json.workspace = true
+serde.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+# The tests lay a workspace out under a temporary folder, never in the checkout.
+tempfile.workspace = true
+# `connectors`: a stand-in tenant (tests/connectors.rs), and the runtime the
+# tests await a connection's operations on.
+wiremock.workspace = true
+tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
+# `connectors`: the platform registry a connection's settings are held to.
+opentide-schema.workspace = true

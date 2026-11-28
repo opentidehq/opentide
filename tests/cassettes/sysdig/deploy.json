@@ -1,0 +1,917 @@
+{
+  "format": 1,
+  "scenario": "sysdig/deploy",
+  "recorded_from": [
+    "{python}",
+    "tests/cassettes/sysdig/client.py"
+  ],
+  "digest": "sha256:4917c4d5ca4aadee8b96721ca6757679ea6e58e981df39b66738b8ef9a9d4d96",
+  "interactions": [
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://sysdig-tenant.invalid/api/secure/rules",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "Bearer REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"name\": \"Sysdig Falco Rule\", \"description\": \"Simulated Sysdig Secure Falco rule for CLI E2E corpus: a shell spawned in a container.\", \"tags\": [\"container\", \"shell\", \"T1059.004\", \"mitre_execution\", \"maturity_incubating\", \"team-blue\"], \"details\": {\"ruleType\": \"FALCO\", \"append\": false, \"source\": \"syscall\", \"condition\": {\"condition\": \"spawned_process and container and proc.name in ( bash, sh, zsh )\", \"components\": []}, \"output\": \"Sysdig Falco Rule | evt_type=%evt.type user=%user.name user_uid=%user.uid process=%proc.name proc_exepath=%proc.exepath parent=%proc.pname command=%proc.cmdline terminal=%proc.tty container_id=%container.id container_name=%container.name image=%container.image.repository\", \"priority\": \"warning\"}}"
+      },
+      "response": {
+        "status": 201,
+        "headers": [
+          [
+            "server",
+            "sysdig-stand-in"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"name\": \"Sysdig Falco Rule\", \"description\": \"Simulated Sysdig Secure Falco rule for CLI E2E corpus: a shell spawned in a container.\", \"tags\": [\"container\", \"shell\", \"T1059.004\", \"mitre_execution\", \"maturity_incubating\", \"team-blue\"], \"details\": {\"ruleType\": \"FALCO\", \"append\": false, \"source\": \"syscall\", \"condition\": {\"condition\": \"spawned_process and container and proc.name in ( bash, sh, zsh )\", \"components\": []}, \"output\": \"Sysdig Falco Rule | evt_type=%evt.type user=%user.name user_uid=%user.uid process=%proc.name proc_exepath=%proc.exepath parent=%proc.pname command=%proc.cmdline terminal=%proc.tty container_id=%container.id container_name=%container.name image=%container.image.repository\", \"priority\": \"warning\"}, \"id\": 42, \"version\": 1}"
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://sysdig-tenant.invalid/api/v2/policies",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "Bearer REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "sysdig-stand-in"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "[{\"id\": 7, \"name\": \"opentide managed detections\", \"ruleNames\": [\"Other rule\"], \"type\": \"falco\", \"version\": 2}, {\"id\": 8, \"name\": \"\\u00dcn\\u00efcode policy\", \"ruleNames\": [], \"type\": \"falco\", \"version\": 1}]"
+      }
+    },
+    {
+      "request": {
+        "method": "PUT",
+        "url": "https://sysdig-tenant.invalid/api/v2/policies/7",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "Bearer REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"id\": 7, \"name\": \"opentide managed detections\", \"ruleNames\": [\"Other rule\", \"Sysdig Falco Rule\"], \"type\": \"falco\", \"version\": 2}"
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "sysdig-stand-in"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"id\": 7, \"name\": \"opentide managed detections\", \"ruleNames\": [\"Other rule\", \"Sysdig Falco Rule\"], \"type\": \"falco\", \"version\": 3}"
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://sysdig-tenant.invalid/api/secure/rules/42",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "Bearer REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "sysdig-stand-in"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"name\": \"Sysdig Falco Rule\", \"description\": \"Simulated Sysdig Secure Falco rule for CLI E2E corpus: a shell spawned in a container.\", \"tags\": [\"container\", \"shell\", \"T1059.004\", \"mitre_execution\", \"maturity_incubating\", \"team-blue\"], \"details\": {\"ruleType\": \"FALCO\", \"append\": false, \"source\": \"syscall\", \"condition\": {\"condition\": \"spawned_process and container and proc.name in ( bash, sh, zsh )\", \"components\": []}, \"output\": \"Sysdig Falco Rule | evt_type=%evt.type user=%user.name user_uid=%user.uid process=%proc.name proc_exepath=%proc.exepath parent=%proc.pname command=%proc.cmdline terminal=%proc.tty container_id=%container.id container_name=%container.name image=%container.image.repository\", \"priority\": \"warning\"}, \"id\": 42, \"version\": 1}"
+      }
+    },
+    {
+      "request": {
+        "method": "PUT",
+        "url": "https://sysdig-tenant.invalid/api/secure/rules/42",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "Bearer REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"name\": \"Sysdig Falco Rule\", \"description\": \"Simulated Sysdig Secure Falco rule for CLI E2E corpus: a shell spawned in a container.\", \"tags\": [\"container\", \"shell\", \"T1059.004\", \"mitre_execution\", \"maturity_incubating\", \"team-blue\"], \"details\": {\"ruleType\": \"FALCO\", \"append\": false, \"source\": \"syscall\", \"condition\": {\"condition\": \"spawned_process and container and proc.name in ( bash, sh, zsh )\", \"components\": []}, \"output\": \"Sysdig Falco Rule | evt_type=%evt.type user=%user.name user_uid=%user.uid process=%proc.name proc_exepath=%proc.exepath parent=%proc.pname command=%proc.cmdline terminal=%proc.tty container_id=%container.id container_name=%container.name image=%container.image.repository\", \"priority\": \"warning\"}, \"id\": 42, \"version\": 1}"
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "sysdig-stand-in"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"name\": \"Sysdig Falco Rule\", \"description\": \"Simulated Sysdig Secure Falco rule for CLI E2E corpus: a shell spawned in a container.\", \"tags\": [\"container\", \"shell\", \"T1059.004\", \"mitre_execution\", \"maturity_incubating\", \"team-blue\"], \"details\": {\"ruleType\": \"FALCO\", \"append\": false, \"source\": \"syscall\", \"condition\": {\"condition\": \"spawned_process and container and proc.name in ( bash, sh, zsh )\", \"components\": []}, \"output\": \"Sysdig Falco Rule | evt_type=%evt.type user=%user.name user_uid=%user.uid process=%proc.name proc_exepath=%proc.exepath parent=%proc.pname command=%proc.cmdline terminal=%proc.tty container_id=%container.id container_name=%container.name image=%container.image.repository\", \"priority\": \"warning\"}, \"id\": 42, \"version\": 2}"
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://sysdig-tenant.invalid/api/v2/policies",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "Bearer REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "sysdig-stand-in"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "[{\"id\": 7, \"name\": \"opentide managed detections\", \"ruleNames\": [\"Other rule\", \"Sysdig Falco Rule\"], \"type\": \"falco\", \"version\": 3}, {\"id\": 8, \"name\": \"\\u00dcn\\u00efcode policy\", \"ruleNames\": [], \"type\": \"falco\", \"version\": 1}]"
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://sysdig-tenant.invalid/api/secure/rules/42",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "Bearer REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "sysdig-stand-in"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"name\": \"Sysdig Falco Rule\", \"description\": \"Simulated Sysdig Secure Falco rule for CLI E2E corpus: a shell spawned in a container.\", \"tags\": [\"container\", \"shell\", \"T1059.004\", \"mitre_execution\", \"maturity_incubating\", \"team-blue\"], \"details\": {\"ruleType\": \"FALCO\", \"append\": false, \"source\": \"syscall\", \"condition\": {\"condition\": \"spawned_process and container and proc.name in ( bash, sh, zsh )\", \"components\": []}, \"output\": \"Sysdig Falco Rule | evt_type=%evt.type user=%user.name user_uid=%user.uid process=%proc.name proc_exepath=%proc.exepath parent=%proc.pname command=%proc.cmdline terminal=%proc.tty container_id=%container.id container_name=%container.name image=%container.image.repository\", \"priority\": \"warning\"}, \"id\": 42, \"version\": 2}"
+      }
+    },
+    {
+      "request": {
+        "method": "PUT",
+        "url": "https://sysdig-tenant.invalid/api/secure/rules/42",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "Bearer REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"name\": \"Sysdig Falco Rule (renamed)\", \"description\": \"Simulated Sysdig Secure Falco rule for CLI E2E corpus: a shell spawned in a container.\", \"tags\": [\"container\", \"shell\", \"T1059.004\", \"mitre_execution\", \"maturity_incubating\", \"team-blue\"], \"details\": {\"ruleType\": \"FALCO\", \"append\": false, \"source\": \"syscall\", \"condition\": {\"condition\": \"spawned_process and container and proc.name in ( bash, sh, zsh )\", \"components\": []}, \"output\": \"Sysdig Falco Rule (renamed) | evt_type=%evt.type user=%user.name user_uid=%user.uid process=%proc.name proc_exepath=%proc.exepath parent=%proc.pname command=%proc.cmdline terminal=%proc.tty container_id=%container.id container_name=%container.name image=%container.image.repository\", \"priority\": \"warning\"}, \"id\": 42, \"version\": 2}"
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "sysdig-stand-in"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"name\": \"Sysdig Falco Rule (renamed)\", \"description\": \"Simulated Sysdig Secure Falco rule for CLI E2E corpus: a shell spawned in a container.\", \"tags\": [\"container\", \"shell\", \"T1059.004\", \"mitre_execution\", \"maturity_incubating\", \"team-blue\"], \"details\": {\"ruleType\": \"FALCO\", \"append\": false, \"source\": \"syscall\", \"condition\": {\"condition\": \"spawned_process and container and proc.name in ( bash, sh, zsh )\", \"components\": []}, \"output\": \"Sysdig Falco Rule (renamed) | evt_type=%evt.type user=%user.name user_uid=%user.uid process=%proc.name proc_exepath=%proc.exepath parent=%proc.pname command=%proc.cmdline terminal=%proc.tty container_id=%container.id container_name=%container.name image=%container.image.repository\", \"priority\": \"warning\"}, \"id\": 42, \"version\": 3}"
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://sysdig-tenant.invalid/api/v2/policies",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "Bearer REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "sysdig-stand-in"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "[{\"id\": 7, \"name\": \"opentide managed detections\", \"ruleNames\": [\"Other rule\", \"Sysdig Falco Rule\"], \"type\": \"falco\", \"version\": 3}, {\"id\": 8, \"name\": \"\\u00dcn\\u00efcode policy\", \"ruleNames\": [], \"type\": \"falco\", \"version\": 1}]"
+      }
+    },
+    {
+      "request": {
+        "method": "PUT",
+        "url": "https://sysdig-tenant.invalid/api/v2/policies/7",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "Bearer REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"id\": 7, \"name\": \"opentide managed detections\", \"ruleNames\": [\"Other rule\", \"Sysdig Falco Rule (renamed)\"], \"type\": \"falco\", \"version\": 3}"
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "sysdig-stand-in"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"id\": 7, \"name\": \"opentide managed detections\", \"ruleNames\": [\"Other rule\", \"Sysdig Falco Rule (renamed)\"], \"type\": \"falco\", \"version\": 4}"
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://sysdig-tenant.invalid/api/v2/policies",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "Bearer REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "sysdig-stand-in"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "[{\"id\": 7, \"name\": \"opentide managed detections\", \"ruleNames\": [\"Other rule\", \"Sysdig Falco Rule (renamed)\"], \"type\": \"falco\", \"version\": 4}, {\"id\": 8, \"name\": \"\\u00dcn\\u00efcode policy\", \"ruleNames\": [], \"type\": \"falco\", \"version\": 1}]"
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://sysdig-tenant.invalid/api/secure/rules/42",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "Bearer REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "sysdig-stand-in"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"name\": \"Sysdig Falco Rule (renamed)\", \"description\": \"Simulated Sysdig Secure Falco rule for CLI E2E corpus: a shell spawned in a container.\", \"tags\": [\"container\", \"shell\", \"T1059.004\", \"mitre_execution\", \"maturity_incubating\", \"team-blue\"], \"details\": {\"ruleType\": \"FALCO\", \"append\": false, \"source\": \"syscall\", \"condition\": {\"condition\": \"spawned_process and container and proc.name in ( bash, sh, zsh )\", \"components\": []}, \"output\": \"Sysdig Falco Rule (renamed) | evt_type=%evt.type user=%user.name user_uid=%user.uid process=%proc.name proc_exepath=%proc.exepath parent=%proc.pname command=%proc.cmdline terminal=%proc.tty container_id=%container.id container_name=%container.name image=%container.image.repository\", \"priority\": \"warning\"}, \"id\": 42, \"version\": 3}"
+      }
+    },
+    {
+      "request": {
+        "method": "PUT",
+        "url": "https://sysdig-tenant.invalid/api/secure/rules/42",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "Bearer REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"name\": \"Sysdig Falco Rule (renamed)\", \"description\": \"Simulated Sysdig Secure Falco rule for CLI E2E corpus: a shell spawned in a container.\", \"tags\": [\"container\", \"shell\", \"T1059.004\", \"mitre_execution\", \"maturity_sandbox\", \"team-blue\"], \"details\": {\"ruleType\": \"FALCO\", \"append\": false, \"source\": \"syscall\", \"condition\": {\"condition\": \"spawned_process and container and proc.name in ( bash, sh, zsh )\", \"components\": []}, \"output\": \"Sysdig Falco Rule (renamed) | evt_type=%evt.type user=%user.name user_uid=%user.uid process=%proc.name proc_exepath=%proc.exepath parent=%proc.pname command=%proc.cmdline terminal=%proc.tty container_id=%container.id container_name=%container.name image=%container.image.repository\", \"priority\": \"warning\"}, \"id\": 42, \"version\": 3}"
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "sysdig-stand-in"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"name\": \"Sysdig Falco Rule (renamed)\", \"description\": \"Simulated Sysdig Secure Falco rule for CLI E2E corpus: a shell spawned in a container.\", \"tags\": [\"container\", \"shell\", \"T1059.004\", \"mitre_execution\", \"maturity_sandbox\", \"team-blue\"], \"details\": {\"ruleType\": \"FALCO\", \"append\": false, \"source\": \"syscall\", \"condition\": {\"condition\": \"spawned_process and container and proc.name in ( bash, sh, zsh )\", \"components\": []}, \"output\": \"Sysdig Falco Rule (renamed) | evt_type=%evt.type user=%user.name user_uid=%user.uid process=%proc.name proc_exepath=%proc.exepath parent=%proc.pname command=%proc.cmdline terminal=%proc.tty container_id=%container.id container_name=%container.name image=%container.image.repository\", \"priority\": \"warning\"}, \"id\": 42, \"version\": 4}"
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://sysdig-tenant.invalid/api/v2/policies",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "Bearer REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "sysdig-stand-in"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "[{\"id\": 7, \"name\": \"opentide managed detections\", \"ruleNames\": [\"Other rule\", \"Sysdig Falco Rule (renamed)\"], \"type\": \"falco\", \"version\": 4}, {\"id\": 8, \"name\": \"\\u00dcn\\u00efcode policy\", \"ruleNames\": [], \"type\": \"falco\", \"version\": 1}]"
+      }
+    },
+    {
+      "request": {
+        "method": "PUT",
+        "url": "https://sysdig-tenant.invalid/api/v2/policies/7",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "Bearer REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"id\": 7, \"name\": \"opentide managed detections\", \"ruleNames\": [\"Other rule\"], \"type\": \"falco\", \"version\": 4}"
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "sysdig-stand-in"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"id\": 7, \"name\": \"opentide managed detections\", \"ruleNames\": [\"Other rule\"], \"type\": \"falco\", \"version\": 5}"
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://sysdig-tenant.invalid/api/v2/policies",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "Bearer REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "sysdig-stand-in"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "[{\"id\": 7, \"name\": \"opentide managed detections\", \"ruleNames\": [\"Other rule\"], \"type\": \"falco\", \"version\": 5}, {\"id\": 8, \"name\": \"\\u00dcn\\u00efcode policy\", \"ruleNames\": [], \"type\": \"falco\", \"version\": 1}]"
+      }
+    },
+    {
+      "request": {
+        "method": "DELETE",
+        "url": "https://sysdig-tenant.invalid/api/secure/rules/42",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "Bearer REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 204,
+        "headers": [
+          [
+            "server",
+            "sysdig-stand-in"
+          ]
+        ],
+        "body": ""
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://sysdig-tenant.invalid/api/secure/rules/42",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "Bearer REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 404,
+        "headers": [
+          [
+            "server",
+            "sysdig-stand-in"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"message\": \"not found\"}"
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://sysdig-tenant.invalid/api/secure/rules",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "Bearer REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"name\": \"Sysdig Falco Rule\", \"description\": \"Simulated Sysdig Secure Falco rule for CLI E2E corpus: a shell spawned in a container.\", \"tags\": [\"container\", \"shell\", \"T1059.004\", \"mitre_execution\", \"maturity_incubating\", \"team-blue\"], \"details\": {\"ruleType\": \"FALCO\", \"append\": false, \"source\": \"syscall\", \"condition\": {\"condition\": \"spawned_process and container and proc.name in ( bash, sh, zsh )\", \"components\": []}, \"output\": \"Sysdig Falco Rule | evt_type=%evt.type user=%user.name user_uid=%user.uid process=%proc.name proc_exepath=%proc.exepath parent=%proc.pname command=%proc.cmdline terminal=%proc.tty container_id=%container.id container_name=%container.name image=%container.image.repository\", \"priority\": \"warning\"}}"
+      },
+      "response": {
+        "status": 201,
+        "headers": [
+          [
+            "server",
+            "sysdig-stand-in"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"name\": \"Sysdig Falco Rule\", \"description\": \"Simulated Sysdig Secure Falco rule for CLI E2E corpus: a shell spawned in a container.\", \"tags\": [\"container\", \"shell\", \"T1059.004\", \"mitre_execution\", \"maturity_incubating\", \"team-blue\"], \"details\": {\"ruleType\": \"FALCO\", \"append\": false, \"source\": \"syscall\", \"condition\": {\"condition\": \"spawned_process and container and proc.name in ( bash, sh, zsh )\", \"components\": []}, \"output\": \"Sysdig Falco Rule | evt_type=%evt.type user=%user.name user_uid=%user.uid process=%proc.name proc_exepath=%proc.exepath parent=%proc.pname command=%proc.cmdline terminal=%proc.tty container_id=%container.id container_name=%container.name image=%container.image.repository\", \"priority\": \"warning\"}, \"id\": 43, \"version\": 1}"
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://sysdig-tenant.invalid/api/v2/policies",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "Bearer REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "sysdig-stand-in"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "[{\"id\": 7, \"name\": \"opentide managed detections\", \"ruleNames\": [\"Other rule\"], \"type\": \"falco\", \"version\": 5}, {\"id\": 8, \"name\": \"\\u00dcn\\u00efcode policy\", \"ruleNames\": [], \"type\": \"falco\", \"version\": 1}]"
+      }
+    },
+    {
+      "request": {
+        "method": "PUT",
+        "url": "https://sysdig-tenant.invalid/api/v2/policies/7",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "Bearer REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"id\": 7, \"name\": \"opentide managed detections\", \"ruleNames\": [\"Other rule\", \"Sysdig Falco Rule\"], \"type\": \"falco\", \"version\": 5}"
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "sysdig-stand-in"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"id\": 7, \"name\": \"opentide managed detections\", \"ruleNames\": [\"Other rule\", \"Sysdig Falco Rule\"], \"type\": \"falco\", \"version\": 6}"
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://sysdig-tenant.invalid/api/secure/rules/99",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "Bearer REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 404,
+        "headers": [
+          [
+            "server",
+            "sysdig-stand-in"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"message\": \"not found\"}"
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://sysdig-tenant.invalid/api/secure/rules",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "Bearer REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"name\": \"Sysdig Falco Rule\", \"description\": \"Simulated Sysdig Secure Falco rule for CLI E2E corpus: a shell spawned in a container.\", \"tags\": [\"container\", \"shell\", \"T1059.004\", \"mitre_execution\", \"maturity_incubating\", \"team-blue\"], \"details\": {\"ruleType\": \"FALCO\", \"append\": false, \"source\": \"syscall\", \"condition\": {\"condition\": \"spawned_process and container and proc.name in ( bash, sh, zsh )\", \"components\": []}, \"output\": \"Sysdig Falco Rule | evt_type=%evt.type user=%user.name user_uid=%user.uid process=%proc.name proc_exepath=%proc.exepath parent=%proc.pname command=%proc.cmdline terminal=%proc.tty container_id=%container.id container_name=%container.name image=%container.image.repository\", \"priority\": \"warning\"}}"
+      },
+      "response": {
+        "status": 201,
+        "headers": [
+          [
+            "server",
+            "sysdig-stand-in"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"name\": \"Sysdig Falco Rule\", \"description\": \"Simulated Sysdig Secure Falco rule for CLI E2E corpus: a shell spawned in a container.\", \"tags\": [\"container\", \"shell\", \"T1059.004\", \"mitre_execution\", \"maturity_incubating\", \"team-blue\"], \"details\": {\"ruleType\": \"FALCO\", \"append\": false, \"source\": \"syscall\", \"condition\": {\"condition\": \"spawned_process and container and proc.name in ( bash, sh, zsh )\", \"components\": []}, \"output\": \"Sysdig Falco Rule | evt_type=%evt.type user=%user.name user_uid=%user.uid process=%proc.name proc_exepath=%proc.exepath parent=%proc.pname command=%proc.cmdline terminal=%proc.tty container_id=%container.id container_name=%container.name image=%container.image.repository\", \"priority\": \"warning\"}, \"id\": 44, \"version\": 1}"
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://sysdig-tenant.invalid/api/v2/policies",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "Bearer REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "sysdig-stand-in"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "[{\"id\": 7, \"name\": \"opentide managed detections\", \"ruleNames\": [\"Other rule\", \"Sysdig Falco Rule\"], \"type\": \"falco\", \"version\": 6}, {\"id\": 8, \"name\": \"\\u00dcn\\u00efcode policy\", \"ruleNames\": [], \"type\": \"falco\", \"version\": 1}]"
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://sysdig-tenant.invalid/api/secure/rules",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "Bearer REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"name\": \"Rejected rule\", \"description\": \"Simulated Sysdig Secure Falco rule for CLI E2E corpus: a shell spawned in a container.\", \"tags\": [\"container\", \"shell\", \"T1059.004\", \"mitre_execution\", \"maturity_incubating\", \"team-blue\"], \"details\": {\"ruleType\": \"FALCO\", \"append\": false, \"source\": \"syscall\", \"condition\": {\"condition\": \"spawned_process and container and proc.name in ( bash, sh, zsh )\", \"components\": []}, \"output\": \"Rejected rule | evt_type=%evt.type user=%user.name user_uid=%user.uid process=%proc.name proc_exepath=%proc.exepath parent=%proc.pname command=%proc.cmdline terminal=%proc.tty container_id=%container.id container_name=%container.name image=%container.image.repository\", \"priority\": \"warning\"}}"
+      },
+      "response": {
+        "status": 422,
+        "headers": [
+          [
+            "server",
+            "sysdig-stand-in"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"errors\": [{\"reason\": \"condition does not compile\"}]}"
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://sysdig-tenant.invalid/api/secure/rules/401",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "Bearer REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 403,
+        "headers": [
+          [
+            "server",
+            "sysdig-stand-in"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"message\": \"Forbidden: missing permission secure.rules.read\"}"
+      }
+    }
+  ]
+}

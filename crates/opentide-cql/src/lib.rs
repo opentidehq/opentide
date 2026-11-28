@@ -1,0 +1,327 @@
+//! I/O-free CrowdStrike Query Language (CQL) engine: Falcon LogScale and
+//! Falcon Next-Gen SIEM (`configurations.crowdstrike`).
+//!
+//! The parser is pure Rust: a logos lexer (`lexer`) and a hand-written
+//! recursive-descent grammar (`parser`) over the `opentide-parse` toolkit, into
+//! a lossless rowan tree (`syntax`). It follows CrowdStrike's published CQL
+//! grammar. [`analyze`] reports its first syntax error and then the checks of
+//! [`check`] against the catalogs of [`catalog`]. See `docs/engine/CQL.md`.
+//!
+//! Internal to opentide, with no stability promise: depend on the
+//! [`opentide`](https://docs.rs/opentide) crate, its Rust SDK, instead.
+
+#![expect(
+    missing_docs,
+    reason = "imported from language-server with public items undocumented: crates/AGENTS.md, Lints"
+)]
+#![expect(
+    clippy::too_many_lines,
+    reason = "engine dispatchers match every node kind in one function"
+)]
+pub mod assist;
+pub mod catalog;
+mod catalog_model;
+pub mod check;
+mod highlight;
+// The parser's pieces and the typed AST of `cql.ungram` (written by `cargo xtask codegen`):
+// public but hidden, as KQL's and SPL's, for the crate's corpus, tree and conformance tests
+// (`tests/`). Not an API.
+#[doc(hidden)]
+#[path = "generated/ast.rs"]
+pub mod ast;
+#[doc(hidden)]
+pub mod lexer;
+#[doc(hidden)]
+pub mod parser;
+#[doc(hidden)]
+pub mod syntax;
+// The typed AST and `T!` name the kinds from the crate root.
+#[doc(hidden)]
+pub use syntax::{Lang, SyntaxKind, SyntaxNode, SyntaxToken};
+
+pub use assist::{completions, hover, signature_help};
+
+use opentide_core::{ByteSpan, Diagnostic, Range, codes, span_to_range};
+use opentide_highlight::{HighlightSpec, HighlightToken};
+use opentide_parse::{ErrorKind, SyntaxError};
+use rowan::TextRange;
+use syntax::SyntaxKind as K;
+
+/// `text[start..end]`, a range this crate computes: a token's bounds, a
+/// character's, or an ASCII byte's, so its ends are char boundaries. A range
+/// that is not fails a debug assertion and reads as empty.
+pub(crate) fn cut(text: &str, start: usize, end: usize) -> &str {
+    let piece = text.get(start..end);
+    debug_assert!(piece.is_some(), "{start}..{end} in {} bytes", text.len());
+    piece.unwrap_or_default()
+}
+
+/// The use of the query (ADR 0015 §1: a profile, chosen by where the text
+/// sits, never by the platform). The default is a search: a raw `.cql` file
+/// or a hunt.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct Profile {
+    /// A Next-Gen SIEM correlation rule (`configurations.crowdstrike.query`),
+    /// which adds CrowdStrike's correlation-rule restrictions.
+    pub correlation_rule: bool,
+}
+
+impl Profile {
+    /// A CrowdStrike block's `query`.
+    pub const CORRELATION_RULE: Profile = Profile {
+        correlation_rule: true,
+    };
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct AnalyzeResult {
+    pub diagnostics: Vec<Diagnostic>,
+    pub tokens: Vec<HighlightToken>,
+}
+
+/// Whether `source` parses without an error: the parse alone, with no
+/// analysis, for the throughput benchmark (`cargo bench --bench throughput`, ADR
+/// 0014). Not part of the API.
+#[doc(hidden)]
+#[must_use]
+pub fn parses(source: &str) -> bool {
+    parser::parse(source).1.errors.is_empty()
+}
+
+/// The node and token kinds of a parse of `source`, by their `snake_case` names, and
+/// whether it has a syntax error: what the corpus gate reads
+/// (`crates/opentide-analysis/tests/corpus_gate.rs`). Not part of the API.
+#[doc(hidden)]
+#[must_use]
+pub fn debug_kinds(source: &str) -> (bool, Vec<String>) {
+    let (root, parse) = parser::parse(source);
+    let kinds = root
+        .descendants_with_tokens()
+        .map(|e| syntax::snake_case(e.kind()))
+        .collect();
+    (!parse.errors.is_empty(), kinds)
+}
+
+/// For each syntax error of `source`, the `snake_case` names of the nodes it was recorded in: what
+/// the corpus gate of `opentide-analysis` reads to check that an invalid fixture fails in the
+/// production it names. Not part of the API.
+#[doc(hidden)]
+#[must_use]
+pub fn debug_error_kinds(source: &str) -> Vec<Vec<String>> {
+    let (_, parse) = parser::parse(source);
+    parse
+        .errors
+        .iter()
+        .map(|e| {
+            e.within
+                .iter()
+                .map(|&k| syntax::snake_case(syntax::SyntaxKind::from_raw(k)))
+                .collect()
+        })
+        .collect()
+}
+
+/// The `snake_case` names of the tree's named productions: the nodes of `cql.ungram`
+/// a parse builds (an enum of the ungram, such as `filter` or `expr`, is no node).
+/// Not part of the API.
+#[doc(hidden)]
+#[must_use]
+pub fn debug_productions() -> Vec<String> {
+    syntax::PRODUCTIONS
+        .iter()
+        .map(|&k| syntax::snake_case(k))
+        .collect()
+}
+
+/// Analyze a CQL query on its own (a raw `.cql` file or a hunt search).
+pub fn analyze(source: &str) -> AnalyzeResult {
+    analyze_with(source, &Profile::default())
+}
+
+/// The CrowdStrike CQL [`QueryEngine`](opentide_highlight::QueryEngine) (#1953):
+/// [`analyze`] behind the shared interface.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct Engine;
+
+impl opentide_highlight::QueryEngine for Engine {
+    fn language(&self) -> opentide_core::LanguageId {
+        opentide_core::LanguageId::Cql
+    }
+
+    fn analyze_for(
+        &self,
+        source: &str,
+        setting: &opentide_highlight::Setting<'_>,
+    ) -> opentide_highlight::AnalyzeResult {
+        let profile = if setting.profile == opentide_highlight::Profile::Rule {
+            Profile::CORRELATION_RULE
+        } else {
+            Profile::default()
+        };
+        let r = analyze_with(source, &profile);
+        opentide_highlight::AnalyzeResult {
+            diagnostics: r.diagnostics,
+            tokens: r.tokens,
+        }
+    }
+
+    fn hover(
+        &self,
+        source: &str,
+        offset: usize,
+        _setting: &opentide_highlight::Setting<'_>,
+    ) -> Option<String> {
+        hover(source, offset)
+    }
+
+    fn completions(
+        &self,
+        source: &str,
+        offset: usize,
+        _setting: &opentide_highlight::Setting<'_>,
+    ) -> Vec<opentide_core::CompletionItem> {
+        completions(source, offset)
+    }
+
+    fn signature_help(
+        &self,
+        source: &str,
+        offset: usize,
+        _setting: &opentide_highlight::Setting<'_>,
+    ) -> Option<opentide_core::SignatureHelp> {
+        signature_help(source, offset)
+    }
+}
+
+/// Analyze a CQL query under `profile`: a correlation rule or a search.
+pub fn analyze_with(source: &str, profile: &Profile) -> AnalyzeResult {
+    opentide_core::with_line_index(source, || analyze_lines(source, *profile))
+}
+
+#[expect(
+    clippy::expect_used,
+    reason = "loads the HighlightSpec compiled in (highlights/spec.toml): a bad spec fails the tests, never a user's document"
+)]
+fn analyze_lines(source: &str, ctx: Profile) -> AnalyzeResult {
+    let spec = HighlightSpec::shared().expect("highlight spec");
+    let (root, parse) = parser::parse(source);
+    let mut diagnostics = Vec::new();
+    if let Some(err) = parse.errors.first() {
+        let (message, span) = parse_error(&root, err, source);
+        diagnostics.push(Diagnostic::error(
+            codes::CQL_PARSE_ERROR,
+            message,
+            span_to_range(source, span),
+        ));
+    }
+    // One walk for the checks and the highlight (ADR 0014 §5a).
+    let mut spans = Vec::new();
+    diagnostics.extend(check::diagnostics_with(
+        &root,
+        &parse.errors,
+        source,
+        ctx,
+        |t| spans.extend(highlight::span(t, source)),
+    ));
+    AnalyzeResult {
+        diagnostics,
+        tokens: highlight::from_spans(spec, source, &spans),
+    }
+}
+
+/// The first syntax error in words, and where it is: what is missing, or the token
+/// that does not fit and what would.
+fn parse_error(root: &SyntaxNode, err: &SyntaxError, source: &str) -> (String, ByteSpan) {
+    let at = usize::from(err.anchor(source.len()));
+    // The token after the gap: the one that does not fit (inside an error node when the
+    // parser skipped it).
+    let next = root
+        .token_at_offset(err.gap.end())
+        .right_biased()
+        .filter(|t| t.text_range().start() == err.gap.end() && !t.text_range().is_empty());
+    // Characters no token takes are one token each (`a >= error` after an operator that wants
+    // a number): the range covers the run of them, so the message quotes the whole word.
+    let span = next.as_ref().map_or(ByteSpan::new(at, at), |t| {
+        let mut end = t.text_range().end();
+        if t.kind() == K::ERROR_TOKEN {
+            let mut cur = t.next_token();
+            while let Some(n) =
+                cur.filter(|n| n.kind() == K::ERROR_TOKEN && n.text_range().start() == end)
+            {
+                end = n.text_range().end();
+                cur = n.next_token();
+            }
+        }
+        bounds(TextRange::new(t.text_range().start(), end))
+    });
+    // Text pasted from a web page often carries U+00A0, which CQL does not
+    // read as a space: blame it when it is where the parser stopped.
+    // The anchor is a gap's bound: a token's.
+    let before = cut(source, 0, at).chars().next_back();
+    let here = source.get(span.start..span.end).unwrap_or("");
+    if before == Some('\u{a0}') || here.contains('\u{a0}') {
+        return (
+            "CQL syntax error: a non-breaking space (U+00A0) is not whitespace in CQL; replace it with a space".to_string(),
+            span,
+        );
+    }
+    // A `"` with no closing quote lexes as a stray character: the string is never closed.
+    if here == "\"" {
+        return (
+            "CQL syntax error: the string is never closed".to_string(),
+            span,
+        );
+    }
+    let message = err.message.as_str();
+    if let ErrorKind::TooDeep { .. } = err.kind {
+        return (format!("CQL syntax error: {message}"), span);
+    }
+    if message.starts_with("missing ") || message.ends_with("is never closed") {
+        return (
+            format!("CQL syntax error: {message}"),
+            ByteSpan::new(at, at),
+        );
+    }
+    let what = if message == parser::UNEXPECTED {
+        String::new()
+    } else {
+        format!(": {message}")
+    };
+    match here.split_whitespace().next() {
+        Some(word) => (format!("CQL syntax error near `{word}`{what}"), span),
+        None if what.is_empty() => ("CQL syntax error".to_string(), span),
+        None => (
+            format!("CQL syntax error at the end of the query{what}"),
+            span,
+        ),
+    }
+}
+
+fn bounds(r: TextRange) -> ByteSpan {
+    ByteSpan::new(usize::from(r.start()), usize::from(r.end()))
+}
+
+/// The text of `node`.
+pub(crate) fn text<'a>(node: &SyntaxNode, source: &'a str) -> &'a str {
+    source
+        .get(std::ops::Range::<usize>::from(node.text_range()))
+        .unwrap_or("")
+}
+
+/// The LSP range of `node`.
+pub(crate) fn range(source: &str, node: &SyntaxNode) -> Range {
+    span_to_range(source, bounds(node.text_range()))
+}
+
+/// The `n`th child node of `node` (ERROR nodes included).
+pub(crate) fn nth(node: &SyntaxNode, n: usize) -> Option<SyntaxNode> {
+    node.children().nth(n)
+}
+
+/// The first child node of `node` of `kind`.
+pub(crate) fn child(node: &SyntaxNode, kind: K) -> Option<SyntaxNode> {
+    node.children().find(|c| c.kind() == kind)
+}
+
+#[cfg(test)]
+mod tests;

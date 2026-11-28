@@ -1,0 +1,28 @@
+{
+  "name": "@opentide/opentide",
+  "version": "0.0.0",
+  "description": "Reserved for the opentide TypeScript SDK and CLI. This version has no code; opentide ships today as the Python package opentide on PyPI.",
+  "license": "EUPL-1.2",
+  "homepage": "https://opentide.org",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/opentidehq/opentide.git",
+    "directory": "publishing/placeholders/npm/opentide-scoped"
+  },
+  "bugs": {
+    "url": "https://github.com/opentidehq/opentide/issues"
+  },
+  "keywords": [
+    "opentide",
+    "detection-as-code",
+    "security"
+  ],
+  "files": [
+    "README.md",
+    "LICENSE"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  }
+}

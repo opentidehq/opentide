@@ -1,0 +1,2 @@
+// prod:evaluate_operator valid
+Event | evaluate bag_unpack(EventData)

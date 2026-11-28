@@ -1,0 +1,1 @@
+evt.type in (open,openat,openat2,creat) and proc.name in (oops and evt.rawres>=0 and evt.is_open_exec=true and container and not runc_writing_exec_fifo and not runc_writing_var_lib_docker and not user_known_container_drift_activities

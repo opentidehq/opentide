@@ -1,0 +1,2 @@
+# prod:group_by_clause valid
+SELECT user, COUNT(*) AS n GROUP-BY user

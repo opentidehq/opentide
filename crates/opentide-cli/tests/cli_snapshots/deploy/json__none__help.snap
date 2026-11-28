@@ -1,0 +1,63 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: deploy/json/none/help
+---
+args: opentide --json deploy --help
+exit: 0
+
+━━━ stdout
+Deploy rules to platform tenants
+
+Usage: opentide deploy [OPTIONS] [COMMAND]
+
+Commands:
+  migrate-state  Move vendor ids from rules into deployment state
+  replay-state   Replay one commit's deployment-state changes onto the checkout (CI write-back)
+
+Options:
+      --platform <PLATFORM>
+          Detection platform: sentinel, microsoft_defender, splunk, sentinel_one, crowdstrike, harfanglab, carbon_black_cloud, elastic, sysdig, bitdefender, graylog, exabeam, google_secops, datadog
+          
+          [possible values: sentinel, microsoft_defender, splunk, sentinel_one, crowdstrike, harfanglab, carbon_black_cloud, elastic, sysdig, bitdefender, graylog, exabeam, google_secops, datadog]
+
+      --strategy <STRATEGY>
+          Status strategy this run deploys (repeatable). PREVIEW: rules whose status maps to PREVIEW or UNIVERSAL. RELEASE: rules whose status maps to RELEASE or UNIVERSAL, and disables or deletes those mapping to DISABLEMENT or DELETION. Each rule goes to the tenants whose 'strategies' accept the run's strategy. Status names such as STAGING or PRODUCTION are not strategies
+
+      --all
+          Read every rule file, not only those the run changed (the pull or merge request, the push, or outside CI the last commit)
+
+      --uuid <UUIDS>
+          Read this rule (metadata.uuid) instead of the changed ones (repeatable). Cannot be combined with --all
+
+      --file <FILES>
+          Read this rule file, matched as by 'opentide validate --file', instead of the changed ones (repeatable). Cannot be combined with --all
+
+      --wide
+          Deploy the rule files read whatever their status strategy, INERT included
+
+      --dry-run
+          Print the plan and compile each rule; send nothing
+
+      --keep-deprecated, --drop-deprecated
+          Include rules whose status maps to DISABLEMENT or DELETION, so a RELEASE run disables or deletes them. Default: on, off with --all
+
+      --skip-promotion
+          Skip the status promotion of a RELEASE run on a push to the default branch
+
+      --skip-unconfigured
+          Exit 0 when every platform with rules to deploy has no [[tenants]] block
+
+      --persist-state-externally
+          Allow Defender, SentinelOne and CrowdStrike creates in a CI run other than a RELEASE run on a push; this pipeline must commit .opentide/states/deployment/ itself
+
+      --prune
+          With --strategy RELEASE: retire (delete) the rules deployed earlier whose rule file is gone: those the run's diff deleted, or with --all those deployment state records and no file holds. Without it, deploy only warns about them
+
+      --help
+          Print help
+
+Examples:
+  $ opentide deploy --strategy PREVIEW --all --dry-run
+  $ opentide deploy --strategy RELEASE
+
+━━━ stderr · empty

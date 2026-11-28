@@ -1,19 +1,22 @@
 ---
 name: release-management
 description: >-
-  Cut opentide PyPI releases: changelog, install pins, GitHub Release tag, OIDC publish. Use
-  when releasing, tagging v*, publishing to PyPI, or preparing 0.x.y notes.
+  Cut opentide releases with the release train (publish.yml): changelog, install pins, the
+  lockstep version, internal release candidates (a draft GitHub pre-release, no registry), then one Run workflow that tags and publishes the
+  wheels, crates, npm packages and binaries with OIDC, and the follow-up review of the
+  opentidehq/skills agent skills. Use when releasing, tagging v*, publishing to PyPI, crates.io
+  or npm, or preparing 0.x.y notes.
 ---
 
 # Release management — opentide
 
-SOP for shipping a PyPI version of `opentide`. Version is **dynamic from git tags** via hatch-vcs (`pyproject.toml` `[tool.hatch.version] source = "vcs"`). There is no hardcoded version in pyproject. Do **not** hand-edit `src/opentide/_version.py`.
+SOP for shipping a version of opentide. One version and one tag (`vX.Y.Z`) publish everything: the PyPI wheels and sdist, the crates (the `opentide` facade and the engine crates), the npm packages (`@opentide/opentide`, its native packages, the `opentide` alias, `@opentide/lsp-client`, `@opentide/lsp-worker`, `@opentide/wasi-host`), and a GitHub Release with the `opentide` and `opentide-lsp` binaries, their installers, the engine assets editors pin, the SBOMs and `SHA256SUMS` ([`publish.yml`](../../../.github/workflows/publish.yml), UC-5.5). The version is the Cargo workspace's (`[workspace.package]` in `Cargo.toml`), which `scripts/engine/release.py bump` sets: the crates carry it, and maturin builds the Python wheel at it (`bindings/python/` takes the workspace's; a candidate's `X.Y.ZrcN` is written in the workflow's checkout by `release.py pypi-version`); the npm packages get it from the workflow.
 
 ## When to use
 
 - User asks to release, cut a version, publish to PyPI, bump the package, or "bundle this in a release"
 - A user-facing fix/feature has landed on `development` but PyPI still shows the previous version
-- Preparing notes / pins before `gh release create`
+- Preparing notes / pins before a release, or a release candidate
 
 ## When NOT to release
 
@@ -21,36 +24,37 @@ SOP for shipping a PyPI version of `opentide`. Version is **dynamic from git tag
 |----------|-----------------|
 | CI-only, docs-for-agents, CodeQL Action pins, E2E tests that do not change the installed CLI/SDK/schema | No release |
 | Tagging HEAD before changelog / notes / pins exist | Step 1 first |
-| Releasing from a feature branch | Merge notes to `development`, then tag the **merge commit** |
+| Releasing from a feature branch | Merge notes to `development`, then Run workflow there |
+| Pushing a `v*` tag or creating a Release by hand | Nothing publishes it: Run workflow on `publish.yml` creates both |
 
-Never tag a feature branch. Trunk is `development`.
+Never tag by hand. Trunk is `development`.
 
 ## Version mechanics
 
 | Fact | Detail |
 |------|--------|
 | Package | `opentide` on PyPI |
-| Tag | `v0.x.y` (leading `v`) |
-| Release | **Run workflow** on `development` (no `checkout_ref`) → [`.github/workflows/publish-pypi.yml`](../../../.github/workflows/publish-pypi.yml) creates the tag + GitHub Release and publishes. A Release published by hand (`release: published`) still publishes |
+| Tag | `v0.x.y` (leading `v`); a release candidate `v1.0.0-rc.N` (the Rust-core transition: 1.0.0, held at candidates; `internal_candidate` is a draft GitHub pre-release, `release_candidate` a public one on GitHub, PyPI and crates.io: `1.0.0-rc.1` is out) |
+| Release | **Run workflow** on `development`, no inputs → [`publish.yml`](../../../.github/workflows/publish.yml) checks, builds, smoke-tests, attests, creates the tag + GitHub Release, then publishes to PyPI, crates.io and npm. Nothing else publishes: no workflow runs on a `v*` tag or a Release made by hand |
 | Version before the tag | Newest dated `CHANGELOG.md` heading: `uv run python scripts/build/release.py version` |
-| Auth | OIDC trusted publishing. Environment `pypi`. **No API token.** |
-| Workflow filename on PyPI | `publish-pypi.yml` (filename only) |
-| Failed release | Release **without** that tag on the checked-out commit publishes `0.1.dev…` |
+| Lockstep | The crates are at that version: `python3 scripts/engine/release.py lockstep 0.x.y` (the workspace version and every internal pin). The workflow writes it into the npm packages (`release.py npm-version`) and checks them (`lockstep --npm`) |
+| Auth | OIDC trusted publishing on all three registries. PyPI environment `pypi`, for releases and candidates (no TestPyPI). Workflow filename `publish.yml` everywhere. `CARGO_REGISTRY_TOKEN` only for a crate's first version (`1.0.0-rc.1` used it for the eight new names, and every crate now trusts `publish.yml`: **delete** the secret, do not only revoke the token, and add one again only for a crate added later) |
+| Engine tags | The engine's own `engine-vX.Y.Z` series (`engine-release.yml`) ended with the release train; its skill, `engine-release`, was removed |
 
-A GitHub Release whose `--target` is not the tagged commit is a failed release. Do not retag; fix the target and publish from the correct tag.
+## What a release publishes
 
-## The engine is part of the wheels
+| Where | What | Built by |
+|-------|------|----------|
+| PyPI | One `cp310-abi3` wheel per platform (manylinux_2_28 x86_64 and aarch64, macOS Intel and Apple silicon, Windows x64 and Arm64) and the sdist | maturin (`[tool.maturin]` in `pyproject.toml`) through PyO3/maturin-action in `release-pipeline.yml`'s `native`, each wheel smoke-tested on its own OS by its `smoke`; `maturin sdist` |
+| crates.io | Every crate without `publish = false`, dependencies first: the engine crates, `opentide-schema`, `-schema-derive`, `-workspace`, `-compile`, `-connectors`, `-cli`, `-lsp`, and the facade `opentide` (`cargo install opentide --features cli`) | `scripts/engine/release.py publish` |
+| npm | `@opentide/opentide` and its six native packages (napi-rs), the `opentide` alias, `@opentide/lsp-client`, `@opentide/lsp-worker`, `@opentide/wasi-host`, with provenance | `bindings/node/build.mjs` per target, `npm pack` |
+| GitHub Release | `opentide-vX.Y.Z-<target>` and `opentide-lsp-vX.Y.Z-<target>` for the four Linux and macOS targets (no Windows binary), `opentide-installer.sh`, `highlights-vX.Y.Z.zip`, `opentide-wasm-web-vX.Y.Z.zip`, the WASI build, the licences, eight CycloneDX SBOMs, `SHA256SUMS` (`release.py assets vX.Y.Z` lists them) | `release-pipeline.yml` (`native`, `wasm`, `sources`, `assemble`) |
 
-opentide compiles its analysis engine (`analysis/`, Rust) into the package (`hatch_build.py`). A release publishes only `opentide`: `publish-pypi.yml` builds one `cp310-abi3` wheel per platform with cibuildwheel (`[tool.cibuildwheel]` in `pyproject.toml`: Linux manylinux and musllinux on x86_64 and aarch64, macOS Intel and Apple silicon, Windows x64 and Arm) and an sdist that carries `analysis/`, and refuses to publish when a platform's wheel is missing.
-
-| Before tagging | Check |
-|----------------|-------|
-| `analysis/Cargo.toml` takes `opentide-analysis` / `opentide-lsp` (the language-server crates) from git | Release the language server to crates.io first, then pin both to `"=<version>"`. `uv run python scripts/build/check_engine_pin.py --release` must pass, or the publish fails before building |
-| The engine's bundled catalog | `scripts/build/check_engine_catalog.py` passes (CI) |
+Every artifact carries a GitHub artifact attestation (build provenance). **No musl builds** (no musllinux wheel, musl binary or musl npm package): the maintainer's decision; Alpine builds from the sdist. **No standalone Windows executable** (no `*-pc-windows-msvc` binary, no `opentide-installer.ps1`): they would need Authenticode signing; Windows installs from PyPI or npm and runs `opentide lsp start` (`docs/internal/publishing.md`, decision 11). The Windows wheels and npm packages stay. **No free-threaded wheel** (`cp314t`): it has no stable ABI, and builds from the sdist. **npm:** the standard napi-rs layout, the native packages named `@opentide/opentide-<platform>` (each with its `os`, `cpu`, glibc `libc`, one `.node` and `LICENSE`), and **no WebAssembly fallback** (`wasm32-wasi`: WASI preview 1 has no sockets under Node.js, so tenant commands could not work), [ADR 0006](../../../docs/internal/adr/0006-npm-packages.md#amendment-2026-11-12-the-package-layout-and-names) as amended. All are recorded in [`docs/internal/publishing.md`](../../../docs/internal/publishing.md#the-release-train).
 
 ## Patch vs minor
 
-The package is pre-1.0, so the minor number carries breaking and behaviour changes. Cut a **minor** (`0.x+1.0`) when any shipped change does one of these:
+The package is pre-1.0, so the minor number carries breaking and behaviour changes. **The Rust core is 1.0.0**, released first as candidates (`1.0.0-rc.N` on crates.io, `1.0.0rcN` on PyPI) and held there until the maintainer accepts the final 1.0.0; breaking changes may land between candidates. Never cut the final 1.0.0 without that decision. Cut a **minor** (`0.x+1.0`) when any shipped change does one of these:
 
 - changes what input is accepted (schema or model shape, validation strictness);
 - changes CLI output, JSON fields, or exit codes that scripts depend on;
@@ -67,15 +71,48 @@ State the rationale in the GitHub Release body ("It is a minor because …"), ne
 
 ## Required two-step flow
 
+- **Step 0** — the version: `release.py bump X.Y.Z` merged, and an internal candidate run green (for a release that changes what is built or how; optional for a docs-only patch).
 - **Step 1** — notes PR, merge to `development`.
 - **Step 1b** — CI green on that PR.
-- **Step 2** — Run **Publish to PyPI** on `development` (this tags, creates the GitHub Release and publishes). Works from a cloud session.
-- **Step 3** — prove PyPI.
+- **Step 2** — Run **Publish** on `development` (this tags, creates the GitHub Release and publishes everywhere). Works from a cloud session.
+- **Step 3** — prove PyPI, crates.io, npm and the binaries.
 - **Step 4** — group the shipped issues under the release tracking issue and close it.
 
 Do not skip Step 1. The tag must sit on the merge commit that **already contains** the changelog, usage notes, GitHub notes file, and install pins.
 
 ---
+
+### Step 0 — Bump the crates, and run an internal candidate
+
+The crates carry the product version: in a pull request to `development` (it can be the notes PR of Step 1, or come before it so that a candidate can run first), or to `integration/unified-core` for a candidate cut there before it merges:
+
+```bash
+python3 scripts/engine/release.py bump 1.0.0      # workspace version, internal pins, Cargo.lock
+python3 scripts/engine/release.py lockstep 1.0.0  # what the release guard checks
+```
+
+The `Cargo.lock` diff is only the workspace crates' `version` lines; anything else means Cargo re-resolved: restore the lock and bump again.
+
+**Internal candidate.** Once the bump is on the branch, Run **Publish** on `integration/unified-core` (or `development`) with `internal_candidate: 1` (then 2, ...) and no other input. **Nothing reaches PyPI, crates.io or npm**, and no OIDC token is minted. The guard refuses another branch, `internal_candidate` combined with `release_candidate`, `dry_run` or `checkout_ref`, an existing tag, crates off the version (lockstep) and a version not above the last release (`release.py check-candidate`). Everything is built and smoke-tested as for a release; then the `internal-release` job (`contents: write` only) pushes the tag `v1.0.0-rc.N` on the commit built and creates a **draft** pre-release (never Latest), `1.0.0-rc.N (internal)`, with every binary and release asset (`SHA256SUMS`, SBOMs), every wheel, the sdist, every `.crate` and every npm tarball, plus `PACKAGES-SHA256SUMS` over those packages. `attest`, `release`, `verify-assets`, `pypi`, `crates`, `npm` and `smoke-registries` are skipped.
+
+- Find it: Releases page, **Draft** at the top (write access only), or `gh release download v1.0.0-rc.N --dir rcN`.
+- Promote it: edit the draft, **Publish release** (still a pre-release, still on no registry).
+- Delete it: `gh release delete v1.0.0-rc.N --cleanup-tag --yes` (the draft and its tag), then rerun N or cut N+1.
+
+**Public release candidate: enabled for 1.0.0-rc.N** (`public_candidates=true` in the guard; `false` refuses it again, a `dry_run` aside, and refuses to resume a `-rc` tag). `release_candidate: N` publishes `v1.0.0-rc.N` as pre-releases:
+
+| Where | What |
+|-------|------|
+| GitHub | A **pre-release** (never Latest) tagged `v1.0.0-rc.N`, with every asset (binaries, installers, engine assets, SBOMs, `SHA256SUMS`) and attestation |
+| PyPI | `1.0.0rcN` on **pypi.org** (environment `pypi`, no TestPyPI): `pip install --pre opentide`, `uv pip install --prerelease=allow opentide`, or `opentide==1.0.0rc1` |
+| crates.io | Every crate at `1.0.0-rc.N`, in dependency order (the workflow runs `release.py bump 1.0.0-rc.N` in its own checkout; the branch keeps `1.0.0`). **Yankable, never deletable**; the first candidate **claims the new crate names** |
+| npm | All eleven packages at `1.0.0-rc.N` under the dist-tag **`next`** (it only moves forward: the job refuses a candidate older than the current `next`, and the guard refuses resuming a candidate before `v1.0.0-rc.3`), never `latest` (`npm publish --provenance --tag next`, OIDC): `npm install @opentide/opentide@next` or the exact version. **Every package must already exist on npm with `publish.yml` as its trusted publisher** (publishing.md, step 10.5; the guard checks the first, not the second). Before `1.0.0-rc.3` a candidate published nothing to npm. Test the tarballs without publishing from ci.yml's `release` artifacts (`npm-packages`) |
+
+Its notes are `.github/release-notes/v1.0.0-rc.N.md` when that file exists (a short summary: what changed, what breaks, how to upgrade; the granular entries stay in `CHANGELOG.md`), else they quote `## [Unreleased]`. Every job must be green, `Smoke the registries` included. A candidate needs no notes PR; the guard (`release.py check-candidate`) refuses one whose version is not above the newest dated `CHANGELOG.md` heading. **GitHub dispatches `publish.yml` only once a file of that name is on the default branch, `development`:** before `integration/unified-core` merged, a stub stood there so candidates could run from the integration branch (`docs/internal/publishing.md`, "Release candidates"); the integration merge replaced it with the release train, so a candidate is resumed on `development` too (Step 2).
+
+**Dry run.** `dry_run: true` builds and smoke-tests every artifact and publishes nothing (no tag, no release, no attestation): any branch, any time.
+
+**A build to test, nothing published.** ci.yml's `release` job (`release-pipeline.yml`; nightly, release PR, `scope: release`) keeps the wheels (`wheels-<platform>`) and npm tarballs (`npm-packages`) of a development version for 14 days: `gh run download <run-id> -R opentidehq/opentide -n wheels-linux-x64`, then `uv pip install opentide-*.whl`; `npm install ./2-package/opentide-opentide-*.tgz ./1-native/opentide-opentide-<platform>-*.tgz`. With a Rust toolchain: `uv tool install "git+https://github.com/opentidehq/opentide@<ref>"`.
 
 ### Step 1 — Prepare notes PR (must merge to `development` first)
 
@@ -84,7 +121,7 @@ Create a `docs:` (or `chore:`) PR against `development`.
 - **Cloud agents:** branch `cursor/prepare-0.x.y-…`, Conventional Commit, PR to `development`.
 - **Local agents:** branch `docs/prepare-0.x.y` from `origin/development`, `gh pr create --base development`.
 
-What the three notes files say, and how, is the [`release-notes`](../release-notes/SKILL.md) skill:
+What the three notes files say, and how, is the [`release-notes`](../release-notes/SKILL.md) skill (`crates/CHANGELOG.md`, the fourth, is [`engine-release-notes`](../engine-release-notes/SKILL.md)'s):
 the parts of a version (headline, Upgrade, Breaking, Added, Changed, Deprecated, Removed, Fixed,
 Security, in that order) and how to write each entry. This step is where they go.
 
@@ -105,11 +142,22 @@ Footer compare links (bottom of `CHANGELOG.md`):
 
 Keep existing `[0.x.(y-1)]:` (etc.) rows.
 
-#### 2. `docs/usage/releases.md`
+#### 2. `crates/CHANGELOG.md` (the language server's notes)
+
+The engine and the language server ship in lockstep with opentide (one version, one tag), and [opentide.org/releases/language-server](https://opentide.org/releases/language-server/) reads this file. Cut it as `CHANGELOG.md`, following the [`engine-release-notes`](../engine-release-notes/SKILL.md) skill:
+
+- Keep a blank `## [Unreleased]` above the new version
+- `## [0.x.y] - YYYY-MM-DD` (a hyphen, as its earlier sections), then its headline paragraph (at most 25 words)
+- The entries the pull requests added, in their parts, in the order of that skill
+- Footer: `[Unreleased]: https://github.com/opentidehq/opentide/compare/v0.x.y...HEAD` and `[0.x.y]: https://github.com/opentidehq/opentide/releases/tag/v0.x.y` above the existing rows
+
+`release.py check` refuses a release whose version has no dated section here: 1.0.0 shipped with this file un-cut, and the website showed the language server at 0.16.1 until it was cut afterwards. A candidate leaves it alone.
+
+#### 3. `docs/usage/releases.md`
 
 Add a **new top section**: the page [opentide.org/releases](https://opentide.org/releases/) renders. Its shape is in the release-notes skill: heading, headline, **Install** (three lines), **Upgrade**, the change parts as bold lines, the CHANGELOG line with the version's anchor, **Links** (PyPI / GitHub Release / CHANGELOG).
 
-#### 3. `.github/release-notes/v0.x.y.md`
+#### 4. `.github/release-notes/v0.x.y.md`
 
 GitHub Release body, in the order of the release-notes skill:
 
@@ -119,27 +167,26 @@ GitHub Release body, in the order of the release-notes skill:
 - Verify (commands; expect `0.x.y`)
 - Links (PyPI, GitHub Release, CHANGELOG, Usage → Releases)
 
-#### 4. User-facing install pins
+#### 5. User-facing install pins
 
-Search the repo for the old pin (`opentide==0.1.3` or whatever the previous version is). Update **every** hit to the new version. Known locations from 0.1.3:
+Search the repo for the old pin (`opentide==0.1.3` or whatever the previous version is). Update **every** hit to the new version. A release candidate changes none of the release pins: `README.md` (the PyPI page) keeps the newest stable pin in the prose below its install block, and while a candidate is current its first install command is `pip install --pre opentide` (no exact candidate pin: `tests/test_docs/test_readme_on_pypi.py` refuses one, and `--pre` needs no edit per candidate; an exact `opentide==1.0.0rcN` is a pre-release pin, which `scripts/build/release.py`'s `_PIN` and `tests/test_docs/test_docs_version_claims.py` do not read as a release pin); the pins move at the final release's notes PR, which also puts the stable pin back first in the README's install block. The pages that document the 1.0 API (`docs/index.md`, `docs/cli/index.md`, `docs/mcp/index.md`, `docs/mcp/installation.md`, `docs/sdk/installation.md`) do not pin the stable release while 1.0 is a candidate: 0.28.1 has no `opentide.Workspace`, so each shows `pip install --pre opentide` and the candidate's `opentide==1.0.0rcN`, linking `docs/usage/installation.md#release-candidates`. Each candidate moves their `rcN` with the installation page's (`tests/test_docs/test_docs_version_claims.py` checks that every `opentide==1.0.0rcN` in `docs/` agrees); the final release gives them the release pin. A candidate does update the candidate's own text: the **Release candidates** section of `docs/usage/installation.md` (the `1.0.0rcN` and `1.0.0-rc.N` pins, the tag in the GitHub Release URLs, the installer and `SHA256SUMS` commands) and the `=1.0.0-rc.N` pins in `docs/sdk/rust.md`'s Install section; the final release removes both, with the section's pointers from the PyPI install paragraph and the Rust page. `README.md`'s links stay absolute (`https://github.com/opentidehq/opentide/blob/development/...`): PyPI renders it away from the repository (`tests/test_docs/test_readme_on_pypi.py`). Known locations from 0.1.3:
 
 | File | Notes |
 |------|--------|
-| `README.md` | |
-| `docs/index.md` | |
+| `README.md` | The newest stable pin stays (the release check reads it); a candidate adds `pip install --pre opentide` as the first install command, the final release puts the stable pin first again |
+| `docs/index.md` | A candidate: `--pre` in the Quick start, and the sentence after the "latest release" claim saying `pip install opentide` still installs 0.28.1, beside the claim, which stays the newest release. The final release: the claim and the pin name 1.0.0, and that sentence, the `--pre` command and the `release-candidates` link go |
 | `docs/usage/index.md` | Card copy too |
-| `docs/usage/installation.md` | pip and uv pins |
+| `docs/usage/installation.md` | pip and uv pins; the **Release candidates** section: updated by each candidate, removed by the final release |
 | `docs/usage/quickstart.md` | |
 | `docs/usage/why-opentide.md` | Latest-patch mention |
 | `docs/usage/troubleshooting.md` | Pins **and** mention the new patch in the relevant bug sections |
 | `docs/usage/workflows/agentic-setup.md` | |
 | `docs/usage/workflows/ci-cd.md` | Hand-written pipeline examples and the callout above them |
-| `docs/usage/migration/index.md` | |
-| `docs/usage/migration/prompt.md` | |
-| `docs/cli/index.md` | |
-| `docs/mcp/index.md` | |
-| `docs/mcp/installation.md` | |
-| `docs/sdk/installation.md` | `dependencies = ["opentide==0.x.y"]` as well |
+| `docs/cli/index.md` | A candidate: `--pre` and the candidate's pin, linking the installation page's Release candidates, and the sentence "`pip install opentide` installs 0.28.1". The final release: the release pin, and that sentence, the `--pre` command and the link go (they have no pin, so only `test_a_page_of_the_1_0_api_installs_the_candidate` catches them) |
+| `docs/mcp/index.md` | As `docs/cli/index.md`; its sentence is "… without `--pre` it installs 0.28.1" in the Quick start paragraph |
+| `docs/mcp/installation.md` | As `docs/cli/index.md`; its sentence follows the PyPI install block |
+| `docs/sdk/rust.md` | Install: the `=1.0.0-rc.N` pins of a candidate; the final release installs `opentide = "1"` and drops the candidate text |
+| `docs/sdk/installation.md` | `dependencies = ["opentide==0.x.y"]` as well; a candidate: the candidate's pin in both blocks, as `docs/cli/index.md`, with its sentence that `pip install opentide` still installs 0.28.1 |
 
 ```bash
 rg -n 'opentide==0\.[0-9]+\.[0-9]+' --glob '!CHANGELOG.md' --glob '!.github/release-notes/**'
@@ -147,19 +194,36 @@ rg -n 'opentide==0\.[0-9]+\.[0-9]+' --glob '!CHANGELOG.md' --glob '!.github/rele
 
 Leave older historical sections in `CHANGELOG.md` / `docs/usage/releases.md` / old `.github/release-notes/` files alone.
 
-#### 5. Do not touch generated version
+The explorer pin is the other pin a release checks: `EXPLORER_RELEASE` and `EXPLORER_COMMIT` in
+`crates/opentide-compile/src/ci/mod.rs` name the opentidehq/explorer release (tag and its commit)
+that `setup ci --explorer-pages` builds the site from (#1693). When this release changes the bundle
+`generate explorer` writes, or an explorer release reads a new one, bump both together, with
+`docs/cli/setup.md`'s `--explorer-pages` row, and re-render the recorded pipelines
+(`OPENTIDE_CI_RENDERED`, `crates/opentide-compile/tests/setup_ci.rs`) and the `setup ci`
+snapshots.
 
-`src/opentide/_version.py` is written by hatch-vcs. Do not commit edits to it.
+#### 6. The version is the workspace's
 
-#### 6. Local check
+The wheel's version is the Cargo workspace's (`bindings/python/` takes it; maturin writes it into
+the wheel), so `scripts/engine/release.py bump X.Y.Z` in the notes PR sets the Python package's
+version too. Never give `bindings/python/Cargo.toml` a version of its own: a candidate's
+(`X.Y.ZrcN`) and a CI build's (`X.Y.Z.devN`) are written there by `release.py pypi-version` in the
+workflow's checkout only.
+
+#### 7. Local check
 
 ```bash
 scripts/ci-local.sh --quick
 scripts/validate-docs.sh   # if docs changed
 uv run python scripts/build/release.py check v0.x.y   # what the release guard checks
+python3 scripts/engine/release.py lockstep 0.x.y      # the crates are at the version (Step 0)
 ```
 
 ---
+
+### Step 1a — The antivirus gate
+
+Every build of the train (`publish.yml`'s `build`, which a candidate, a dry run and a release all run) ends with the antivirus gate, `av-scan` and `av-defender` in [`release-pipeline.yml`](../../../.github/workflows/release-pipeline.yml), once over every artifact: ClamAV (fresh signatures, archives scanned), YARA (signature-base and protections-artifacts at pinned commits, with the reviewed allow-list `scripts/av/yara-allowlist.toml`), Microsoft Defender on `windows-latest` (`MpCmdRun -SignatureUpdate`, then `-Scan -ScanType 3 -File ... -DisableRemediation`), the marker-string check (no `moneropool`, `sekurlsa`, `Login Data`, `Invoke-Mimikatz`, `jndi:ldap` in plain text in any artifact) and the size budgets (`tests/bench/sizes.toml`). It runs before anything is tagged, attested or published, and also on a release pull request (the `release` label) and a `scope: release` Run workflow, never on an ordinary pull request. Nothing is uploaded to an external scanner: never upload an artifact to VirusTotal to "check" it. A detection fails the build: read the job's log, fix the cause (a dataset stored loose again shows as a marker), or report a false positive to the vendor with the file's hash and, for a YARA hunting rule that matches noise, add it to the allow-list with its reason in a reviewed pull request. [`docs/internal/publishing.md`](../../../docs/internal/publishing.md#the-antivirus-gate) has the details.
 
 ### Step 1b — CI must actually be green
 
@@ -173,10 +237,10 @@ Required success:
 
 | Check | Notes |
 |-------|--------|
-| Unit matrix Python 3.10–3.14 | |
+| Unit matrix Python 3.10–3.14 | 3.10–3.13 run in CI's nightly set: Run workflow on `development` before a release if the last nightly is not green |
 | lint | ruff + ty |
 | CLI E2E | Do **not** treat a skipped job (because unit tests failed) as success |
-| docs | |
+| docs | ci.yml's `docs` job: on every pull request that changes `docs/`, and in a release pull request's checks |
 | CodeQL Analyze (python) | |
 | CodeQL Analyze (actions) | |
 
@@ -186,64 +250,64 @@ CodeQL Analyze (actions) dying at "Uploading results" with no query findings is 
 
 ---
 
-### Step 2 — Release from `development` (this publishes to PyPI)
+### Step 2 — Release from `development` (this publishes everywhere)
 
 **ONLY** after the notes PR is **merged to `development`** and `development` CI is green.
 
-Run **Publish to PyPI** on `development` with `checkout_ref` **empty**, as language-server releases from `main`:
+Run **Publish** on `development` with no inputs:
 
 | Where | How |
 |-------|-----|
-| Cloud session (no `gh`) | GitHub MCP `actions_run_trigger`: `method: run_workflow`, `workflow_id: publish-pypi.yml`, `ref: development`, no inputs |
-| Browser | Actions → Publish to PyPI → Run workflow → branch `development`, leave `checkout_ref` empty |
-| Local | `gh workflow run publish-pypi.yml --repo opentidehq/opentide --ref development` |
+| Cloud session (no `gh`) | GitHub MCP `actions_run_trigger`: `method: run_workflow`, `workflow_id: publish.yml`, `ref: development`, no inputs (an internal candidate: `ref: integration/unified-core`, `inputs: {internal_candidate: "1"}`) |
+| Browser | Actions → Publish → Run workflow → branch `development`, inputs empty |
+| Local | `gh workflow run publish.yml --repo opentidehq/opentide --ref development` |
 
 The run:
 
-1. **Release guard** reads the version from the newest dated `CHANGELOG.md` heading and runs `scripts/build/release.py check v0.x.y` (changelog section and links, `.github/release-notes/v0.x.y.md`, top of `docs/usage/releases.md`, README pin), then `check_engine_pin.py --release`. It refuses a tag or Release that already exists and a run from another branch.
-2. **Wheels** and **Sdist** build that commit with the changelog's version.
-3. **GitHub Release** creates tag `v0.x.y` on the built commit (`--target $GITHUB_SHA`) with the notes file as body. Latest by default.
-4. **Publish to PyPI** uploads and refuses files of any version other than the guard's.
+1. **Release guard** reads the version from the newest dated `CHANGELOG.md` heading, runs `scripts/build/release.py check v0.x.y` (changelog section and links, `crates/CHANGELOG.md`'s section, `.github/release-notes/v0.x.y.md`, top of `docs/usage/releases.md`, README pin) and `scripts/engine/release.py lockstep 0.x.y`. It refuses a tag or Release that already exists and a run from another branch. For a release or a public candidate it also checks, **before anything is built or published**, that every one of the eleven npm packages exists on registry.npmjs.org (the registry's package document, no authentication): a missing one fails the run with its name and a pointer to publishing.md step 10.5, so PyPI and crates.io never publish for a run npm would then fail. It cannot see npm's trusted-publisher configuration (a signed-in maintainer's, `npm trust list <package>`, expiring after two days without a publish): the step says so.
+2. **Checks**: every crate built from its package (`cargo package`), the licence scan.
+3. **Builds**: the wheels, the sdist, the npm native packages and tarballs, the GitHub Release's assets (binaries, installers, engine assets, the command line's WASI module `opentide-wasm32-wasip1.wasm` (smoke-tested under wasmtime: `--version` is the release's), SBOMs, `SHA256SUMS`).
+4. **Smoke tests**: `pip install` the wheel and `opentide --version` (Linux, macOS, Windows); a build from the sdist; the npm tarballs published to a throwaway local registry and `npm install @opentide/opentide` in a clean project, which must pick the host's native package, run `npx opentide --version`, load the SDK and type-check (`scripts/engine/npm-local-registry/test.mjs`; Linux, macOS, Windows); `cargo install opentide --features cli` from the crates' packages; the binary installers.
+5. **Attestations** of every artifact, then **GitHub Release**: the tag `v0.x.y` on the built commit (`--target $GITHUB_SHA`) with the notes file as body, every asset attached. Latest by default.
+6. **Verify the published assets**: `sha256sum -c`, the asset set, and each asset's attestation signed by `publish.yml` on `development`.
+7. **Publish to PyPI**, **Publish to crates.io** (dependencies first), **Publish to npm** (`latest` for a release, `next` for a candidate), in parallel; then **Smoke the registries** installs from each (npx by the exact version; a candidate's `next` is checked and its `latest` must not be the candidate).
 
-The Release comes from `GITHUB_TOKEN`, which starts no `release: published` run: one publish per version.
+The Release comes from `GITHUB_TOKEN`, which starts no other workflow: one publish per version.
 
 Find the run (REST; `gh run list` uses GraphQL, which cloud sessions cannot reach):
 
 ```bash
-gh api "repos/opentidehq/opentide/actions/workflows/publish-pypi.yml/runs?per_page=1" \
+gh api "repos/opentidehq/opentide/actions/workflows/publish.yml/runs?per_page=1" \
   --jq '.workflow_runs[0] | "\(.id) \(.status) \(.conclusion) \(.head_sha)"'
 ```
 
-**Local alternative: publish a Release by hand.** Still supported; the guard then requires the Release's tag on the checkout. Confirm the merge commit contains the notes first:
+**Resume a release that failed partway.** Never retag, never delete a published Release. **First, Re-run failed jobs on the same run** (`gh run rerun <run id> --failed`; cloud: `actions_run_trigger` with `method: rerun_failed_jobs` and the `run_id`): every job after `build` works from the run's artifacts and is safe to repeat (the GitHub Release job deletes an untagged draft a failed attempt left, PyPI `skip-existing`, crates and npm versions already published are skipped), so nothing is rebuilt, smoke-tested or scanned again. Only when a re-run cannot help (the fix is in `publish.yml` or a script it runs: a re-run uses the original attempt's workflow file; the artifacts expired) run **Publish** with `checkout_ref: v0.x.y` (a candidate: `vX.Y.Z-rc.N`). It rebuilds from the tag, uploads nothing to its Release (consumers pinned those digests), verifies the published assets, and publishes only what each registry lacks (`skip-existing` on PyPI, crates already on crates.io and npm versions already there are skipped). **The ref matters:** a run uses the `publish.yml` of the ref it is dispatched on.
+
+| When | Resume with |
+|------|-------------|
+| Any release or candidate (since `integration/unified-core` merged into `development`) | Run on `development` with `checkout_ref: v0.x.y` (cloud: `actions_run_trigger`, `ref: development`, `inputs: {checkout_ref: v0.x.y}`); an App token without `actions: write`: the `repository_dispatch` below |
 
 ```bash
-git fetch origin development
-git show origin/development:CHANGELOG.md | head -n 20
-gh release create v0.x.y \
-  --repo opentidehq/opentide \
-  --target development \
-  --title "0.x.y" \
-  --notes-file .github/release-notes/v0.x.y.md
+# development's publish.yml has the repository_dispatch trigger.
+gh api repos/opentidehq/opentide/dispatches \
+  -f event_type=publish \
+  -f client_payload[checkout_ref]=v0.x.y
 ```
 
-`--target development` must resolve to that merge commit.
-
-**Latest flag.** Do not pass `--latest` or `--latest=false` for the newest version: by default GitHub marks it **Latest**. When cutting several versions back to back, cut them in version order, and give each one the default flag. Pass `--latest=false` only when publishing an older version after a newer one already exists.
-
-This bit 0.4.0. It was cut with `--latest=false` because 0.5.0 was about to follow, so Releases kept showing 0.3.0 as Latest. Verify:
+**Latest flag.** A release is created without `--latest`, so GitHub marks it **Latest**; a candidate is a pre-release with `--latest=false`. Cut versions in order. This bit 0.4.0, cut by hand with `--latest=false`: Releases kept showing 0.3.0 as Latest. Verify:
 
 ```bash
 gh release list --repo opentidehq/opentide --limit 3   # new tag must show Latest
 gh api repos/opentidehq/opentide/releases/latest --jq .tag_name   # REST, works in cloud sessions
 ```
 
-Watch [publish-pypi.yml](https://github.com/opentidehq/opentide/actions/workflows/publish-pypi.yml). If the `pypi` environment has required reviewers, someone must approve. The job ends with **Verify PyPI lists every built file**, which fails unless PyPI lists both the wheel and the sdist.
+Watch [publish.yml](https://github.com/opentidehq/opentide/actions/workflows/publish.yml). If the `pypi` environment has required reviewers, someone must approve. The PyPI job ends with **Verify PyPI lists every built file**, which fails unless PyPI lists every wheel and the sdist.
 
 ---
 
-### Step 3 — Prove PyPI
+### Step 3 — Prove PyPI, crates.io, npm and the binaries
 
-Wait for the publish workflow, then:
+**Smoke the registries**, the run's last job, installs from each registry. Check by hand too. Wait for the publish workflow, then:
 
 ```bash
 uv venv /tmp/opentide-0.x.y && source /tmp/opentide-0.x.y/bin/activate
@@ -262,7 +326,17 @@ The Python check must print `0.x.y`, **not** `0.x.dev…`. The JSON check must l
 
 Query-string cache busting does not help. Wait and retry with `--no-cache`. Do not retag or re-publish during that window.
 
-If version is `0.1.dev…`: the tag was not on the checkout (`fetch-depth: 0` is already in the workflow; usually the Release targeted the wrong commit). Do not retag; fix target and publish from the correct tag.
+The other registries and the Release:
+
+```bash
+curl -s -A release-check https://crates.io/api/v1/crates/opentide | jq -r '.crate.max_version'   # 0.x.y
+npm view @opentide/opentide dist-tags                                  # latest: 0.x.y (a candidate: next: 1.0.0-rc.N, latest still the placeholder)
+npx --yes @opentide/opentide@0.x.y --version
+gh api repos/opentidehq/opentide/releases/tags/v0.x.y --jq '.tag_name, .prerelease, (.assets|length)'
+python3 scripts/engine/release.py assets v0.x.y | wc -l                 # the same count
+```
+
+**After a final release, move npm's `next`** to it for all eleven packages: `npm dist-tag add <pkg>@X.Y.Z next` (trusted publishing covers `npm publish` only, so a maintainer signed in to npm runs it; the `npm` job's warning names the packages; `docs/internal/publishing.md`, "After the final release"), so that `@next` never installs something older than `latest`.
 
 ---
 
@@ -276,33 +350,65 @@ Every release gets a tracking issue. Examples: [#285](https://github.com/opentid
 
 Milestones are optional; `setup-cli-v1` is the only precedent. The Cursor GitHub App token gets 403 on milestone creation, so a maintainer must create `0.x.y` first; agents can then assign issues to it.
 
-## Failure table
+---
 
-Copied from [`docs/internal/pypi-trusted-publishing.md`](../../../docs/internal/pypi-trusted-publishing.md):
+### Step 5 — Bring the agent skills up to date
+
+[opentidehq/skills](https://github.com/opentidehq/skills) is what `opentide setup skills` and the opentide Agent Plugin install, so a release the skills do not describe teaches agents the previous one. Its `coverage.json` maps every platform key to a skill and records the capabilities (`can_deploy`, `can_validate`, `can_query`) and the last release reviewed (`reviewed_against`); its daily CI check compares that with the latest PyPI release's `opentide --json info` and opens a *Review skills against opentide 0.x.y* issue when they differ.
+
+After Step 3, read this release's `CHANGELOG.md` section and, in opentidehq/skills, follow [Keeping skills in step with opentide](https://github.com/opentidehq/skills/blob/main/AGENTS.md#keeping-skills-in-step-with-opentide):
+
+1. A new platform needs a platform skill naming `configurations.<key>` before the release is announced as supported by the plugin.
+2. Update the platform skills whose capabilities, rule types, languages or deploy behaviour changed, and any skill naming a renamed CLI command, flag or MCP tool.
+3. Bump `reviewed_against` to `0.x.y` in `coverage.json`, even when nothing else changed, and run `./scripts/check-opentide-coverage.sh --engine` with this release installed.
+
+Link that pull request from the tracking issue in Step 4.
+
+## Failure table
 
 | Symptom | Cause / fix |
 |--------|-------------|
-| Guard: `v0.x.y is already tagged` | That version is out. Merge the next version's notes PR; to re-publish the existing tag, run with `checkout_ref=v0.x.y` |
-| Guard: `CHANGELOG.md's newest version is …` / `… is missing` | The notes PR has not merged, or misses a piece (`release.py check` names it). Fix it on `development` and run again |
-| Guard: `Run the release from development` | Run workflow was started on another branch. Pick `development` |
-| Publish failed after the **GitHub Release** job created the tag | Run workflow again with `checkout_ref=v0.x.y` (cloud: `actions_run_trigger` with `inputs: {checkout_ref: v0.x.y}`). Do not delete the tag |
-| `0.1.dev…` | Tag not on the checked-out commit. Wrong `--target`. Do not retag; retarget. |
-| 403 `invalid-publisher` | OIDC fields: owner `opentidehq` (lowercase), workflow `publish-pypi.yml`, env `pypi`. Re-run; do not retag. |
-| `No module named 'hatch'` in Build package | `hatch build` isolated env (hatch 1.18.1 / hatchling 1.32.1). Publish uses `uv build`. A tag cut before that still runs the old YAML on `release: published`. From `development`: `gh api repos/opentidehq/opentide/dispatches -f event_type=publish-pypi -f client_payload[checkout_ref]=v0.x.y`. Do not retag. |
-| `502` / 5xx on upload, job failed, some files already on PyPI (0.4.0) | From `development`: `gh api repos/opentidehq/opentide/dispatches -f event_type=publish-pypi -f client_payload[checkout_ref]=v0.x.y`. The upload sets `skip-existing: true`, so the retry uploads only the missing files. From a cloud session, Run workflow with `checkout_ref=v0.x.y` (`actions_run_trigger`) is the same retry. The Cursor GitHub App token got 403 on `workflow_dispatch` (no `actions:write`); for it, dispatch is the path. Do not retag. |
-| Verify PyPI lists every built file fails | Wait out the CDN delay (Step 3), then use the same dispatch retry. The step log prints the exact command. |
-| New tag not shown as Latest | It was created with `--latest=false`. `gh release edit v0.x.y --repo opentidehq/opentide --latest`. |
-| Release exists but Publish to PyPI never starts | Workflow file on `development` failed GitHub's parser (`secrets` in `steps.if` is a common cause). Fix the workflow on `development`, then convert the GitHub Release to draft and back to published. Do not move the tag. |
-| Core Metadata 2.5 | Already pinned to `2.4` in pyproject sdist/wheel. `uvx twine check dist/*` before tag. |
+| Guard: `v0.x.y is already tagged` | That version is out. Merge the next version's notes PR; to finish publishing the existing tag, run with `checkout_ref=v0.x.y` |
+| Guard: `CHANGELOG.md's newest version is …` / `… is missing` / `crates/CHANGELOG.md has no ## [X.Y.Z] …` | The notes PR has not merged, or misses a piece (`release.py check` names it). Fix it on `development` and run again |
+| Guard: `the workspace version in Cargo.toml is …, not 0.x.y` | Step 0: `release.py bump 0.x.y` in a pull request, merged |
+| Guard: `… is not newer than …, the last release` (a candidate) | Bump the workspace past the last release first (Step 0) |
+| Guard: `Run the release from development` | Run workflow was started on another branch. Pick `development` (a `dry_run` runs anywhere) |
+| Guard: `Run a release candidate from integration/unified-core or development` / `Run an internal candidate from …` | A candidate was started on another branch. Pick one of those two |
+| Guard: `public release candidates are disabled while the internal channel exists` | `public_candidates` is `false` in the guard (it is `true` for 1.0.0-rc.N). Use `internal_candidate: N` (or `release_candidate` with `dry_run`, as a rehearsal). A `checkout_ref=vX.Y.Z-rc.N` resume is refused for the same reason |
+| Guard: `internal_candidate cannot be combined with …` | Pass `internal_candidate` alone |
+| `internal-release`: `two assets are named …` | Two artifacts carry one file name; fix the build, rerun (delete the draft and tag first if they were created) |
+| Run workflow does not list Publish, or the API cannot find `publish.yml` | `publish.yml` is not on `development`, the default branch, yet: land the stub (`docs/internal/publishing.md`, "Release candidates") |
+| A smoke test failed | Nothing was tagged or published. Fix on `development`, run again |
+| `AV gate` failed (markers, sizes, ClamAV, YARA or Defender) | Nothing was tagged or published. The job's log names the engine, the signature or rule and the file ([Step 1a](#step-1a--the-antivirus-gate)); fix the build, or report a false positive to the vendor and add a reviewed YARA allow-list entry. Never upload the artifact to a public scanner |
+| `GitHub Release` failed (a GitHub 5xx while uploading or publishing) | Re-run failed jobs on that run: the job deletes the untagged draft it left and starts again, from the run's artifacts |
+| A registry job failed after the **GitHub Release** job created the tag | Re-run failed jobs on that run first (its artifacts, no rebuild); if that cannot work (a fix to `publish.yml`, expired artifacts), Run workflow on `development` with `checkout_ref=v0.x.y` (cloud: `actions_run_trigger` with `ref: development` and `inputs: {checkout_ref: v0.x.y}`). Do not delete the tag or the Release |
+| `Verify the published assets` failed | It is the published assets that failed (sums, set, attestation): fix the cause, then resume with `checkout_ref`, or cut a patch release |
+| 403 `invalid-publisher` on PyPI | OIDC fields: owner `opentidehq` (lowercase), workflow `publish.yml`, environment `pypi` (a candidate's too). Re-run; do not retag |
+| crates.io: `trusted publishing tokens do not support creating new crates` with no `CARGO_REGISTRY_TOKEN` | A crate's first version needs the stored token (docs/internal/publishing.md, step 10). Add the secret, resume, then **delete** it again. The trust step runs only when the trusted login failed or a crate was created with the token; a failure there is a warning |
+| crates.io: `::warning::Trusted publishing was not registered …` | The crates are published. Register `publish.yml` on the crates named in the log (crate settings, Trusted Publishing), or add a token with the `trusted-publishing` scope and resume |
+| crates.io: `rate limited, retrying in …` | Normal for new crates: the job waits until the time crates.io names (capped at 30 minutes, 11 without one) and tries again, 12 times at most |
+| Guard: `These npm packages do not exist on npm yet: …` | A candidate or release needs all eleven packages on npm first (nothing was built or published). Publish each named package once by hand and register `publish.yml` on it (`docs/internal/publishing.md`, step 10.5), then run again |
+| Guard: `Could not read … from https://registry.npmjs.org` | The registry did not answer (5xx or timeout), which is not read as missing. Run again |
+| npm: `E404` / `ENEEDAUTH` on publish | The package has no trusted publisher for `publish.yml`, or it expired (two days without a publish): the guard cannot see this. Register it, resume (PyPI and crates.io have published by then) |
+| npm: `refusing to publish it under next` / `under latest` | A tarball's version does not fit the channel (a candidate must be `X.Y.Z-rc.N`, a release `X.Y.Z`). Every tarball is checked before the first publish, so nothing was published; fix the build |
+| npm: `npm's next is already …, newer than …` | The candidate would move `next` backwards (an older candidate resumed, or an older branch). Nothing was published to npm; cut the next candidate instead |
+| Guard: `… is older than v1.0.0-rc.3, the first candidate that publishes to npm` | A `checkout_ref` resume of `v1.0.0-rc.1` or `rc.2` would publish an old version under `next`. Cut the next candidate |
+| npm: `::warning::next trails latest …` (after a release) | Trusted publishing cannot move a dist-tag. As a maintainer signed in to npm run `npm dist-tag add <pkg>@X.Y.Z next` for each of the eleven packages (`docs/internal/publishing.md`, "After the final release") |
+| `502` / 5xx on PyPI upload, some files already there (0.4.0) | Re-run failed jobs on that run (`skip-existing` uploads only the missing files); otherwise resume with `checkout_ref=v0.x.y` on `development`; `skip-existing` uploads only the missing files. The step log prints the command |
+| Verify PyPI lists every built file fails | Wait out the CDN delay (Step 3), then re-run failed jobs (the step prints the command) |
+| New tag not shown as Latest | `gh release edit v0.x.y --repo opentidehq/opentide --latest` |
+| Core Metadata 2.5 | Already pinned to `2.4` in pyproject sdist/wheel. `uvx twine check dist/*` before tag |
 
-Job needs `id-token: write` and `contents: read` (already set in the workflow).
+The registry jobs need `id-token: write` (already set on `pypi`, `crates`, `npm` and `attest`, and on no other job).
 
 ## Related
 
-- [`docs/internal/pypi-trusted-publishing.md`](../../../docs/internal/pypi-trusted-publishing.md) — OIDC publisher fields, first-upload vs later releases
+- [`docs/internal/publishing.md`](../../../docs/internal/publishing.md) — every name, owner and trusted publisher, the release train's decisions, the maintainer's setup (step 10)
+- [`docs/internal/pypi-trusted-publishing.md`](../../../docs/internal/pypi-trusted-publishing.md) — PyPI's OIDC publisher fields
 - [`docs/usage/releases.md`](../../../docs/usage/releases.md) — public release page
 - [`CHANGELOG.md`](../../../CHANGELOG.md)
 - [`release-notes`](../release-notes/SKILL.md) — what the notes say, and the shape of each file
 - [`.github/release-notes/v0.22.0.md`](../../../.github/release-notes/v0.22.0.md) — a GitHub Release body
 - [`docs-maintenance`](../docs-maintenance/SKILL.md) — Fumadocs pages in Step 1
+- [opentidehq/skills `AGENTS.md`](https://github.com/opentidehq/skills/blob/main/AGENTS.md#keeping-skills-in-step-with-opentide) — Step 5
 - `AGENTS.md` — trunk, Conventional Commits, branch and PR workflow

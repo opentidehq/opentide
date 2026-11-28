@@ -1,0 +1,68 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/conformance/external/esql/posh_ps_active_directory_module_dll_import.broken.esql
+---
+SOURCE_FILE@0..235
+  QUERY@0..234
+    FROM_COMMAND@0..37
+      FROM_KW@0..4 "from"
+      WHITESPACE@4..5 " "
+      INDEX_PATTERN@5..6
+        INDEX_NAME@5..6
+          SOURCE_TEXT@5..6 "*"
+      WHITESPACE@6..7 " "
+      METADATA@7..37
+        METADATA_KW@7..15 "metadata"
+        WHITESPACE@15..16 " "
+        METADATA_FIELD@16..19
+          SOURCE_TEXT@16..19 "_id"
+        COMMA@19..20 ","
+        WHITESPACE@20..21 " "
+        METADATA_FIELD@21..27
+          SOURCE_TEXT@21..27 "_index"
+        COMMA@27..28 ","
+        WHITESPACE@28..29 " "
+        METADATA_FIELD@29..37
+          SOURCE_TEXT@29..37 "_version"
+    WHITESPACE@37..38 " "
+    PIPE@38..39 "|"
+    WHITESPACE@39..40 " "
+    UNKNOWN_COMMAND@40..234
+      COMMAND_NAME@40..50
+        COMMAND_WORD@40..50 "frobnicate"
+      WHITESPACE@50..51 " "
+      UNKNOWN_TEXT@51..66
+        UNKNOWN_WORD@51..66 "ScriptBlockText"
+      WHITESPACE@66..67 " "
+      UNKNOWN_TEXT@67..71
+        UNKNOWN_WORD@67..71 "like"
+      WHITESPACE@71..72 " "
+      STRING@72..90
+        STRING_LIT@72..90 "\"*Import-Module *\""
+      WHITESPACE@90..91 " "
+      UNKNOWN_TEXT@91..94
+        UNKNOWN_WORD@91..94 "and"
+      WHITESPACE@94..95 " "
+      UNKNOWN_TEXT@95..110
+        UNKNOWN_WORD@95..110 "ScriptBlockText"
+      WHITESPACE@110..111 " "
+      UNKNOWN_TEXT@111..115
+        UNKNOWN_WORD@111..115 "like"
+      WHITESPACE@115..116 " "
+      STRING@116..160
+        STRING_LIT@116..160 "\"*Microsoft.ActiveDirectory.Management.dll*\""
+      WHITESPACE@160..161 " "
+      UNKNOWN_TEXT@161..163
+        UNKNOWN_WORD@161..163 "or"
+      WHITESPACE@163..164 " "
+      UNKNOWN_TEXT@164..179
+        UNKNOWN_WORD@164..179 "ScriptBlockText"
+      WHITESPACE@179..180 " "
+      UNKNOWN_TEXT@180..184
+        UNKNOWN_WORD@180..184 "like"
+      WHITESPACE@184..185 " "
+      STRING@185..234
+        STRING_LIT@185..234 "\"*ipmo Microsoft.ActiveDirectory.Management.dll*\""
+  WHITESPACE@234..235 "\n"
+--- errors

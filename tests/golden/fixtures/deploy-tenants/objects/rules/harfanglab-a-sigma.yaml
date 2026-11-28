@@ -1,0 +1,24 @@
+name: HarfangLab Sigma rule
+metadata:
+  uuid: 00000000-0000-4000-8047-000000000051
+  schema: rule::1.0
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+description: A rule the harfanglab stand-in tenant receives in a deploy that sends.
+response:
+  alert_severity: High
+configurations:
+  harfanglab:
+    status: STAGING
+    action: Alert
+    sigma:
+      logsource:
+        category: process_creation
+        product: windows
+      selections:
+        - name: selection
+          field: Image
+          value: cmd.exe
+      condition: selection

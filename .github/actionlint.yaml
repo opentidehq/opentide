@@ -1,0 +1,13 @@
+# actionlint (the `lint` job of ci.yml, and scripts/ci-local.sh): what this
+# version of it does not know yet.
+self-hosted-runner:
+  # GitHub-hosted runners newer than actionlint 1.7.7's list.
+  labels:
+    - macos-15-intel
+    - windows-11-arm
+paths:
+  .github/workflows/ci.yml:
+    ignore:
+      # The Code Quality upload's permission (GitHub's code-quality scope),
+      # newer than actionlint 1.7.7's list of scopes.
+      - 'unknown permission scope "code-quality"'

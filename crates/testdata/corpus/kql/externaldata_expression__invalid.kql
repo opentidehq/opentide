@@ -1,0 +1,3 @@
+// prod:externaldata_expression invalid
+externaldata (Ip: string) with (format="csv")
+| take 10

@@ -1,0 +1,16 @@
+# Recorded by oracle.py from the Python CLI (retired, #1142); edited since:
+# a platform with no tenants has no [credentials] entry.
+ci = "github"
+path = ".github/workflows/opentide.yml"
+platforms = ["bitdefender", "carbon_black_cloud", "crowdstrike", "microsoft_defender", "elastic", "exabeam", "google_secops", "graylog", "harfanglab", "sentinel", "sentinel_one", "splunk", "sysdig"]
+staging = true
+inflight = true
+sharing = false
+lint_changed = false
+explorer_pages = false
+python_version = "3.12"
+opentide_version = "0.23.0"
+default_branch = "main"
+rules_folder = "objects/rules"
+
+[credentials]

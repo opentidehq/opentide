@@ -1,0 +1,3 @@
+// prod:string invalid
+FROM logs-* METADATA _id
+| WHERE file.path == "C:\Windows"

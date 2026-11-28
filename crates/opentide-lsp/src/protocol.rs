@@ -1,0 +1,1128 @@
+//! The protocol loop (#185 P1): frames read and written with `lsp-server`,
+//! the LSP lifecycle, and batches of the messages that are ready.
+//!
+//! A batch is every message the client has sent that the server has not
+//! handled yet. Its notifications apply in order; a request the batch also
+//! cancels is answered `RequestCanceled` (-32800), and one for a document the
+//! batch edits again later is answered `ContentModified` (-32801) when its
+//! result describes the whole document (semantic tokens, code actions, inlay
+//! hints, pulled diagnostics). Diagnostics are published once per batch, for
+//! each document it changed, so twenty queued keystrokes cost one analysis.
+//!
+//! Two sources feed the loop. [`Threaded`] reads on its own thread, so the
+//! messages that arrive while a request is handled form the next batch: the
+//! `opentide-lsp` binary and `opentide lsp start` use it. [`Direct`] reads on
+//! the caller's thread and batches only the frames already buffered: the
+//! library's [`serve`](crate::serve) and wasip1, which has no threads.
+
+use crate::session::Session;
+use lsp_server::{ErrorCode, Message, Notification, Request, RequestId, Response};
+use serde_json::{Value, json};
+use std::collections::HashSet;
+use std::io::{self, BufRead, BufReader, Read, Write};
+use std::sync::Arc;
+
+/// One frame from the client.
+pub(crate) enum Frame {
+    Message(Message),
+    /// A frame whose body is not a message. It is answered with the id it
+    /// names, if it names a valid one, else `id: null`.
+    Invalid {
+        id: Value,
+        code: i32,
+        message: String,
+    },
+    /// A body that is not a message but answers nothing (a response with
+    /// `id: null`): logged, never answered.
+    Skipped(String),
+}
+
+/// Read one frame; `Ok(None)` at the end of input. A body that is not a
+/// message is a [`Frame::Invalid`], and the next frame can still be read; a
+/// broken header ends the session, since nothing after it can be framed.
+pub(crate) fn read_frame(reader: &mut dyn BufRead) -> io::Result<Option<Frame>> {
+    // The frame's bytes, read once: `lsp-server` parses them from memory, and
+    // a frame it cannot parse is answered from the same bytes, which are
+    // exactly what it consumed.
+    let raw = read_raw_frame(reader)?;
+    match Message::read(&mut io::Cursor::new(&raw[..])) {
+        // `lsp-server` reads `"id": null` as a notification; it is a request
+        // whose id is not valid, and is answered with `id: null`.
+        Ok(Some(Message::Notification(n))) if names_an_id(&raw) => Ok(Some(Frame::Invalid {
+            id: Value::Null,
+            code: ErrorCode::InvalidRequest as i32,
+            message: format!(
+                "invalid request: `id` of {} must be an integer or a string",
+                n.method
+            ),
+        })),
+        Ok(Some(message)) => Ok(Some(Frame::Message(message))),
+        Ok(None) => Ok(None),
+        Err(err) if err.kind() == io::ErrorKind::InvalidData => match frame_body(&raw) {
+            Some(body) if !body.is_empty() => Ok(Some(classify(body))),
+            _ => Err(err),
+        },
+        Err(err) => Err(err),
+    }
+}
+
+/// The bytes of the next frame, header and body, read as `lsp-server`'s
+/// `Message::read` reads them, for it to parse from memory.
+///
+/// `lsp-server` sizes its buffer from `Content-Length` before it reads the
+/// body, so a header alone made the server allocate and zero whatever length
+/// it named (#843, found by the `framing` fuzz target). Here the body grows
+/// only as its bytes arrive: a length longer than the input ends the session
+/// with the error `lsp-server` gives a short body (`UnexpectedEof`) before
+/// anything is allocated for it. A header `lsp-server` would refuse (no line
+/// end, no `: `, a length that is not a number, no length at all, the end of
+/// input) is returned as read so far, and `lsp-server` refuses it from
+/// memory with its own error, as it did from the stream.
+fn read_raw_frame(reader: &mut dyn BufRead) -> io::Result<Vec<u8>> {
+    let mut raw = Vec::new();
+    let mut size = None;
+    loop {
+        let start = raw.len();
+        if reader.read_until(b'\n', &mut raw)? == 0 {
+            return Ok(raw);
+        }
+        let Some(line) = std::str::from_utf8(&raw[start..])
+            .ok()
+            .and_then(|line| line.strip_suffix("\r\n"))
+        else {
+            return Ok(raw);
+        };
+        if line.is_empty() {
+            break;
+        }
+        let mut parts = line.splitn(2, ": ");
+        let name = parts.next().unwrap_or_default();
+        let Some(value) = parts.next() else {
+            return Ok(raw);
+        };
+        if name.eq_ignore_ascii_case("Content-Length") {
+            match value.parse::<usize>() {
+                Ok(length) => size = Some(length),
+                Err(_) => return Ok(raw),
+            }
+        }
+    }
+    let Some(size) = size else {
+        return Ok(raw);
+    };
+    let header = raw.len();
+    // Room for a usual message up front; a longer body grows as it arrives.
+    raw.reserve(size.min(1 << 20));
+    reader
+        .take(u64::try_from(size).unwrap_or(u64::MAX))
+        .read_to_end(&mut raw)?;
+    if raw.len() - header < size {
+        // What `read_exact` reports, which `lsp-server` returned here.
+        return Err(io::Error::new(
+            io::ErrorKind::UnexpectedEof,
+            "failed to fill whole buffer",
+        ));
+    }
+    Ok(raw)
+}
+
+/// Why a framed body is not a message: not JSON (-32700), or JSON that is
+/// not a request, response or notification (-32600). A batch is one of the
+/// latter: LSP has none.
+fn classify(body: &[u8]) -> Frame {
+    let value: Value = match serde_json::from_slice(body) {
+        Ok(value) => value,
+        Err(err) => {
+            return Frame::Invalid {
+                id: Value::Null,
+                code: ErrorCode::ParseError as i32,
+                message: format!("parse error: {err}"),
+            };
+        }
+    };
+    let (id, message) = match &value {
+        Value::Array(_) => (
+            Value::Null,
+            "invalid request: a batch is not an LSP message".to_string(),
+        ),
+        Value::Object(map)
+            if !map.contains_key("method")
+                && (map.contains_key("result") || map.contains_key("error")) =>
+        {
+            return Frame::Skipped("a response with an id the server never sent".to_string());
+        }
+        Value::Object(map) => {
+            let id = map
+                .get("id")
+                .filter(|id| id.is_string() || id.is_i64() || id.is_u64())
+                .cloned()
+                .unwrap_or(Value::Null);
+            let why = match map.get("id") {
+                Some(Value::Null) => "`id` must be an integer or a string",
+                _ => "not a request, response or notification",
+            };
+            (id, format!("invalid request: {why}"))
+        }
+        _ => (
+            Value::Null,
+            "invalid request: not a JSON-RPC object".to_string(),
+        ),
+    };
+    Frame::Invalid {
+        id,
+        code: ErrorCode::InvalidRequest as i32,
+        message,
+    }
+}
+
+/// The body of a frame's bytes, after the blank line ending its header.
+fn frame_body(raw: &[u8]) -> Option<&[u8]> {
+    let end = raw.windows(4).position(|w| w == b"\r\n\r\n")?;
+    Some(&raw[end + 4..])
+}
+
+/// Whether the frame's body has a top-level `id` member. Cheap for the usual
+/// notification, which never spells `"id"` at all.
+fn names_an_id(raw: &[u8]) -> bool {
+    let Some(body) = frame_body(raw) else {
+        return false;
+    };
+    if !body.windows(4).any(|w| w == b"\"id\"") {
+        return false;
+    }
+    serde_json::from_slice::<Value>(body).is_ok_and(|v| v.get("id").is_some())
+}
+
+/// Where the loop's batches come from.
+pub(crate) trait Source {
+    /// The next batch, never empty; `None` at the end of input.
+    fn next_batch(&mut self) -> io::Result<Option<Vec<Frame>>>;
+
+    /// What tells, while a batch is handled, whether the client sent more
+    /// ([`InputProbe`]): `None` where the source cannot tell, and a long
+    /// request then runs to its end as before.
+    fn probe(&self) -> Option<InputProbe> {
+        None
+    }
+}
+
+/// Whether input is waiting to be read, asked without waiting for it: a
+/// workspace pull yields to the messages behind it when it is
+/// ([`Session::should_yield`](crate::session::Session::should_yield)).
+pub(crate) type InputProbe = Arc<dyn Fn() -> bool + Send + Sync>;
+
+/// Frames read on the caller's thread. A batch is one frame and every
+/// further frame already in the buffer: reading never waits for a message
+/// that has not started to arrive.
+pub(crate) struct Direct<R: Read> {
+    reader: BufReader<R>,
+    /// Whether the reader has input waiting, when it can tell. A batch ends
+    /// with the buffer empty (it takes every frame the buffer holds, and
+    /// waits for the rest of one it holds part of), so the reader's is the
+    /// only input there is to ask about.
+    probe: Option<InputProbe>,
+}
+
+impl<R: Read> Direct<R> {
+    pub(crate) fn new(reader: R) -> Self {
+        Self {
+            reader: BufReader::new(reader),
+            probe: None,
+        }
+    }
+
+    /// [`Direct::new`] over a reader `probe` can ask about.
+    #[cfg_attr(
+        not(target_os = "wasi"),
+        expect(dead_code, reason = "only the WASI build reads stdin on this thread")
+    )]
+    pub(crate) fn with_probe(reader: R, probe: InputProbe) -> Self {
+        Self {
+            reader: BufReader::new(reader),
+            probe: Some(probe),
+        }
+    }
+}
+
+impl<R: Read> Source for Direct<R> {
+    fn probe(&self) -> Option<InputProbe> {
+        self.probe.clone()
+    }
+
+    fn next_batch(&mut self) -> io::Result<Option<Vec<Frame>>> {
+        let Some(first) = read_frame(&mut self.reader)? else {
+            return Ok(None);
+        };
+        let mut hold = Hold::default();
+        hold.take(0, &first);
+        let mut batch = vec![first];
+        loop {
+            // A hold waits for the frames it asks for, and takes none after
+            // them; otherwise the batch is what the buffer holds.
+            match hold.end {
+                Some(end) if batch.len() >= end => break,
+                None if self.reader.buffer().is_empty() => break,
+                _ => {}
+            }
+            match read_frame(&mut self.reader)? {
+                Some(frame) => {
+                    hold.take(batch.len(), &frame);
+                    batch.push(frame);
+                }
+                None => break,
+            }
+        }
+        Ok(Some(batch))
+    }
+}
+
+/// Debug builds: where a batch that holds an `opentide/__hold { frames: n }`
+/// request ends, exactly `n` frames after it. The source waits for those
+/// frames and takes none after them, so the tests queue a batch without a
+/// timing window (#2010). Release and fuzz builds never hold: the request
+/// is an unknown method there.
+#[derive(Default)]
+struct Hold {
+    /// The length the batch must have, when a frame in it holds.
+    end: Option<usize>,
+}
+
+impl Hold {
+    /// Note the frame at `index` of the batch.
+    fn take(&mut self, index: usize, frame: &Frame) {
+        #[cfg(not(all(debug_assertions, not(fuzzing))))]
+        let _ = (self, index, frame);
+        #[cfg(all(debug_assertions, not(fuzzing)))]
+        {
+            use lsp_types::request::Request as _;
+            use serde::Deserialize as _;
+            let Frame::Message(Message::Request(request)) = frame else {
+                return;
+            };
+            if request.method != crate::handlers::custom::Hold::METHOD {
+                return;
+            }
+            // The request's own params type, so the source and the
+            // dispatcher read them alike: params it refuses (`-32602`)
+            // hold no frames (#2041).
+            let frames = crate::handlers::custom::HoldParams::deserialize(&request.params)
+                .map_or(0, |params| {
+                    usize::try_from(params.frames).unwrap_or(usize::MAX)
+                });
+            let end = index.saturating_add(1).saturating_add(frames);
+            self.end = Some(self.end.map_or(end, |held| held.max(end)));
+        }
+    }
+}
+
+/// Frames read on a thread of their own, so the next batch is everything
+/// that arrived while the last one was handled.
+#[cfg(not(target_os = "wasi"))]
+pub(crate) struct Threaded {
+    frames: std::sync::mpsc::Receiver<io::Result<Option<Frame>>>,
+    /// What ended the input, kept until the batch before it is handled.
+    end: Option<io::Result<()>>,
+    /// How many frames the reader sent that no batch took yet.
+    queued: Arc<std::sync::atomic::AtomicUsize>,
+}
+
+#[cfg(not(target_os = "wasi"))]
+impl Threaded {
+    /// Read the stream `open` returns on a new thread. The thread ends at
+    /// the end of input or when the loop is gone.
+    pub(crate) fn spawn<R, F>(open: F) -> io::Result<Self>
+    where
+        R: BufRead,
+        F: FnOnce() -> R + Send + 'static,
+    {
+        let (sender, frames) = std::sync::mpsc::channel();
+        let queued = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let counted = Arc::clone(&queued);
+        std::thread::Builder::new()
+            .name("opentide-lsp-reader".into())
+            .spawn(move || {
+                let mut reader = open();
+                loop {
+                    let frame = read_frame(&mut reader);
+                    let last = !matches!(frame, Ok(Some(_)));
+                    // Only a frame is input a request may yield to: the end
+                    // of input is not (the loop answers what is carried
+                    // when it reads it, `run`).
+                    if !last {
+                        counted.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                    }
+                    if sender.send(frame).is_err() || last {
+                        return;
+                    }
+                }
+            })?;
+        Ok(Self {
+            frames,
+            end: None,
+            queued,
+        })
+    }
+}
+
+#[cfg(not(target_os = "wasi"))]
+impl Source for Threaded {
+    fn probe(&self) -> Option<InputProbe> {
+        let queued = Arc::clone(&self.queued);
+        Some(Arc::new(move || {
+            queued.load(std::sync::atomic::Ordering::SeqCst) > 0
+        }))
+    }
+
+    fn next_batch(&mut self) -> io::Result<Option<Vec<Frame>>> {
+        if let Some(end) = self.end.take() {
+            return end.map(|()| None);
+        }
+        // The reader counts a frame before it sends it, so a frame received
+        // was counted: the count never goes below zero. The end of input is
+        // not counted, nor taken.
+        let taken = |queued: &std::sync::atomic::AtomicUsize| {
+            queued.fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
+        };
+        let first = match self.frames.recv() {
+            Ok(frame) => {
+                if matches!(frame, Ok(Some(_))) {
+                    taken(&self.queued);
+                }
+                frame?
+            }
+            Err(_) => None,
+        };
+        let Some(first) = first else {
+            return Ok(None);
+        };
+        let mut hold = Hold::default();
+        hold.take(0, &first);
+        let mut batch = vec![first];
+        loop {
+            // A hold waits for the frames it asks for, and takes none after
+            // them; otherwise the batch is what the reader has sent.
+            let next = match hold.end {
+                Some(end) if batch.len() >= end => break,
+                Some(_) => match self.frames.recv() {
+                    Ok(next) => next,
+                    Err(_) => break,
+                },
+                None => match self.frames.try_recv() {
+                    Ok(next) => next,
+                    Err(_) => break,
+                },
+            };
+            match next {
+                Ok(Some(frame)) => {
+                    taken(&self.queued);
+                    hold.take(batch.len(), &frame);
+                    batch.push(frame);
+                }
+                Ok(None) => {
+                    self.end = Some(Ok(()));
+                    break;
+                }
+                Err(err) => {
+                    self.end = Some(Err(err));
+                    break;
+                }
+            }
+        }
+        Ok(Some(batch))
+    }
+}
+
+/// Where a session is in the LSP lifecycle.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(crate) enum Lifecycle {
+    Uninitialized,
+    Running,
+    ShuttingDown,
+}
+
+/// Requests whose result describes a whole document as it is: answered
+/// `ContentModified` when a later message in the batch edits that document.
+const DOCUMENT_STATE: &[&str] = &[
+    "textDocument/semanticTokens/full",
+    "textDocument/codeAction",
+    "textDocument/inlayHint",
+    "textDocument/diagnostic",
+    "textDocument/codeLens",
+    "textDocument/documentLink",
+];
+
+/// Serve one client until it sends `exit` or the input ends. Whether the
+/// session ended cleanly: `exit` (or the end of input) after `shutdown`.
+pub(crate) fn run(
+    source: &mut dyn Source,
+    writer: &mut dyn Write,
+    session: &mut Session,
+) -> anyhow::Result<bool> {
+    let mut driver = Driver::default();
+    session.set_input_probe(source.probe());
+    while let Some(batch) = source.next_batch()? {
+        if let Some(clean) = driver.batch(session, writer, batch)? {
+            return Ok(clean);
+        }
+    }
+    // The input ended with a workspace pull carried: it is answered, as it
+    // was when it ran to its end before the input was read again.
+    driver.answer_carried(session, writer)?;
+    Ok(driver.state == Lifecycle::ShuttingDown)
+}
+
+/// The loop's state between batches: where the session is in the
+/// lifecycle. [`run`] feeds it batches from a [`Source`];
+/// [`MessageSession`](crate::MessageSession) feeds it one message at a time.
+pub(crate) struct Driver {
+    pub(crate) state: Lifecycle,
+    /// Workspace pulls that yielded to the messages behind them
+    /// ([`Session::should_yield`](crate::session::Session::should_yield)):
+    /// answered at the end of the next batch, after its own requests.
+    /// Each with when its first attempt began
+    /// ([`Session::begin_yieldable`](crate::session::Session::begin_yieldable)).
+    carried: Vec<(Request, HashSet<String>, Option<std::time::Instant>)>,
+}
+
+impl Default for Driver {
+    fn default() -> Self {
+        Self {
+            state: Lifecycle::Uninitialized,
+            carried: Vec::new(),
+        }
+    }
+}
+
+impl Driver {
+    /// Handle one batch and write what it answers and publishes. `Some`
+    /// once the client sent `exit`, with whether it shut the server down
+    /// first; nothing after `exit` is handled.
+    pub(crate) fn batch(
+        &mut self,
+        session: &mut Session,
+        writer: &mut dyn Write,
+        batch: Vec<Frame>,
+    ) -> io::Result<Option<bool>> {
+        session.begin_batch();
+        let cancelled: HashSet<RequestId> = batch.iter().filter_map(cancelled_id).collect();
+        // The documents a frame at or after each index edits.
+        let mut edited_after: Vec<HashSet<String>> = vec![HashSet::new(); batch.len() + 1];
+        for (i, frame) in batch.iter().enumerate().rev() {
+            let mut edited = edited_after[i + 1].clone();
+            if let Some(uri) = edited_uri(frame) {
+                edited.insert(uri);
+            }
+            edited_after[i] = edited;
+        }
+        // The documents each `didClose` closes, by where it is in the batch: a
+        // request answered last is about a document that is gone by then.
+        let closes: Vec<(usize, String)> = batch
+            .iter()
+            .enumerate()
+            .filter_map(|(i, frame)| closed_uri(frame).map(|uri| (i, uri)))
+            .collect();
+        // The diagnostics requests are the slow ones (see [`DEFERRED`]), and
+        // the client asks for the workspace's again two seconds after every
+        // answer: a hover or a completion that waits in the same batch is
+        // answered first. A deferred request still answers `ContentModified`
+        // when the batch edits its document later.
+        let mut deferred: Vec<(Request, HashSet<String>)> = Vec::new();
+        for (i, frame) in batch.into_iter().enumerate() {
+            let message = match frame {
+                Frame::Invalid { id, code, message } => {
+                    eprintln!("opentide-lsp: {message}");
+                    write_raw(
+                        writer,
+                        &json!({ "jsonrpc": "2.0", "id": id, "error": { "code": code, "message": message } }),
+                    )?;
+                    continue;
+                }
+                Frame::Skipped(why) => {
+                    eprintln!("opentide-lsp: ignoring {why}");
+                    continue;
+                }
+                Frame::Message(message) => message,
+            };
+            match message {
+                // A response to a request the server sent.
+                Message::Response(response) => session.response(response),
+                Message::Notification(notification) => {
+                    if notification.method == "exit" {
+                        // What the batch asked before `exit` is answered
+                        // first, as it was before diagnostics came last.
+                        self.answer_deferred(session, writer, &mut deferred, &cancelled, false)?;
+                        flush(session, writer, self.state)?;
+                        return Ok(Some(self.state == Lifecycle::ShuttingDown));
+                    }
+                    // Dropped before `initialize` and after `shutdown`; a
+                    // cancellation is read with its batch.
+                    if self.state == Lifecycle::Running && notification.method != "$/cancelRequest"
+                    {
+                        // A notification may say the disk changed: what the
+                        // requests before it read of the disk is read again.
+                        session.forget_disk();
+                        handle_notification(session, notification);
+                    }
+                }
+                Message::Request(request)
+                    if DEFERRED.contains(&request.method.as_str())
+                        && self.state == Lifecycle::Running
+                        && !cancelled.contains(&request.id) =>
+                {
+                    let mut staled_by = edited_after[i + 1].clone();
+                    staled_by.extend(
+                        closes
+                            .iter()
+                            .filter(|(at, _)| *at > i)
+                            .map(|(_, uri)| uri.clone()),
+                    );
+                    deferred.push((request, staled_by));
+                }
+                Message::Request(request) => {
+                    if request.method == "shutdown" {
+                        // The server is shut down for what follows, not for
+                        // what the batch asked before it.
+                        self.answer_deferred(session, writer, &mut deferred, &cancelled, false)?;
+                    }
+                    let staled_by = &edited_after[i + 1];
+                    let response =
+                        respond(session, &mut self.state, request, &cancelled, staled_by);
+                    // What the handler queued (a publish before `shutdown`)
+                    // goes first.
+                    write_outbox(session, writer)?;
+                    write(writer, &Message::Response(response))?;
+                }
+            }
+            write_outbox(session, writer)?;
+        }
+        self.answer_deferred(session, writer, &mut deferred, &cancelled, true)?;
+        flush(session, writer, self.state)?;
+        // The batch's reads of the disk are not kept while the server waits
+        // for the next one (the workspace keeps its own parse). A native
+        // workspace that still loads on its thread keeps what it reads
+        // until the next message forgets it.
+        session.forget_disk();
+        Ok(None)
+    }
+
+    /// Answer the requests [`DEFERRED`] put off, in the order they came.
+    /// The batch's own deferred requests first, then the workspace pulls an
+    /// earlier batch carried. With `may_yield` (the end of a batch, not a
+    /// `shutdown` or `exit` the batch holds), a workspace pull that finds the
+    /// client sent more stops without an answer and is carried to the next
+    /// batch: what it found so far is kept, so it goes on where it stopped.
+    fn answer_deferred(
+        &mut self,
+        session: &mut Session,
+        writer: &mut dyn Write,
+        deferred: &mut Vec<(Request, HashSet<String>)>,
+        cancelled: &HashSet<RequestId>,
+        may_yield: bool,
+    ) -> io::Result<()> {
+        let mut queue: Vec<_> = std::mem::take(deferred)
+            .into_iter()
+            .map(|(request, staled_by)| (request, staled_by, None))
+            .collect();
+        queue.append(&mut self.carried);
+        for (request, staled_by, first) in queue {
+            let yields = may_yield
+                && self.state == Lifecycle::Running
+                && request.method == WORKSPACE_PULL
+                && !cancelled.contains(&request.id);
+            if yields {
+                let first = session.begin_yieldable(first);
+                let kept = request.clone();
+                let response = respond(session, &mut self.state, request, cancelled, &staled_by);
+                if session.end_yieldable() {
+                    // A yielded pull is not answered; what its handler
+                    // queued (a log, a refresh) goes out with the batch.
+                    self.carried.push((kept, staled_by, first));
+                    continue;
+                }
+                write_outbox(session, writer)?;
+                write(writer, &Message::Response(response))?;
+                continue;
+            }
+            let response = respond(session, &mut self.state, request, cancelled, &staled_by);
+            write_outbox(session, writer)?;
+            write(writer, &Message::Response(response))?;
+        }
+        Ok(())
+    }
+
+    /// Answer the workspace pulls a batch carried, none yielding: the input
+    /// ended, and no batch is left to carry them to.
+    fn answer_carried(&mut self, session: &mut Session, writer: &mut dyn Write) -> io::Result<()> {
+        if self.carried.is_empty() {
+            return Ok(());
+        }
+        self.answer_deferred(session, writer, &mut Vec::new(), &HashSet::new(), false)?;
+        flush(session, writer, self.state)
+    }
+}
+
+/// The requests a batch answers last: the diagnostics of the workspace and of
+/// a document, which on a large workspace take tenths of a second (what
+/// `validate` and `lint` check across every object file) while a completion
+/// or a hover takes a millisecond.
+const DEFERRED: [&str; 2] = [WORKSPACE_PULL, "textDocument/diagnostic"];
+
+/// The workspace's diagnostics: the one request that yields to the messages
+/// behind it ([`Driver::answer_deferred`]).
+const WORKSPACE_PULL: &str = "workspace/diagnostic";
+
+/// One message's JSON text, without its `Content-Length` header, read as
+/// [`read_frame`] reads a framed one: the same answers for a body that is
+/// not a message.
+pub(crate) fn frame_of(text: &str) -> Frame {
+    let mut framed = format!("Content-Length: {}\r\n\r\n", text.len()).into_bytes();
+    framed.extend_from_slice(text.as_bytes());
+    match read_frame(&mut io::Cursor::new(framed)) {
+        Ok(Some(frame)) => frame,
+        _ => classify(text.as_bytes()),
+    }
+}
+
+/// The bodies of the frames written into `bytes`, in order: what a host
+/// with no stdio posts, one message at a time.
+pub(crate) fn frame_bodies(mut bytes: &[u8]) -> Vec<String> {
+    let mut bodies = Vec::new();
+    while let Some(sep) = bytes.windows(4).position(|w| w == b"\r\n\r\n") {
+        let length = std::str::from_utf8(&bytes[..sep]).ok().and_then(|header| {
+            header.lines().find_map(|line| {
+                let (name, value) = line.split_once(':')?;
+                name.trim()
+                    .eq_ignore_ascii_case("content-length")
+                    .then(|| value.trim().parse::<usize>().ok())
+                    .flatten()
+            })
+        });
+        let start = sep + 4;
+        // A length past `usize::MAX - start` ends the frames, as a short body
+        // does (#1936).
+        let Some(body) = length
+            .and_then(|length| start.checked_add(length))
+            .and_then(|end| bytes.get(start..end))
+        else {
+            break;
+        };
+        bodies.push(String::from_utf8_lossy(body).into_owned());
+        bytes = &bytes[start + body.len()..];
+    }
+    bodies
+}
+
+/// The answer to one request, whatever the lifecycle and the batch say.
+fn respond(
+    session: &mut Session,
+    state: &mut Lifecycle,
+    request: Request,
+    cancelled: &HashSet<RequestId>,
+    staled_by: &HashSet<String>,
+) -> Response {
+    let refusal = match (*state, request.method.as_str()) {
+        (Lifecycle::Uninitialized, "initialize") => None,
+        (Lifecycle::Uninitialized, _) => Some((
+            ErrorCode::ServerNotInitialized,
+            "the server is not initialized",
+        )),
+        (Lifecycle::Running, "initialize") => Some((
+            ErrorCode::InvalidRequest,
+            "the server is already initialized",
+        )),
+        (Lifecycle::Running, _) => None,
+        (Lifecycle::ShuttingDown, _) => {
+            Some((ErrorCode::InvalidRequest, "the server is shutting down"))
+        }
+    };
+    if let Some((code, message)) = refusal {
+        return Response::new_err(request.id, code as i32, message.to_string());
+    }
+    if cancelled.contains(&request.id) {
+        return Response::new_err(
+            request.id,
+            ErrorCode::RequestCanceled as i32,
+            "the request was cancelled".to_string(),
+        );
+    }
+    if DOCUMENT_STATE.contains(&request.method.as_str())
+        && document_uri(&request.params).is_some_and(|uri| staled_by.contains(&uri))
+    {
+        return Response::new_err(
+            request.id,
+            ErrorCode::ContentModified as i32,
+            "the document changed".to_string(),
+        );
+    }
+    if request.method == "shutdown" {
+        // What the edits before it changed is published before the reply;
+        // nothing is after it.
+        session.flush_publishes();
+    }
+    let method = request.method.clone();
+    let id = request.id.clone();
+    let _span = crate::timing::Span::named("request ", &method);
+    let handled = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        crate::handlers::request(session, request)
+    }));
+    let response = match handled {
+        Ok(response) => response,
+        Err(panic) => {
+            let what = panic_text(&panic);
+            eprintln!("opentide-lsp: handling {method:?} failed: {what}");
+            Response::new_err(
+                id,
+                ErrorCode::InternalError as i32,
+                format!("internal error: {what}"),
+            )
+        }
+    };
+    if response.response_result.is_ok() {
+        match method.as_str() {
+            "initialize" => *state = Lifecycle::Running,
+            "shutdown" => *state = Lifecycle::ShuttingDown,
+            _ => {}
+        }
+    }
+    response
+}
+
+fn handle_notification(session: &mut Session, notification: Notification) {
+    let method = notification.method.clone();
+    let handled = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        crate::handlers::notification(session, notification);
+    }));
+    if let Err(panic) = handled {
+        eprintln!(
+            "opentide-lsp: handling {method:?} failed: {}",
+            panic_text(&panic)
+        );
+    }
+}
+
+fn panic_text(panic: &Box<dyn std::any::Any + Send>) -> String {
+    panic
+        .downcast_ref::<String>()
+        .cloned()
+        .or_else(|| panic.downcast_ref::<&str>().map(|s| s.to_string()))
+        .unwrap_or_else(|| "a panic".to_string())
+}
+
+/// The id a `$/cancelRequest` in the batch cancels.
+fn cancelled_id(frame: &Frame) -> Option<RequestId> {
+    let Frame::Message(Message::Notification(n)) = frame else {
+        return None;
+    };
+    if n.method != "$/cancelRequest" {
+        return None;
+    }
+    match n.params.get("id")? {
+        Value::Number(n) => Some(RequestId::from(i32::try_from(n.as_i64()?).ok()?)),
+        Value::String(s) => Some(RequestId::from(s.clone())),
+        _ => None,
+    }
+}
+
+/// The document a `didChange` edits.
+fn edited_uri(frame: &Frame) -> Option<String> {
+    let Frame::Message(Message::Notification(n)) = frame else {
+        return None;
+    };
+    (n.method == "textDocument/didChange")
+        .then(|| document_uri(&n.params))
+        .flatten()
+}
+
+/// The document a `didClose` notification closes.
+fn closed_uri(frame: &Frame) -> Option<String> {
+    let Frame::Message(Message::Notification(n)) = frame else {
+        return None;
+    };
+    (n.method == "textDocument/didClose")
+        .then(|| document_uri(&n.params))
+        .flatten()
+}
+
+fn document_uri(params: &Value) -> Option<String> {
+    Some(
+        params
+            .get("textDocument")?
+            .get("uri")?
+            .as_str()?
+            .to_string(),
+    )
+}
+
+/// Publish what the batch changed (nothing once the server is shut down),
+/// then write what is queued.
+fn flush(session: &mut Session, writer: &mut dyn Write, state: Lifecycle) -> io::Result<()> {
+    if state == Lifecycle::Running {
+        session.flush_publishes();
+        // The workspace may have loaded, or `paths.toml` moved a folder, in
+        // this batch.
+        session.sync_watchers();
+    } else {
+        session.discard_publishes();
+    }
+    write_outbox(session, writer)
+}
+
+fn write_outbox(session: &mut Session, writer: &mut dyn Write) -> io::Result<()> {
+    for message in session.take_outbox() {
+        write(writer, &message)?;
+    }
+    Ok(())
+}
+
+pub(crate) fn write(writer: &mut dyn Write, message: &Message) -> io::Result<()> {
+    let mut buffer = Vec::new();
+    message.clone().write(&mut buffer)?;
+    writer.write_all(&buffer)?;
+    writer.flush()
+}
+
+/// A message `lsp-server` cannot represent: an error answered with
+/// `id: null`.
+fn write_raw(writer: &mut dyn Write, body: &Value) -> io::Result<()> {
+    let text = serde_json::to_string(body)?;
+    write!(writer, "Content-Length: {}\r\n\r\n{text}", text.len())?;
+    writer.flush()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn framed(body: &str) -> Vec<u8> {
+        format!("Content-Length: {}\r\n\r\n{body}", body.len()).into_bytes()
+    }
+
+    fn invalid(frame: Frame) -> (Value, i32) {
+        match frame {
+            Frame::Invalid { id, code, .. } => (id, code),
+            Frame::Skipped(why) => panic!("skipped: {why}"),
+            Frame::Message(m) => panic!("a message: {m:?}"),
+        }
+    }
+
+    #[test]
+    fn bodies_that_are_not_messages_are_classified_and_reading_goes_on() {
+        let mut input = framed("{not json");
+        input.extend(framed(r#"[{"jsonrpc":"2.0","id":1,"method":"shutdown"}]"#));
+        input.extend(framed(r#"{"jsonrpc":"2.0","id":null,"method":"x"}"#));
+        input.extend(framed(r#"{"jsonrpc":"2.0","id":4,"params":{}}"#));
+        input.extend(framed(r#"{"id":5,"method":"shutdown"}"#));
+        let mut reader = &input[..];
+        let next = |reader: &mut &[u8]| read_frame(reader).unwrap().unwrap();
+        assert_eq!(invalid(next(&mut reader)), (Value::Null, -32700));
+        assert_eq!(invalid(next(&mut reader)), (Value::Null, -32600));
+        assert_eq!(invalid(next(&mut reader)), (Value::Null, -32600));
+        assert_eq!(invalid(next(&mut reader)), (json!(4), -32600));
+        match next(&mut reader) {
+            Frame::Message(Message::Request(r)) => assert_eq!(r.method, "shutdown"),
+            _ => panic!("the request without `jsonrpc`"),
+        }
+        assert!(read_frame(&mut reader).unwrap().is_none());
+    }
+
+    #[test]
+    fn a_broken_header_ends_the_input() {
+        let mut reader: &[u8] = b"Content-Length 3\r\n\r\n{}";
+        assert!(read_frame(&mut reader).is_err());
+        let mut reader: &[u8] = b"X-Other: 1\r\n\r\n";
+        assert!(read_frame(&mut reader).is_err());
+    }
+
+    #[test]
+    fn a_length_longer_than_the_input_ends_it_without_allocating_the_length() {
+        // The fuzzer's `framing` target (#843): lsp-server sizes its buffer
+        // from the header before reading, so one header made the server
+        // allocate (and zero) whatever it named, or abort.
+        for header in [
+            format!("Content-Length: {}\r\n\r\n{{}}", usize::MAX),
+            "Content-Length: 1099511627776\r\n\r\n{}".to_string(),
+        ] {
+            let mut reader = header.as_bytes();
+            let err = read_frame(&mut reader).err().expect("an error");
+            assert_eq!(err.kind(), io::ErrorKind::UnexpectedEof, "{header}");
+        }
+        // A body that arrives whole is read as before, however its length
+        // compares with the reader's buffer.
+        let body = format!(
+            r#"{{"jsonrpc":"2.0","method":"x","params":"{}"}}"#,
+            "a".repeat(100_000)
+        );
+        let input = framed(&body);
+        let mut reader = io::BufReader::with_capacity(16, &input[..]);
+        match read_frame(&mut reader).unwrap().unwrap() {
+            Frame::Message(Message::Notification(n)) => assert_eq!(n.method, "x"),
+            _ => panic!("the notification"),
+        }
+        assert!(read_frame(&mut reader).unwrap().is_none());
+    }
+
+    #[test]
+    fn direct_batches_the_frames_already_buffered() {
+        let mut input = framed(r#"{"jsonrpc":"2.0","method":"a"}"#);
+        input.extend(framed(r#"{"jsonrpc":"2.0","method":"b"}"#));
+        let mut source = Direct::new(&input[..]);
+        assert_eq!(source.next_batch().unwrap().unwrap().len(), 2);
+        assert!(source.next_batch().unwrap().is_none());
+    }
+
+    /// #2010: a batch with `opentide/__hold { frames: n }` ends exactly `n`
+    /// frames after it, wherever the buffer ends.
+    #[cfg(all(debug_assertions, not(fuzzing)))]
+    #[test]
+    fn direct_holds_exactly_the_frames_a_hold_asks_for() {
+        let mut input = framed(r#"{"jsonrpc":"2.0","method":"a"}"#);
+        input.extend(framed(
+            r#"{"jsonrpc":"2.0","id":1,"method":"opentide/__hold","params":{"frames":2}}"#,
+        ));
+        for method in ["b", "c", "d"] {
+            input.extend(framed(&format!(
+                r#"{{"jsonrpc":"2.0","method":"{method}"}}"#
+            )));
+        }
+        let mut source = Direct::new(&input[..]);
+        assert_eq!(source.next_batch().unwrap().unwrap().len(), 4);
+        assert_eq!(source.next_batch().unwrap().unwrap().len(), 1);
+        assert!(source.next_batch().unwrap().is_none());
+    }
+
+    /// #2010: the threaded source waits for the frames a hold asks for,
+    /// however late they arrive, and leaves the next one to the next batch.
+    #[cfg(all(debug_assertions, not(fuzzing), not(target_os = "wasi")))]
+    #[test]
+    fn threaded_waits_for_the_frames_a_hold_asks_for() {
+        let (reader, mut writer) = std::io::pipe().unwrap();
+        let mut source = Threaded::spawn(move || BufReader::new(reader)).unwrap();
+        writer
+            .write_all(&framed(
+                r#"{"jsonrpc":"2.0","id":1,"method":"opentide/__hold","params":{"frames":2}}"#,
+            ))
+            .unwrap();
+        writer
+            .write_all(&framed(r#"{"jsonrpc":"2.0","method":"é😀"}"#))
+            .unwrap();
+        let late = std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_millis(100));
+            writer
+                .write_all(&framed(r#"{"jsonrpc":"2.0","method":"b"}"#))
+                .unwrap();
+            writer
+                .write_all(&framed(r#"{"jsonrpc":"2.0","method":"c"}"#))
+                .unwrap();
+        });
+        let batch = source.next_batch().unwrap().unwrap();
+        assert_eq!(batch.len(), 3);
+        assert!(matches!(
+            &batch[2],
+            Frame::Message(Message::Notification(n)) if n.method == "b"
+        ));
+        late.join().unwrap();
+        let rest = source.next_batch().unwrap().unwrap();
+        assert!(matches!(
+            &rest[..],
+            [Frame::Message(Message::Notification(n))] if n.method == "c"
+        ));
+        assert!(source.next_batch().unwrap().is_none());
+    }
+
+    /// #2041: input that ends during a hold ends the batch with what came,
+    /// and the next batch is the end of input: the source does not wait on.
+    #[cfg(all(debug_assertions, not(fuzzing)))]
+    #[test]
+    fn direct_ends_a_hold_at_the_end_of_input() {
+        let mut input =
+            framed(r#"{"jsonrpc":"2.0","id":1,"method":"opentide/__hold","params":{"frames":3}}"#);
+        input.extend(framed(r#"{"jsonrpc":"2.0","method":"é😀"}"#));
+        let mut source = Direct::new(&input[..]);
+        assert_eq!(source.next_batch().unwrap().unwrap().len(), 2);
+        assert!(source.next_batch().unwrap().is_none());
+    }
+
+    /// #2041: the threaded source, the same: the reader's end of input ends
+    /// the held batch.
+    #[cfg(all(debug_assertions, not(fuzzing), not(target_os = "wasi")))]
+    #[test]
+    fn threaded_ends_a_hold_at_the_end_of_input() {
+        let (reader, mut writer) = std::io::pipe().unwrap();
+        let mut source = Threaded::spawn(move || BufReader::new(reader)).unwrap();
+        writer
+            .write_all(&framed(
+                r#"{"jsonrpc":"2.0","id":1,"method":"opentide/__hold","params":{"frames":3}}"#,
+            ))
+            .unwrap();
+        writer
+            .write_all(&framed(r#"{"jsonrpc":"2.0","method":"é😀"}"#))
+            .unwrap();
+        drop(writer);
+        assert_eq!(source.next_batch().unwrap().unwrap().len(), 2);
+        assert!(source.next_batch().unwrap().is_none());
+    }
+
+    /// #2041: the source reads a hold's params as the dispatcher does:
+    /// params it refuses (`-32602`) hold no frames, so the batch is what
+    /// was buffered, and a later frame is the next batch's.
+    #[cfg(all(debug_assertions, not(fuzzing), not(target_os = "wasi")))]
+    #[test]
+    fn a_hold_the_dispatcher_refuses_holds_nothing() {
+        let (reader, mut writer) = std::io::pipe().unwrap();
+        let mut source = Threaded::spawn(move || BufReader::new(reader)).unwrap();
+        writer
+            .write_all(&framed(
+                r#"{"jsonrpc":"2.0","id":1,"method":"opentide/__hold","params":{"frames":"2"}}"#,
+            ))
+            .unwrap();
+        assert_eq!(source.next_batch().unwrap().unwrap().len(), 1);
+        writer
+            .write_all(&framed(r#"{"jsonrpc":"2.0","method":"b"}"#))
+            .unwrap();
+        drop(writer);
+        assert_eq!(source.next_batch().unwrap().unwrap().len(), 1);
+        assert!(source.next_batch().unwrap().is_none());
+    }
+
+    #[test]
+    fn frame_bodies_splits_what_write_wrote() {
+        let mut buf = Vec::new();
+        write(
+            &mut buf,
+            &Message::Notification(Notification::new("a".into(), json!("é😀"))),
+        )
+        .unwrap();
+        write_raw(
+            &mut buf,
+            &json!({ "jsonrpc": "2.0", "id": null, "error": { "code": -32700, "message": "x" } }),
+        )
+        .unwrap();
+        let bodies = frame_bodies(&buf);
+        assert_eq!(bodies.len(), 2);
+        let first: Value = serde_json::from_str(&bodies[0]).unwrap();
+        assert_eq!(first["params"], "é😀");
+        let second: Value = serde_json::from_str(&bodies[1]).unwrap();
+        assert_eq!(second["id"], Value::Null);
+        assert!(frame_bodies(b"").is_empty());
+        // A frame cut short is dropped, never read past.
+        assert!(frame_bodies(b"Content-Length: 10\r\n\r\n{}").is_empty());
+        // A length whose end overflows is dropped, never wrapped (#1936).
+        let huge = format!("Content-Length: {}\r\n\r\n{{}}", usize::MAX);
+        assert!(frame_bodies(huge.as_bytes()).is_empty());
+    }
+
+    #[test]
+    fn frame_of_reads_a_body_as_read_frame_does() {
+        assert!(matches!(
+            frame_of(r#"{"jsonrpc":"2.0","method":"initialized","params":{}}"#),
+            Frame::Message(Message::Notification(_))
+        ));
+        assert_eq!(
+            invalid(frame_of("{ not json")).1,
+            ErrorCode::ParseError as i32
+        );
+        let (id, code) = invalid(frame_of(r#"{"jsonrpc":"2.0","id":3}"#));
+        assert_eq!((id, code), (json!(3), ErrorCode::InvalidRequest as i32));
+        assert!(matches!(frame_of(""), Frame::Invalid { .. }));
+    }
+}

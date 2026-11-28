@@ -1,0 +1,116 @@
+---
+title: "Architecture"
+description: "The engine's architecture: an I/O-free Rust engine and thin hosts (the language server, WebAssembly, the TypeScript client, opentide)."
+---
+
+# Architecture
+
+opentide LSP is an I/O-free Rust engine plus thin hosts.
+
+```
+editors / @opentide/lsp-client / WASM worker
+                │
+         opentide-lsp  (stdio JSON-RPC, CLI analyze/highlight)
+                │
+         opentide-analysis  (WorkspaceHost)
+          /        |         \
+    opentide-{kql,spl}  opentide-{esql,eql,kuery,lucene}  opentide-tide
+          \        |         /
+            opentide-parse + opentide-highlight
+                      |
+               opentide-core
+```
+
+## Layers
+
+- **Parsers** are pure Rust (ADR 0012): each language crate has a logos lexer and a hand-written grammar on `opentide-parse` into a lossless rowan tree, and a `.ungram` its typed AST is generated from (`cargo xtask codegen`, checked in CI). YARA reads `yara-x-parser`. No C and no `unsafe` in the engine; the browser module links no libc (`.agents/skills/parser/SKILL.md`).
+- **Catalogs** (`data/catalogs/`) compiled into the engine with `include_str!`. The language server generates each root's Tide field catalogs from `opentide-schema` and hands them to the engine (#926); it does not read `.opentide/lsp/catalogs/`.
+- **HighlightSpec** (`highlights/spec.toml`) is frozen. Capture rename = major. Generated tmLanguage / Monaco / Helix maps are CI-checked.
+- **Injection**: block-scalar indent is stripped for analysis; tokens are remapped onto YAML coordinates.
+
+## Injection table
+
+| Field path | Language |
+| --- | --- |
+| `configurations.sentinel.query` | KQL |
+| `configurations.microsoft_defender.query` | KQL |
+| `configurations.splunk.query` | SPL |
+| `configurations.splunk.search` (legacy) | SPL |
+| `configurations.elastic.query` with `type: esql` | ES\|QL |
+| `configurations.elastic.query` with `type: eql` | EQL |
+| `configurations.elastic.query` with `type: query`, `threshold`, `new_terms`, or `threat_match` | `language: kuery` (default) → Kibana KQL; `language: lucene` → Lucene |
+| `configurations.elastic.threat.query` | `threat.language` (`kuery` default, or `lucene`) |
+| `configurations.elastic.query` with `type: machine_learning` | none |
+| `configurations.carbon_black_cloud.query` | Lucene (Carbon Black dialect) |
+| `configurations.graylog.query` | Lucene (Graylog dialect); the block's constraint codes, `aggregation.condition` grammar included, are `crates/opentide-tide/src/graylog.rs` |
+| `configurations.sysdig.condition` | Falco condition, with the block's `macros` and `lists` in scope and the fields of its `source` (`syscall` default); a fragment that starts with `and`/`or` when the block sets `append_to_rule` |
+| `configurations.sysdig.macros[].condition` | Falco condition, same scope |
+| `configurations.sysdig.output` | Falco output template, read as libsinsp's formatter reads it: `%field` and `%transformer(...)` tokens compiled for the `source` |
+| `configurations.sysdig.exceptions` | Not a query: Falco's exception rules (operators, counts, fields) and the text Falco writes from them, compiled with the condition (`opentide_falco::exceptions`, reported on the YAML keys) |
+| `response.procedure.searches[].query` with `system: elastic` | `language` on the entry (`esql`, `eql`, `kuery`, `lucene`); none when omitted (specifications#58) |
+| `response.procedure.searches[].query` with `system: sentinel`, `microsoft_defender`, `splunk`, `carbon_black_cloud`, `graylog` or `crowdstrike` | that platform's language and profile, whatever the order of the entry's keys; any other `system` (`Sentinel`, `Splunk ES`) is free text and is not analysed |
+| `configurations.splunk.actions.notable.drilldown.search` | none: a `$token$` template, not the rule's query |
+| `configurations.crowdstrike.query` | CQL, with the Next-Gen SIEM correlation-rule checks ([CQL.md](CQL.md)) |
+| `configurations.exabeam.sequences[].query` | Exabeam Query Language, profile `rule` (the filter only); the block's constraint codes come from `crates/opentide-tide/src/exabeam.rs` ([EXABEAM.md](EXABEAM.md)) |
+| `response.procedure.searches[].query` with `system: exabeam` | Exabeam Query Language, profile `search` (the filter and the advanced operators), whatever the order of the entry's keys |
+| `configurations.harfanglab.yara.signature`, `configurations.bitdefender.yara.signature` | YARA, under that platform's profile ([YARA.md](YARA.md)); a YAML alias is `yara_signature_alias` and is not analysed |
+| `configurations.harfanglab.yara.strings` + `.condition` + `.imports` | YARA: one injection spanning several scalars. The text analysed is the rule deploy assembles (`compile_yara_deployment`): `import` lines, `rule <name> {`, generated meta, and each body's lines indented after `strip()`. The bodies and the module names map back byte for byte; the generated text is marked synthetic (`InjectionPart`), gets no token, and a finding there is reported by the block's constraint codes instead (`crates/opentide-tide/src/yara.rs`) |
+| `configurations.google_secops.setup` + `.events` + `.outcome` + `.condition` + `.export` | YARA-L, `rule` profile: one injection spanning the section scalars, as the rule deploy assembles (google-secops-1.0 "Assembled rule"): `rule <name> {`, generated meta, each section's label indented two and its lines four. `match` and `options` are YAML, rendered into the rule as synthetic text mapped onto their YAML values; the header, meta and labels are synthetic too. Line `n` of a section is line `L + n` of the rule, four columns right (`crates/opentide-tide/src/google_secops.rs`, [YARAL.md](YARAL.md)) |
+| `response.procedure.searches[].query` with `system: google_secops` | YARA-L, `search` profile |
+| `description` / `procedure.analysis` / `recommendation` / other `markdown = true` fields | Markdown (HighlightSpec `markdown.*`) |
+
+A key is a query only at these paths, read from the YAML structure (`crates/opentide-tide/src/injection.rs`): a `query:` or `search:` anywhere else is not one. Each query is reported at its own path, list items by index (`response.procedure.searches.0.query`), with its platform (`InjectedQuery::platform`, `QueryReport::platform`), since a hunt's path does not name it. The text analysed is the scalar's value, as a YAML loader reads it: block scalars of either style with any chomping or indentation indicator (`|`, `>-`, `|2`), plain scalars over several lines, and single- or double-quoted scalars with their escapes. Every byte of the value maps back to the source byte it comes from, so a diagnostic in a folded or quoted query lands on its line and column in the file.
+
+Tide object intelligence is generated by opentide itself: `cargo xtask codegen` runs `opentide-schema`'s generator (`opentide_schema::generate::catalog`, the one `opentide generate schemas` uses for workspace catalogs) on the bundled configuration, so the two never differ. The LSP loads [`data/catalogs/tide/generated/fields.json`](../../data/catalogs/tide/generated/fields.json), keyed by schema id (`rule::1.0`, `rule::1.1`) and YAML path, and resolves each object through its `metadata.schema`. JSON Schema supplies titles, types, required, enums, consts, and which objects are closed (`additionalProperties: false`). Pydantic `tide.template.multiline` / `hide` supply markdown and hidden flags the schema emitter drops, and `TideModel.__legacy_keys__` the legacy spellings a model's validator accepts (`legacy`). Capture rename in HighlightSpec is a **major**; adding `markdown.*` / `macro` is a minor (`0.2.0`).
+
+Every field row in `fields.json` has the capture `tide.property`, so a
+schema key keeps one color however deeply it nests, list items included
+(`- purpose:`). opentide's generator sets it; a test in
+`crates/opentide-highlight/src/lib.rs` fails if any row differs.
+`tide.keyword` stays in HighlightSpec and no row uses it. Values keep their
+own captures (markdown, enums as `constant`, UUIDs as `tide.uuid`, injected
+queries). A key with no field row is `property`. LSP semantic tokens map
+`tide.property` → `property`. JSON `highlight()` still emits `tide.property`.
+
+## Diagnostics
+
+**Elastic stack version.** ES|QL availability is checked against the lowest `setup.version` declared across a rule block's target tenants in `.opentide/configurations/platforms/elastic.toml` (the block's `tenants`, or every tenant). A target without a version, or no configuration, means the 8.19 floor (specifications#59). A declared 9.4+ or Serverless target also drops `esql_metadata_id`, because Kibana adds `METADATA _id` itself there.
+
+The object checks are `opentide-workspace`'s `validate`: the language server loads each root with `Workspace::open` over the disk and the editor's buffers, keeps it current with `Workspace::invalidate` (an edit, a watched file, `opentide/didChangeWorkspace`), and publishes `validate`'s findings with their ranges in UTF-16 (UC-2.6, #821; [OBJECTS.md](OBJECTS.md)). The engine adds its query diagnostics inside `query: |`; the platform blocks are `validate`'s and `lint`'s alone (`opentide_analysis::analyze_blocks`), so no fault is published twice.
+
+## Configuration TOML
+
+`.opentide/configurations/**/*.toml` is `opentide-config` (#158). opentide's models decide what is wrong with these files. The engine only says where:
+
+- **The server checks, natively.** `opentide-lsp` checks each buffer with `opentide_schema::configuration::checks::buffer_issues` (UC-2.6, #821), the port of `configuration_buffer_issues` that `opentide validate`'s configuration check shares: the buffer merged onto the bundled file and the parent instance's file of the same name, the models, and the checks a schema cannot state (`rule_status_unknown`, `promotion_target_unknown`, `asset_unknown`, `identifier_mismatch`, the `sharing-config` codes); for `sharing.toml`, the statuses of an open `deployment.toml` buffer, else the file. Every host has them, the bare binary and WebAssembly included; the `set_configuration_checker` callback is gone. The findings are `{code, field_path, severity, message}` (`ConfigIssue`).
+- **The engine places.** `toml_edit` spans turn each `field_path` into a range:
+  - a path that exists: its last key, or an array-of-tables entry's `[[header]]`;
+  - a path that exists only in part (a missing key): the deepest key or header that exists, and the message names the path (`misp[1].url: Field required`);
+  - an empty path, or one held by another layer: the first line;
+  - `config_parse`: where `toml_edit` stops parsing.
+- **The models' schemas** (`ConfigurationSchemas`: the router and one JSON Schema per file, as `opentide-schema`'s `generate::configuration` writes them, which `opentide-lsp` generates once per process and passes to `configuration_hover` and `configuration_completions`) give hover and completion, in every host (#926). Hover shows title, type, description, allowed values and default, never the buffer's value. Completion offers the keys a table may still take, table names in a header, and allowed values after `=`. A walker reads the schema (`$ref`, `anyOf`, `items`, `additionalProperties`); it does not validate.
+- **No highlighting.** The editor's TOML grammar stays: no semantic tokens for `opentide-config`, no HighlightSpec captures, no TOML grammar here.
+
+## Hosts
+
+- Native: `opentide-lsp --stdio` or `--listen 127.0.0.1:2087`
+- Web: `wasm32-unknown-unknown`: the language server itself (`LanguageServer`, `opentide_lsp::MessageSession` one JSON-RPC message at a time, served in a Web Worker by `@opentide/lsp-worker`), and `highlight(language_id, bytes)` — do **not** mix WASI + wasm-bindgen in one artifact. With no filesystem, the client supplies the workspace on `initialize` (`initializationOptions.workspace`)
+- vscode.dev: `wasm32-wasip1` of the same binary
+- TypeScript: `createOpentideClient({ transport: "stdio" | "worker" | "wasi" })`
+
+## Structure providers
+
+`initialize` advertises document symbols, workspace symbols, document
+highlight, code actions, folding, selection range, inlay hints, document
+links, code lenses, and pull and workspace diagnostics (for a client that
+pulls). Behavior, the visibility.toml fixes, and the quickfix range
+pitfall: [EDITORS.md](EDITORS.md#structure-providers).
+
+## Custom RPCs
+
+- `opentide/analyze`, `opentide/highlight`, `opentide/compiledKql`, `opentide/compiledSpl` and `opentide/fs/read`: thin wrappers over `opentide_analysis` (`analyze`, `highlight`, `compiled_kql`, `compiled_spl`) and the session's document store. Params and results: [EDITORS.md](EDITORS.md#custom-rpcs).
+- `opentide/catalog` and the notification `opentide/catalogChanged` (#198): the workspace index (each object's identity, its name's range and the UUIDs its body names, with their ranges) for catalogue and graph views. `index_object` finds the references once per text and keeps them in `IndexedObject::refs` (`opentide_tide::object_refs`); `find_refs` and the reference lens read them instead of walking every body. The host compares a digest of each root's catalog at the end of a batch whose index changed and notifies a client that has asked for it. Shapes: [EDITORS.md](EDITORS.md#custom-rpcs).
+
+## Development
+
+Use `cargo test --workspace`. Release tags are `v0.x.y`, independent of the `opentide` Python package.

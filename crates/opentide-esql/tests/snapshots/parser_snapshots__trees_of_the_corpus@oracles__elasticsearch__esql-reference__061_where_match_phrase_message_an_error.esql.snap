@@ -1,0 +1,33 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/oracles/elasticsearch/esql-reference/061_where_match_phrase_message_an_error.esql
+---
+SOURCE_FILE@0..52
+  QUERY@0..51
+    FROM_COMMAND@0..9
+      FROM_KW@0..4 "FROM"
+      WHITESPACE@4..5 " "
+      INDEX_PATTERN@5..9
+        INDEX_NAME@5..9
+          SOURCE_TEXT@5..9 "logs"
+    WHITESPACE@9..10 " "
+    PIPE@10..11 "|"
+    WHITESPACE@11..12 " "
+    WHERE_COMMAND@12..51
+      WHERE_KW@12..17 "WHERE"
+      WHITESPACE@17..18 " "
+      FUNCTION_CALL@18..51
+        IDENTIFIER@18..30
+          IDENT@18..30 "MATCH_PHRASE"
+        L_PAREN@30..31 "("
+        QUALIFIED_NAME@31..38
+          IDENTIFIER@31..38
+            IDENT@31..38 "message"
+        COMMA@38..39 ","
+        WHITESPACE@39..40 " "
+        STRING@40..50
+          STRING_LIT@40..50 "\"an error\""
+        R_PAREN@50..51 ")"
+  WHITESPACE@51..52 "\n"
+--- errors

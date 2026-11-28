@@ -1,0 +1,5 @@
+// prod:meta_section invalid
+rule r {
+  meta:
+    author "a"
+}

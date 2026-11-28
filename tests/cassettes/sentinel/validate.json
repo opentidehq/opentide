@@ -1,0 +1,188 @@
+{
+  "format": 1,
+  "scenario": "sentinel/validate",
+  "recorded_from": [
+    "{python}",
+    "tests/cassettes/sentinel/client.py",
+    "validate"
+  ],
+  "digest": "sha256:8f462ac1dd77f7555f23e244d86a56a1a7471803356da54046ba5e85ebaa1a1e",
+  "interactions": [
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://login.microsoftonline.com/contoso-tenant-id/v2.0/.well-known/openid-configuration",
+        "headers": [
+          [
+            "x-ms-client-request-id",
+            "00000000-0000-4000-8000-000000000002"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "sentinel-tenant"
+          ],
+          [
+            "content-type",
+            "application/json; charset=utf-8"
+          ]
+        ],
+        "body": "{\"token_endpoint\": \"REDACTED\", \"token_endpoint_auth_methods_supported\": [\"REDACTED\", \"REDACTED\", \"REDACTED\"], \"jwks_uri\": \"https://login.microsoftonline.com/contoso-tenant-id/discovery/v2.0/keys\", \"response_modes_supported\": [\"query\", \"fragment\", \"form_post\"], \"subject_types_supported\": [\"pairwise\"], \"id_token_signing_alg_values_supported\": [\"REDACTED\"], \"response_types_supported\": [\"code\", \"id_token\", \"code id_token\", \"id_token token\"], \"scopes_supported\": [\"openid\", \"profile\", \"email\", \"offline_access\"], \"issuer\": \"https://login.microsoftonline.com/contoso-tenant-id/v2.0\", \"request_uri_parameter_supported\": false, \"userinfo_endpoint\": \"https://graph.microsoft.com/oidc/userinfo\", \"authorization_endpoint\": \"https://login.microsoftonline.com/contoso-tenant-id/oauth2/v2.0/authorize\", \"device_authorization_endpoint\": \"https://login.microsoftonline.com/contoso-tenant-id/oauth2/v2.0/devicecode\", \"http_logout_supported\": true, \"frontchannel_logout_supported\": true, \"end_session_endpoint\": \"REDACTED\", \"claims_supported\": [\"sub\", \"iss\", \"aud\", \"exp\", \"iat\"], \"kerberos_endpoint\": \"https://login.microsoftonline.com/contoso-tenant-id/kerberos\", \"tenant_region_scope\": \"EU\", \"cloud_instance_name\": \"microsoftonline.com\", \"cloud_graph_host_name\": \"graph.windows.net\", \"msgraph_host\": \"graph.microsoft.com\", \"rbac_url\": \"https://pas.windows.net\"}"
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://login.microsoftonline.com/contoso-tenant-id/oauth2/v2.0/token",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "client-request-id",
+            "00000000-0000-4000-8000-000000000004"
+          ],
+          [
+            "content-type",
+            "application/x-www-form-urlencoded"
+          ],
+          [
+            "x-client-current-telemetry",
+            "4|730,2|"
+          ],
+          [
+            "x-client-last-telemetry",
+            "4|0|||"
+          ],
+          [
+            "x-client-os",
+            "linux"
+          ],
+          [
+            "x-client-sku",
+            "MSAL.Python"
+          ],
+          [
+            "x-client-ver",
+            "1.39.0"
+          ],
+          [
+            "x-ms-client-request-id",
+            "00000000-0000-4000-8000-000000000005"
+          ],
+          [
+            "x-ms-lib-capability",
+            "retry-after, h429"
+          ]
+        ],
+        "body": "client_id=opentide-app-id&grant_type=client_credentials&client_info=1&client_secret=REDACTED&scope=https%3A%2F%2Fapi.loganalytics.io%2F.default"
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "sentinel-tenant"
+          ],
+          [
+            "content-type",
+            "application/json; charset=utf-8"
+          ]
+        ],
+        "body": "{\"token_type\": \"REDACTED\", \"expires_in\": 3599, \"ext_expires_in\": 3599, \"access_token\": \"REDACTED\"}"
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://api.loganalytics.io/v1/workspaces/11111111-2222-4333-8444-555555555555/query",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "Bearer REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ],
+          [
+            "prefer",
+            "wait=120"
+          ],
+          [
+            "x-ms-client-request-id",
+            "00000000-0000-4000-8000-000000000001"
+          ]
+        ],
+        "body": "{\"query\": \"SecurityEvent\\n| where EventID == 4688\\n| take 2\", \"timespan\": \"2026-10-27T07:59:00.000Z/2026-10-27T08:00:00.000Z\", \"workspaces\": null}"
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "sentinel-tenant"
+          ],
+          [
+            "content-type",
+            "application/json; charset=utf-8"
+          ]
+        ],
+        "body": "{\"tables\": [{\"name\": \"PrimaryResult\", \"columns\": [{\"name\": \"TimeGenerated\", \"type\": \"datetime\"}, {\"name\": \"Computer\", \"type\": \"string\"}, {\"name\": \"EventID\", \"type\": \"int\"}], \"rows\": [[\"2026-10-27T07:51:00Z\", \"ws-1.contoso.example\", 4689], [\"2026-10-27T07:52:00Z\", \"ws-2.contoso.example\", 4690]]}]}"
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://api.loganalytics.io/v1/workspaces/11111111-2222-4333-8444-555555555555/query",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "Bearer REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ],
+          [
+            "prefer",
+            "wait=120"
+          ],
+          [
+            "x-ms-client-request-id",
+            "00000000-0000-4000-8000-000000000006"
+          ]
+        ],
+        "body": "{\"query\": \"SigninLogs\\n| project TimeGenerated, Computer\\n| take 2\", \"timespan\": \"2026-10-27T07:59:00.000Z/2026-10-27T08:00:00.000Z\", \"workspaces\": null}"
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "sentinel-tenant"
+          ],
+          [
+            "content-type",
+            "application/json; charset=utf-8"
+          ]
+        ],
+        "body": "{\"tables\": [{\"name\": \"PrimaryResult\", \"columns\": [{\"name\": \"TimeGenerated\", \"type\": \"datetime\"}, {\"name\": \"Computer\", \"type\": \"string\"}], \"rows\": [[\"2026-10-27T07:51:00Z\", \"ws-1.contoso.example\"], [\"2026-10-27T07:52:00Z\", \"ws-2.contoso.example\"]]}]}"
+      }
+    }
+  ]
+}

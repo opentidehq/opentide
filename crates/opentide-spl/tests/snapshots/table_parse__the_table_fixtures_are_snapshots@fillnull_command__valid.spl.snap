@@ -1,0 +1,36 @@
+---
+source: crates/opentide-spl/tests/table_parse.rs
+expression: render(&body(path))
+input_file: crates/testdata/corpus/spl/fillnull_command__valid.spl
+---
+SOURCE_FILE@0..36
+  PIPELINE@0..36
+    BARE_SEARCH@0..10
+      FIELD_VALUE@0..10
+        FIELD_REF@0..5
+          IDENTIFIER@0..5
+            IDENT@0..5 "index"
+        EQ@5..6 "="
+        FIELD_VALUE_RHS@6..10
+          IDENTIFIER@6..10
+            IDENT@6..10 "main"
+    WHITESPACE@10..11 " "
+    PIPE@11..12 "|"
+    WHITESPACE@12..13 " "
+    FILLNULL_COMMAND@13..36
+      FILLNULL_KW@13..21 "fillnull"
+      WHITESPACE@21..22 " "
+      COMMAND_OPTION@22..31
+        IDENTIFIER@22..27
+          IDENT@22..27 "value"
+        EQ@27..28 "="
+        STR@28..31
+          STRING_TOKEN@28..31 "\"-\""
+      WHITESPACE@31..32 " "
+      IDENTIFIER@32..33
+        IDENT@32..33 "a"
+      COMMA@33..34 ","
+      WHITESPACE@34..35 " "
+      IDENTIFIER@35..36
+        IDENT@35..36 "b"
+--

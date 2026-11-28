@@ -1,0 +1,26 @@
+name: Sentinel retire rule
+metadata:
+  uuid: 00000000-0000-4000-8047-000000000072
+  schema: rule::1.0
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+description: A rule the sentinel stand-in tenant receives in a deploy that sends.
+response:
+  alert_severity: High
+configurations:
+  sentinel:
+    status: REMOVED
+    query: |
+      SecurityEvent
+      | where EventID == 4688
+    scheduling:
+      frequency: PT1H
+      lookback: PT2H
+    alert:
+      title: Sentinel deploy rule
+    grouping:
+      event: SingleAlert
+      alert:
+        enabled: false

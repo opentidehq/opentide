@@ -1,0 +1,1 @@
+SigninLogs | search foo=1 * has "admin"

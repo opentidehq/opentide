@@ -1,0 +1,2 @@
+# prod:value_list valid
+process.name:(cmd.exe or "power shell.exe")

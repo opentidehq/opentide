@@ -2,7 +2,7 @@
 
 A block list names itself as one of its items, so its own name stays in the expanded condition.
 
-Severity: warning. Reported by the analysis engine on a Sysdig rule (`sysdig`): an item of one of the block's `lists` is that list's own name. `opentide lint` (its `queries` check) and an editor running `opentide lsp start` show it; `opentide validate` does not fail on it. Falco loads the rule: it flattens a list with the lists defined before it only, and its `resolve_list` pass never re-scans the items it has just inserted, so the name is left in the text as a literal value. On Sysdig Secure that literal then resolves against any tenant list of the same name, or matches the bare string. A list naming a later block list is not this advisory: the later list's own pass expands it, as Falco does.
+Severity: warning. Reported by the analysis engine on a Sysdig rule (`sysdig`): an item of one of the block's `lists` is that list's own name. `opentide lint` (its `queries` check) shows it; `opentide validate` does not fail on it, and since UC-2.6 an editor running `opentide lsp start` does not show it either: the editor publishes what `opentide validate` reports on the object, and the block's advisories are lint's. Falco loads the rule: it flattens a list with the lists defined before it only, and its `resolve_list` pass never re-scans the items it has just inserted, so the name is left in the text as a literal value. On Sysdig Secure that literal then resolves against any tenant list of the same name, or matches the bare string. A list naming a later block list is not this advisory: the later list's own pass expands it, as Falco does.
 
 ## Example
 

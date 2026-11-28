@@ -1,0 +1,1 @@
+FROM logs | EVAL b = MV_COUNT(a), c = MV_FIRST(a)

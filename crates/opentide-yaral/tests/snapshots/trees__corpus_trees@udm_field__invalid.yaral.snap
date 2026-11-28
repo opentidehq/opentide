@@ -1,0 +1,26 @@
+---
+source: crates/opentide-yaral/tests/trees.rs
+expression: debug_parse(&source)
+input_file: crates/testdata/corpus/yaral/udm_field__invalid.yaral
+---
+SOURCE_FILE@0..45
+  COMMENT@0..25 "// prod:udm_field invalid"
+  WHITESPACE@25..26 "\n"
+  SEARCH_QUERY@26..44
+    SEARCH_EVENTS@26..29
+      UDM_FIELD@26..29
+        VARIABLE@26..28
+          VAR_TOKEN@26..28 "$e"
+        MEMBER@28..29
+          ACCESS_DOT@28..29 "."
+    ERROR@29..44
+      DOT@29..30 "."
+      IDENT@30..38 "metadata"
+      WHITESPACE@38..39 " "
+      EQ@39..40 "="
+      WHITESPACE@40..41 " "
+      STRING@41..44 "\"A\""
+  WHITESPACE@44..45 "\n"
+errors:
+29..29: expected a field name (expected a field name)
+29..29: expected a section such as `events:` (expected a field name)

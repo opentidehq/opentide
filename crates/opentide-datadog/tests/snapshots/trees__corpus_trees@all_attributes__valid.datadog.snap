@@ -1,0 +1,12 @@
+---
+source: crates/opentide-datadog/tests/trees.rs
+expression: "debug_tree(&body.join(\"\\n\"))"
+input_file: crates/testdata/corpus/datadog/all_attributes__valid.datadog
+---
+QUERY@0..10
+  FIELD_CLAUSE@0..10
+    ALL_ATTRIBUTES@0..1
+      STAR@0..1 "*"
+    COLON@1..2 ":"
+    TERM@2..10
+      WORD@2..10 "mimikatz"

@@ -1,0 +1,1 @@
+evt.type=connect and proc.name in (oops and (fd.typechar=4 or fd.typechar=6) and container and k8s_api_server and not k8s_containers and not user_known_contact_k8s_api_server_activities

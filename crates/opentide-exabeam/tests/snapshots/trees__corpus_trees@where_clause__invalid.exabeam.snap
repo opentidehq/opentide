@@ -1,0 +1,22 @@
+---
+source: crates/opentide-exabeam/tests/trees.rs
+expression: "debug_parse(&body.join(\"\\n\"))"
+input_file: crates/testdata/corpus/exabeam/where_clause__invalid.exabeam
+---
+source_file@0..17
+  statement@0..17
+    select_clause@0..11
+      keyword@0..6
+        letters@0..6 "SELECT"
+      whitespace@6..7 " "
+      column@7..11
+        field_name@7..11
+          identifier@7..11
+            letters@7..11 "user"
+    whitespace@11..12 " "
+    where_clause@12..17
+      keyword@12..17
+        letters@12..17 "WHERE"
+      filter@17..17
+errors:
+17..17: expected a term

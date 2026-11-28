@@ -1,0 +1,1 @@
+index=a | foreach | stats count by host

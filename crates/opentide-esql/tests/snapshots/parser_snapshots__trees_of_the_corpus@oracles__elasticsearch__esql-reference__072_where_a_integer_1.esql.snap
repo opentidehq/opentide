@@ -1,0 +1,35 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/oracles/elasticsearch/esql-reference/072_where_a_integer_1.esql
+---
+SOURCE_FILE@0..33
+  QUERY@0..32
+    FROM_COMMAND@0..9
+      FROM_KW@0..4 "FROM"
+      WHITESPACE@4..5 " "
+      INDEX_PATTERN@5..9
+        INDEX_NAME@5..9
+          SOURCE_TEXT@5..9 "logs"
+    WHITESPACE@9..10 " "
+    PIPE@10..11 "|"
+    WHITESPACE@11..12 " "
+    WHERE_COMMAND@12..32
+      WHERE_KW@12..17 "WHERE"
+      WHITESPACE@17..18 " "
+      COMPARISON@18..32
+        INLINE_CAST@18..28
+          QUALIFIED_NAME@18..19
+            IDENTIFIER@18..19
+              IDENT@18..19 "a"
+          COLON_COLON@19..21 "::"
+          TYPE_NAME@21..28
+            IDENTIFIER@21..28
+              IDENT@21..28 "integer"
+        WHITESPACE@28..29 " "
+        GT@29..30 ">"
+        WHITESPACE@30..31 " "
+        NUMBER@31..32
+          NUMBER_LIT@31..32 "1"
+  WHITESPACE@32..33 "\n"
+--- errors

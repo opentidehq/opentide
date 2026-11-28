@@ -1,0 +1,26 @@
+name: Splunk Cron
+
+metadata:
+  uuid: 00000000-0000-4000-8005-000000000305
+  schema: rule::1.0
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+
+description: Splunk Cron for the compile corpus.
+
+response:
+  alert_severity: Informational
+
+configurations:
+  splunk:
+    status: STAGING
+    correlation_search: true
+    query: index=main cron
+    scheduling:
+      schedule:
+        cron: "*/5 * * * *"
+    actions:
+      notable:
+        security_domain: Identity

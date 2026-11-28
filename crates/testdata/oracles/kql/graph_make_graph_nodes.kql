@@ -1,0 +1,1 @@
+SigninLogs | make-graph UserPrincipalName --> IPAddress with Users on UserPrincipalName, (Ips | where Risk > 1) on IPAddress

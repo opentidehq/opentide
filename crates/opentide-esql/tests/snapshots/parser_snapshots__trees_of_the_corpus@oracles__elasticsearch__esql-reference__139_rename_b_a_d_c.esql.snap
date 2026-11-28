@@ -1,0 +1,43 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/oracles/elasticsearch/esql-reference/139_rename_b_a_d_c.esql
+---
+SOURCE_FILE@0..32
+  QUERY@0..31
+    FROM_COMMAND@0..9
+      FROM_KW@0..4 "FROM"
+      WHITESPACE@4..5 " "
+      INDEX_PATTERN@5..9
+        INDEX_NAME@5..9
+          SOURCE_TEXT@5..9 "logs"
+    WHITESPACE@9..10 " "
+    PIPE@10..11 "|"
+    WHITESPACE@11..12 " "
+    RENAME_COMMAND@12..31
+      RENAME_KW@12..18 "RENAME"
+      WHITESPACE@18..19 " "
+      RENAME_CLAUSE@19..24
+        NAME_PATTERN@19..20
+          ID_PATTERN@19..20
+            ID_PATTERN_TEXT@19..20 "b"
+        WHITESPACE@20..21 " "
+        EQ@21..22 "="
+        WHITESPACE@22..23 " "
+        NAME_PATTERN@23..24
+          ID_PATTERN@23..24
+            ID_PATTERN_TEXT@23..24 "a"
+      COMMA@24..25 ","
+      WHITESPACE@25..26 " "
+      RENAME_CLAUSE@26..31
+        NAME_PATTERN@26..27
+          ID_PATTERN@26..27
+            ID_PATTERN_TEXT@26..27 "d"
+        WHITESPACE@27..28 " "
+        EQ@28..29 "="
+        WHITESPACE@29..30 " "
+        NAME_PATTERN@30..31
+          ID_PATTERN@30..31
+            ID_PATTERN_TEXT@30..31 "c"
+  WHITESPACE@31..32 "\n"
+--- errors

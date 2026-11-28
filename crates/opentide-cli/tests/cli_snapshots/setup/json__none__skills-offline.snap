@@ -1,0 +1,51 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: setup/json/none/skills-offline
+---
+args: opentide --json setup --skills generic --plugin --yes
+exit: 0
+
+━━━ stdout · json, 1 lines
+{
+  "command": "setup",
+  "duration_ms": 0,
+  "exit_code": 0,
+  "failure": null,
+  "message": "Setup complete",
+  "next_actions": [],
+  "ok": true,
+  "path": "<WS>",
+  "schema_version": 1,
+  "status": "completed",
+  "steps": [],
+  "summary": {},
+  "warnings": [
+    "Agent skills skipped: Could not fetch skills catalogue from opentidehq/skills@main. Check network access and that the skills repository is publicly reachable."
+  ]
+}
+
+━━━ stderr · json, 1 lines
+{
+  "event": "skills_manifest_remote_unavailable",
+  "level": "error",
+  "ref": "main",
+  "source": "opentidehq/skills",
+  "timestamp": "0000-00-00 00:00:00"
+}
+
+━━━ ws/.claude/ · created 0755
+
+━━━ ws/.claude/settings.json · created 0644
+{
+  "extraKnownMarketplaces": {
+    "opentide": {
+      "source": {
+        "source": "github",
+        "repo": "opentidehq/skills"
+      }
+    }
+  },
+  "enabledPlugins": {
+    "opentide@opentide": true
+  }
+}

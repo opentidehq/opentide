@@ -1,0 +1,1 @@
+is_logging_service and (gcp.methodName="google.logging.v2.ConfigServiceV2.UpdateSink")

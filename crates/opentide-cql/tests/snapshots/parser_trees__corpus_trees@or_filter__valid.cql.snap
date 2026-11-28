@@ -1,0 +1,65 @@
+---
+source: crates/opentide-cql/tests/parser_trees.rs
+expression: debug_parse(query(&file))
+input_file: crates/testdata/corpus/cql/or_filter__valid.cql
+---
+SOURCE_FILE@0..72
+  PIPELINE@0..71
+    AND_FILTER@0..46
+      FIELD_FILTER@0..14
+        FIELD_NAME@0..10
+          WORD@0..10 "statuscode"
+        EQ@10..11 "="
+        UNQUOTED_PATTERN@11..14
+          WORD@11..14 "404"
+      WHITESPACE@14..15 " "
+      AND@15..18
+        AND_KW@15..18 "and"
+      WHITESPACE@18..19 " "
+      PARENTHESIZED_FILTER@19..46
+        L_PAREN@19..20 "("
+        OR_FILTER@20..45
+          FIELD_FILTER@20..30
+            FIELD_NAME@20..26
+              WORD@20..26 "method"
+            EQ@26..27 "="
+            UNQUOTED_PATTERN@27..30
+              WORD@27..30 "GET"
+          WHITESPACE@30..31 " "
+          OR@31..33
+            OR_KW@31..33 "or"
+          WHITESPACE@33..34 " "
+          FIELD_FILTER@34..45
+            FIELD_NAME@34..40
+              WORD@34..40 "method"
+            EQ@40..41 "="
+            UNQUOTED_PATTERN@41..45
+              WORD@41..45 "POST"
+        R_PAREN@45..46 ")"
+    WHITESPACE@46..47 "\n"
+    PIPE@47..48 "|"
+    WHITESPACE@48..49 " "
+    AND_FILTER@49..71
+      OR_FILTER@49..63
+        FREE_TEXT@49..52
+          UNQUOTED_PATTERN@49..52
+            WORD@49..52 "foo"
+        WHITESPACE@52..53 " "
+        OR@53..55
+          OR_KW@53..55 "or"
+        WHITESPACE@55..56 " "
+        NOT_FILTER@56..63
+          NOT@56..59
+            NOT_KW@56..59 "not"
+          WHITESPACE@59..60 " "
+          FREE_TEXT@60..63
+            UNQUOTED_PATTERN@60..63
+              WORD@60..63 "bar"
+      WHITESPACE@63..64 " "
+      AND@64..67
+        AND_KW@64..67 "and"
+      WHITESPACE@67..68 " "
+      FREE_TEXT@68..71
+        UNQUOTED_PATTERN@68..71
+          WORD@68..71 "baz"
+  WHITESPACE@71..72 "\n"

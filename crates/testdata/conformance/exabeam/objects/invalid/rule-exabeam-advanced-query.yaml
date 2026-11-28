@@ -1,0 +1,22 @@
+# A sequence query that uses SELECT and GROUP-BY, which only Search takes.
+# Expected constraint code: exabeam_advanced_in_rule.
+name: Exabeam rule with a Search query
+metadata:
+  uuid: 00000000-0000-4000-8003-000000000077
+  schema: rule::1.0
+  version: 1
+  created: "2026-01-01"
+  modified: "2026-01-02"
+  tlp: clear
+  author: Detection Engineering
+description: |
+  A sequence query that uses SELECT and GROUP-BY, which only Search takes.
+status: STAGING
+severity: Medium
+configurations:
+  exabeam:
+    enabled: true
+    schema: platform::exabeam::1.0
+    status: STAGING
+    sequences:
+      - query: SELECT user, COUNT(*) AS logins WHERE activity_type:"app-login" GROUP-BY user

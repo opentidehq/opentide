@@ -1,0 +1,10 @@
+default_lines = 80
+
+[[gate]]
+crate = "schema"
+lines = 90
+
+[[gate]]
+crate = "cli"
+lines = 90
+item = "UC-3.3 (#825)"

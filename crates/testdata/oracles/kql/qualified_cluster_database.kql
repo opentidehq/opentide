@@ -1,0 +1,2 @@
+cluster("help").database("Samples").StormEvents
+| take 10

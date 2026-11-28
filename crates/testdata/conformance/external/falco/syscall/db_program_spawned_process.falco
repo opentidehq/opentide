@@ -1,0 +1,1 @@
+spawned_process and proc.pname in (db_server_binaries) and not proc.name in (db_server_binaries) and not postgres_running_wal_e and not user_known_db_spawned_processes

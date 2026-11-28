@@ -1,0 +1,2 @@
+// prod:function_call invalid
+strings.to_lower($e.principal.hostname = "a"

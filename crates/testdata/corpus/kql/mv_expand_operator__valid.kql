@@ -1,0 +1,2 @@
+// prod:mv_expand_operator valid
+SecurityEvent | mv-expand EventData

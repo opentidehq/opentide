@@ -1,0 +1,104 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: setup.repo/json/tide-corpus/example
+---
+args: opentide --json setup repo --yes --name Detections --platform sentinel
+exit: 0
+
+━━━ stdout · json, 1 lines
+{
+  "command": "setup repo",
+  "duration_ms": 0,
+  "exit_code": 0,
+  "failure": null,
+  "files": [
+    "README.md",
+    ".gitignore"
+  ],
+  "gitignore_added": [
+    "__pycache__/",
+    "*.pyc",
+    ".venv/",
+    "dist/",
+    "build/",
+    "*.egg-info/",
+    ".pytest_cache/",
+    ".opentide/exports/*.export.json",
+    ".opentide/states/sharing.jsonl",
+    "opentide-reports/"
+  ],
+  "message": "Created Detections here",
+  "name": "Detections",
+  "next_actions": [
+    {
+      "command": "opentide --json generate",
+      "reason": "schemas, templates and editor snippets"
+    },
+    {
+      "command": "opentide --json validate",
+      "reason": "check every object before you commit"
+    }
+  ],
+  "ok": true,
+  "path": "<WS>",
+  "platform_files": [],
+  "platforms": [
+    "sentinel"
+  ],
+  "scaffolded": true,
+  "schema_version": 1,
+  "status": "completed",
+  "summary": {}
+}
+
+━━━ stderr · empty
+
+━━━ ws/.gitignore · created 0644
+__pycache__/
+*.pyc
+.venv/
+dist/
+build/
+*.egg-info/
+.pytest_cache/
+.opentide/exports/*.export.json
+.opentide/states/sharing.jsonl
+opentide-reports/
+
+━━━ ws/.opentide/exports/.gitkeep · created 0644
+
+━━━ ws/.opentide/inflight/.gitkeep · created 0644
+
+━━━ ws/.opentide/schemas/.gitkeep · created 0644
+
+━━━ ws/.opentide/templates/.gitkeep · created 0644
+
+━━━ ws/README.md · created 0644
+# Detections
+
+## Quick start
+
+```bash
+opentide setup
+opentide validate
+opentide generate
+opentide deploy --platform sentinel --dry-run --strategy PREVIEW --all
+```
+
+## Platforms
+
+- sentinel
+
+━━━ ws/docs/ · created 0755
+
+━━━ ws/docs/objectives/ · created 0755
+
+━━━ ws/docs/objectives/.gitkeep · created 0644
+
+━━━ ws/docs/rules/ · created 0755
+
+━━━ ws/docs/rules/.gitkeep · created 0644
+
+━━━ ws/docs/threats/ · created 0755
+
+━━━ ws/docs/threats/.gitkeep · created 0644

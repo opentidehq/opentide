@@ -1,0 +1,15 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: lint/plain/fault-lint/ci-sink-azure
+---
+args: opentide lint
+exit: 0
+view: diagnostics (code, severity, file, line, column and counts; a warning's text; log events by name; no other message text)
+
+━━━ stdout · text, not held
+
+━━━ stderr · empty
+
+━━━ tmp/agent/ · created 0755
+
+━━━ tmp/agent/opentide-lint.md · created 0644

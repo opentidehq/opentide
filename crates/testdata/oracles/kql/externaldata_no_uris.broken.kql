@@ -1,0 +1,1 @@
+externaldata(c:string) with (format="csv") | take 1

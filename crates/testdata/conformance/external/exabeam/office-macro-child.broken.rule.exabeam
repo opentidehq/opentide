@@ -1,0 +1,3 @@
+activity_type:"process-create"
+AND parent_process_name:("winword.exe", "excel.exe", "powerpnt.exe", "outlook.exe"
+AND process_name:("cmd.exe", "powershell.exe", "wscript.exe", "cscript.exe", "mshta.exe", "rundll32.exe", "regsvr32.exe")

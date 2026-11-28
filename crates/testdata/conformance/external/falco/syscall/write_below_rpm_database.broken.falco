@@ -1,0 +1,1 @@
+open_write and proc.name in (oops and fd.name startswith /var/lib/rpm and not rpm_procs and not ansible_running_python and not python_running_chef and not exe_running_docker_save and not amazon_linux_running_python_yum and not user_known_write_rpm_database_activities

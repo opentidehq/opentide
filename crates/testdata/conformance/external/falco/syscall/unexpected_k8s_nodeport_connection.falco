@@ -1,0 +1,1 @@
+inbound_outbound and container and fd.sport >= 30000 and fd.sport <= 32767 and not nodeport_containers

@@ -1,0 +1,102 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: deploy/json/deploy-push/dry-run-push
+---
+args: opentide --json deploy --dry-run --platform splunk --strategy PREVIEW
+exit: 0
+
+━━━ stdout · json, 1 lines
+{
+  "changes": [
+    {
+      "action": "upsert",
+      "name": "Splunk create rule",
+      "platform": "splunk",
+      "status": "STAGING",
+      "tenant": "lab",
+      "uuid": "00000000-0000-4000-8047-000000000041"
+    }
+  ],
+  "command": "deploy",
+  "deployed": [
+    "splunk"
+  ],
+  "detail": "splunk: once a rule's saved search is written or deleted, any other saved search in the tenant's app whose description ends with the line `opentide rule <uuid>` for the rule (one an earlier name of the rule left) is deleted",
+  "dry_run": true,
+  "duration_ms": 0,
+  "exit_code": 0,
+  "failure": null,
+  "message": "Plan: 0 to create, 0 to update, 1 to create or update, 0 to disable, 0 to delete",
+  "next_actions": [],
+  "ok": true,
+  "payloads": {
+    "splunk": [
+      {
+        "api_request": [
+          {
+            "body": {
+              "name": "Splunk create rule",
+              "search": "index=main EventCode=4688"
+            },
+            "method": "POST",
+            "url": "https://splunk.invalid:8089/servicesNS/nobody/search/saved/searches/"
+          },
+          {
+            "body": {
+              "alert.managedBy": "",
+              "alert.severity": 5,
+              "cron_schedule": "0 * * * *",
+              "description": "A changed rule the splunk stand-in tenant receives in a deploy that sends.\n\nopentide rule 00000000-0000-4000-8047-000000000041",
+              "search": "index=main EventCode=4688"
+            },
+            "method": "POST",
+            "url": "https://splunk.invalid:8089/servicesNS/nobody/search/saved/searches/Splunk%20create%20rule"
+          },
+          {
+            "body": {
+              "is_scheduled": 1,
+              "search": "index=main EventCode=4688"
+            },
+            "method": "POST",
+            "url": "https://splunk.invalid:8089/servicesNS/nobody/search/saved/searches/Splunk%20create%20rule"
+          }
+        ],
+        "name": "Splunk create rule",
+        "tenant": "lab",
+        "uuid": "00000000-0000-4000-8047-000000000041"
+      }
+    ]
+  },
+  "plan": {
+    "splunk": [
+      "00000000-0000-4000-8047-000000000041"
+    ]
+  },
+  "schema_version": 1,
+  "status": "completed",
+  "strategies": [
+    "PREVIEW"
+  ],
+  "summary": {
+    "create": 0,
+    "delete": 0,
+    "disable": 0,
+    "platforms": 1,
+    "tenants": 1,
+    "update": 0,
+    "upsert": 1
+  },
+  "tenants": {
+    "splunk": {
+      "lab": [
+        "00000000-0000-4000-8047-000000000041"
+      ]
+    }
+  },
+  "warnings": [
+    "This push's diff starts at its last commit's parent: the run names no push event with a `before` commit. Rules that earlier commits of the same push changed are not in it; pass --all to deploy every rule file",
+    "a real deploy would need $SPLUNK_TOKEN, which is unset"
+  ]
+}
+
+━━━ stderr · empty

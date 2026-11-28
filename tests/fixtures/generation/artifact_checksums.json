@@ -3,7 +3,7 @@
   "repo:src/opentide/schemas/data/platform_templates/MDR Systems Deployment/Templates/Crowdstrike Falcon Correlation Rules Template.yaml": "5f8da093ae594b25a6b0967ad34cfc672f1d802f53a5d32b28364c2dbd10a875",
   "repo:src/opentide/schemas/data/platform_templates/MDR Systems Deployment/Templates/Crowdstrike Falcon Template.yaml": "5f8da093ae594b25a6b0967ad34cfc672f1d802f53a5d32b28364c2dbd10a875",
   "repo:src/opentide/schemas/data/platform_templates/MDR Systems Deployment/Templates/HarfangLab Template.yaml": "0e56741dfd2cb11f4f4f155fcc8947966d0d41ca5d05d4f356ca7c33afcadaea",
-  "repo:src/opentide/schemas/data/platform_templates/MDR Systems Deployment/Templates/Microsoft Defender for Endpoint Template.yaml": "db9b3de095841ce9cb2c6b17d26a82053fa230ebe10b24e4d55d56090a8f0a08",
+  "repo:src/opentide/schemas/data/platform_templates/MDR Systems Deployment/Templates/Microsoft Defender Template.yaml": "db9b3de095841ce9cb2c6b17d26a82053fa230ebe10b24e4d55d56090a8f0a08",
   "repo:src/opentide/schemas/data/platform_templates/MDR Systems Deployment/Templates/Microsoft Sentinel Template.yaml": "51bdf24a70cedf5287c99ad81720cfe5775eb06d367bd51b5e3debb1648e6db6",
   "repo:src/opentide/schemas/data/platform_templates/MDR Systems Deployment/Templates/Sentinel One Template.yaml": "600582806998dbc0a9f9f96ff9c8b9d30a0d73688f944d6081b80ec0a9805f2b",
   "repo:src/opentide/schemas/data/platform_templates/MDR Systems Deployment/Templates/Splunk Enterprise Template.yaml": "a2d8f3e3d1e2f8d230c6942b4dd28526e61db0c6ee19dc91400c99f3616a0f2c",

@@ -1,0 +1,64 @@
+---
+source: crates/opentide-cql/tests/parser_trees.rs
+expression: debug_parse(query(&file))
+input_file: crates/testdata/corpus/cql/match_branch__valid.cql
+---
+SOURCE_FILE@0..88
+  PIPELINE@0..87
+    MATCH_STATEMENT@0..87
+      FIELD_NAME@0..11
+        WORD@0..11 "UserIsAdmin"
+      WHITESPACE@11..12 " "
+      MATCH_KW@12..17 "match"
+      WHITESPACE@17..18 " "
+      L_BRACE@18..19 "{"
+      WHITESPACE@19..20 " "
+      MATCH_BRANCH@20..46
+        UNQUOTED_PATTERN@20..21
+          WORD@20..21 "1"
+        WHITESPACE@21..22 " "
+        FAT_ARROW@22..24 "=>"
+        WHITESPACE@24..25 " "
+        PIPELINE@25..46
+          ASSIGNMENT@25..46
+            FIELD_NAME@25..36
+              WORD@25..36 "UserIsAdmin"
+            WHITESPACE@36..37 " "
+            COLON_EQ@37..39 ":="
+            WHITESPACE@39..40 " "
+            STRING@40..46
+              STRING_TOKEN@40..46 "\"True\""
+      WHITESPACE@46..47 " "
+      SEMI@47..48 ";"
+      WHITESPACE@48..49 " "
+      MATCH_BRANCH@49..76
+        UNQUOTED_PATTERN@49..50
+          WORD@49..50 "0"
+        WHITESPACE@50..51 " "
+        FAT_ARROW@51..53 "=>"
+        WHITESPACE@53..54 " "
+        PIPELINE@54..76
+          ASSIGNMENT@54..76
+            FIELD_NAME@54..65
+              WORD@54..65 "UserIsAdmin"
+            WHITESPACE@65..66 " "
+            COLON_EQ@66..68 ":="
+            WHITESPACE@68..69 " "
+            STRING@69..76
+              STRING_TOKEN@69..76 "\"False\""
+      WHITESPACE@76..77 " "
+      SEMI@77..78 ";"
+      WHITESPACE@78..79 " "
+      MATCH_BRANCH@79..85
+        UNQUOTED_PATTERN@79..80
+          PATTERN@79..80 "*"
+        WHITESPACE@80..81 " "
+        FAT_ARROW@81..83 "=>"
+        WHITESPACE@83..84 " "
+        PIPELINE@84..85
+          FREE_TEXT@84..85
+            UNQUOTED_PATTERN@84..85
+              PATTERN@84..85 "*"
+      WHITESPACE@85..86 " "
+      R_BRACE@86..87 "}"
+  WHITESPACE@87..88 "\n"

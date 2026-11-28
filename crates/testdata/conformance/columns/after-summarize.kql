@@ -1,0 +1,3 @@
+SigninLogs
+| summarize Attempts = count() by UserPrincipalName
+| where TimeGenerated > ago(1d)

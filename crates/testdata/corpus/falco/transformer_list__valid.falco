@@ -1,0 +1,2 @@
+# prod:transformer_list valid
+join(",", (proc.name, proc.pname, "x", 1)) = "a,b" and concat(proc.name, "-", toupper(proc.pname)) = a-B and getopt(proc.args, "nt:")[t] = value and len(()) = 0

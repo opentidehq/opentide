@@ -1,0 +1,26 @@
+---
+source: crates/opentide-yaral/tests/trees.rs
+expression: debug_parse(&source)
+input_file: crates/testdata/corpus/yaral/comment__invalid.yaral
+---
+SOURCE_FILE@0..75
+  COMMENT@0..23 "// prod:comment invalid"
+  WHITESPACE@23..24 "\n"
+  ERROR@24..74
+    ERROR_TOKEN@24..25 "/"
+    STAR@25..26 "*"
+    WHITESPACE@26..27 " "
+    IDENT@27..32 "never"
+    WHITESPACE@32..33 " "
+    IDENT@33..39 "closed"
+    WHITESPACE@39..40 "\n"
+    IDENT@40..48 "metadata"
+    ACCESS_DOT@48..49 "."
+    FIELD_NAME@49..59 "event_type"
+    WHITESPACE@59..60 " "
+    EQ@60..61 "="
+    WHITESPACE@61..62 " "
+    STRING@62..74 "\"USER_LOGIN\""
+  WHITESPACE@74..75 "\n"
+errors:
+0..24: unexpected text (expected `rule`, `stage`)

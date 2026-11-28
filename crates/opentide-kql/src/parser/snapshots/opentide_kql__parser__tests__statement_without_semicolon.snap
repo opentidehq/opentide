@@ -1,0 +1,32 @@
+---
+source: crates/opentide-kql/src/parser/tests.rs
+expression: "show(\"declare query_parameters(p:string = \\\"x\\\");\\nlet y = 1\")"
+---
+SOURCE_FILE@0..51
+  QUERY_PARAMETERS_STATEMENT@0..41
+    DECLARE_KW@0..7 "declare"
+    WHITESPACE@7..8 " "
+    IDENT@8..24 "query_parameters"
+    L_PAREN@24..25 "("
+    PARAMETER@25..39
+      IDENT@25..26 "p"
+      COLON@26..27 ":"
+      TYPE@27..33
+        IDENT@27..33 "string"
+      WHITESPACE@33..34 " "
+      EQ@34..35 "="
+      WHITESPACE@35..36 " "
+      LITERAL@36..39
+        STRING@36..39 "\"x\""
+    R_PAREN@39..40 ")"
+    SEMICOLON@40..41 ";"
+  WHITESPACE@41..42 "\n"
+  LET_STATEMENT@42..51
+    LET_KW@42..45 "let"
+    WHITESPACE@45..46 " "
+    IDENT@46..47 "y"
+    WHITESPACE@47..48 " "
+    EQ@48..49 "="
+    WHITESPACE@49..50 " "
+    LITERAL@50..51
+      NUMBER@50..51 "1"

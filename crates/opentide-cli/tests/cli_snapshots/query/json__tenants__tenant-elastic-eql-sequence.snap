@@ -1,0 +1,76 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: query/json/tenants/tenant-elastic-eql-sequence
+---
+args: opentide --json query --platform elastic --from 2099-01-01T00:00:00Z --to 2099-01-01T01:00:00Z --language eql 'sequence [process where true] [process where true]'
+exit: 0
+
+━━━ stdout · json, 1 lines
+{
+  "command": "query",
+  "duration_ms": 0,
+  "exit_code": 0,
+  "failure": null,
+  "limit": 100,
+  "message": "2 rows from 1 elastic tenant",
+  "next_actions": [],
+  "ok": true,
+  "platform": "elastic",
+  "query": "sequence [process where true] [process where true]",
+  "results": [
+    {
+      "columns": [
+        {
+          "name": "_sequence",
+          "type": null
+        },
+        {
+          "name": "_index",
+          "type": null
+        },
+        {
+          "name": "process.name",
+          "type": null
+        }
+      ],
+      "elapsed_ms": 0,
+      "language": "eql",
+      "partial": false,
+      "row_count": 2,
+      "rows": [
+        {
+          "_index": "logs-1",
+          "_sequence": 1,
+          "process.name": "cmd.exe"
+        },
+        {
+          "_index": "logs-1",
+          "_sequence": 1,
+          "process.name": "whoami.exe"
+        }
+      ],
+      "status": "ok",
+      "tenant": "soc",
+      "truncated": false,
+      "warnings": []
+    }
+  ],
+  "row_count": 2,
+  "schema_version": 1,
+  "source": "query",
+  "status": "completed",
+  "summary": {
+    "failed": 0,
+    "rows": 2,
+    "tenants": 1
+  },
+  "tenants": [
+    "soc"
+  ],
+  "window": {
+    "from": "2099-01-01T00:00:00.000Z",
+    "to": "2099-01-01T01:00:00.000Z"
+  }
+}
+
+━━━ stderr · empty

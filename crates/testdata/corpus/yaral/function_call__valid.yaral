@@ -1,0 +1,3 @@
+// prod:function_call valid
+strings.to_lower($e.principal.hostname) = "web01"
+re.regex($e.target.url, `login\.php`) nocase

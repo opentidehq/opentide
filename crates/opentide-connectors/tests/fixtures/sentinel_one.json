@@ -1,0 +1,101 @@
+{
+  "deploy": {
+    "rules": [
+      {
+        "data": {
+          "expirationMode": "Permanent",
+          "name": "SentinelOne rule 41 \u2014 \u00dcn\u00efcode",
+          "description": "Rule 41 of the SentinelOne connector's cassettes.",
+          "queryType": "correlation",
+          "severity": "High",
+          "status": "Active",
+          "networkQuarantine": false,
+          "treatAsThreat": "Malicious",
+          "queryLang": "2.0",
+          "coolOffSetting": {
+            "renotifyMinutes": 30
+          },
+          "correlationParams": {
+            "entity": "host",
+            "matchInOrder": true,
+            "subQueries": [
+              {
+                "matchesRequired": 1,
+                "subQuery": "EventType = \"Process Create\""
+              },
+              {
+                "matchesRequired": 2,
+                "subQuery": "src.process.name = 'cmd.exe'"
+              }
+            ],
+            "timeWindow": {
+              "windowMinutes": 60
+            }
+          }
+        },
+        "filter": {
+          "siteIds": [
+            "77"
+          ]
+        }
+      },
+      {
+        "data": {
+          "expirationMode": "Permanent",
+          "name": "SentinelOne rule 42 \u2014 \u00dcn\u00efcode",
+          "description": "Rule 42 of the SentinelOne connector's cassettes.",
+          "queryType": "events",
+          "severity": "High",
+          "status": "Active",
+          "networkQuarantine": true,
+          "treatAsThreat": "UNDEFINED",
+          "queryLang": "2.0",
+          "s1ql": "src.process.name = 'cmd.exe'"
+        },
+        "filter": {
+          "siteIds": [
+            "77"
+          ]
+        }
+      }
+    ],
+    "validations": [
+      "EventType = \"Process Create\"",
+      "EventType = | syntax"
+    ]
+  },
+  "query": {
+    "window": [
+      "2026-10-26T08:00:00+00:00",
+      "2026-10-27T08:00:00+00:00"
+    ],
+    "queries": [
+      {
+        "text": "event.type = \"Process Creation\" // slow",
+        "limit": 1
+      },
+      {
+        "text": "src.process.name contains 'cmd' | limit 5",
+        "limit": 100
+      },
+      {
+        "text": "event.type = 'x' | syntax",
+        "limit": 100
+      },
+      {
+        "text": "event.type = 'y' // fails",
+        "limit": 100
+      }
+    ]
+  },
+  "validate": {
+    "window": [
+      "2026-10-27T07:59:00+00:00",
+      "2026-10-27T08:00:00+00:00"
+    ],
+    "queries": [
+      "EventType = \"Process Create\"",
+      "src.process.name = 'cmd.exe'"
+    ]
+  }
+}

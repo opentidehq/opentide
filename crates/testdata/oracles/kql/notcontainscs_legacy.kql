@@ -1,0 +1,1 @@
+print h = "Mozilla" | where h notcontainscs "x" and h notcontains "y"

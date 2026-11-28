@@ -1,0 +1,18 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: rules.unreviewed/json/fault/example
+---
+args: opentide --json rules unreviewed --older-than 90d
+exit: 1
+view: diagnostics (code, severity, file, line, column and counts; a warning's text; log events by name; no other message text)
+
+━━━ stdout · json
+findings: 1
+  command_failed | - | - | - | -
+exit_code: 1
+schema_version: 1
+next_actions[]: 0 items
+ok: false x1
+status: failed x1
+
+━━━ stderr · empty

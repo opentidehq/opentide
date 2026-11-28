@@ -1,0 +1,80 @@
+{
+  "format": 1,
+  "scenario": "golden/validate-live-carbon-black",
+  "recorded_from": [
+    "{oracle}/opentide",
+    "--repo",
+    "tests/golden/fixtures/live-tenants",
+    "--json",
+    "validate",
+    "query",
+    "--live",
+    "--platform",
+    "carbon_black_cloud"
+  ],
+  "digest": "sha256:40f22e790943ff9e659fdb6d712a3976cc9e4e088cf2a6057dce9418a54209bb",
+  "interactions": [
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://cbc.invalid/api/investigate/v2/orgs/ORGKEY01/processes/search_validation",
+        "headers": [
+          [
+            "content-type",
+            "application/json"
+          ],
+          [
+            "x-auth-token",
+            "REDACTED"
+          ]
+        ],
+        "body": "{\"query\": \"process_name:(cmd.exe\"}"
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "cbc-tenant"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"valid\": false, \"invalid_message\": \"unbalanced parenthesis\", \"value_search_query\": false}"
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://cbc.invalid/api/investigate/v2/orgs/ORGKEY01/processes/search_validation",
+        "headers": [
+          [
+            "content-type",
+            "application/json"
+          ],
+          [
+            "x-auth-token",
+            "REDACTED"
+          ]
+        ],
+        "body": "{\"query\": \"process_name:cmd.exe AND netconn_count:[1 TO *]\"}"
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "cbc-tenant"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"valid\": true, \"value_search_query\": true}"
+      }
+    }
+  ]
+}

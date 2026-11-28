@@ -1,0 +1,34 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: validate/json/heavy-small/default
+---
+args: opentide --json validate
+exit: 0
+view: diagnostics (code, severity, file, line, column and counts; a warning's text; log events by name; no other message text)
+
+━━━ stdout · json
+findings: 0
+exit_code: 0
+report.stats.objects_checked: 110
+report.stats.queries_checked: 131
+schema_version: 1
+summary.errors: 0
+summary.files: 0
+summary.fixable: 0
+summary.objects: 110
+summary.queries: 131
+summary.warning_files: 0
+summary.warnings: 0
+next_actions[]: 0 items
+report.issues[]: 0 items
+report.warnings[]: 0 items
+checks.configuration.status: passed x1
+checks.id-uniqueness.status: passed x1
+checks.queries.status: passed x1
+checks.schema.status: passed x1
+checks.uuid-format.status: passed x1
+ok: true x1
+report.ok: true x1
+status: passed x1
+
+━━━ stderr · empty

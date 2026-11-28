@@ -1,0 +1,1 @@
+user IN "Executives" AND src_host IN "Jump Hosts" AND dest_host IN "Domain Controllers"

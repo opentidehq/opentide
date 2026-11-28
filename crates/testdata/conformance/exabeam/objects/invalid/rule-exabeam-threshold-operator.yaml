@@ -1,0 +1,27 @@
+# A count threshold with the in operator, which only the value function takes.
+# Expected constraint code: exabeam_threshold_operator.
+name: Exabeam count compared with a list
+metadata:
+  uuid: 00000000-0000-4000-8003-000000000074
+  schema: rule::1.0
+  version: 1
+  created: "2026-01-01"
+  modified: "2026-01-02"
+  tlp: clear
+  author: Detection Engineering
+description: |
+  A count threshold with the in operator, which only the value function takes.
+status: STAGING
+severity: Medium
+configurations:
+  exabeam:
+    enabled: true
+    schema: platform::exabeam::1.0
+    status: STAGING
+    sequences:
+      - query: activity_type:"app-login" AND outcome:"fail"
+        threshold:
+          function: count
+          operator: in
+          value: [5, 10]
+          within: 10m

@@ -1,0 +1,2 @@
+// prod:or_expression valid
+$e.metadata.event_type = "USER_LOGIN" or $e.metadata.event_type = "USER_LOGOUT"

@@ -1,0 +1,129 @@
+{
+  "format": 1,
+  "scenario": "graylog/validate",
+  "recorded_from": [
+    "{python}",
+    "tests/cassettes/graylog/client.py",
+    "validate"
+  ],
+  "digest": "sha256:20d9379a1253e7ad5b438c68c44aead957cc4a94720492b530d505b262c89140",
+  "interactions": [
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://graylog-tenant.invalid/api/search/validate",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "Basic REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ],
+          [
+            "x-requested-by",
+            "opentide"
+          ]
+        ],
+        "body": "{\"query\": \"EventID:1 AND image_lc:/.*\\\\\\\\powershell\\\\.exe/\", \"streams\": [\"65f0c0ffee0123456789abcd\"], \"timerange\": {\"type\": \"relative\", \"range\": 86400}}"
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "graylog-stand-in"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"status\": \"OK\", \"explanations\": []}"
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://graylog-tenant.invalid/api/search/validate",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "Basic REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ],
+          [
+            "x-requested-by",
+            "opentide"
+          ]
+        ],
+        "body": "{\"query\": \"EventID:1 AND unknown_field:x\", \"streams\": [\"65f0c0ffee0123456789abcd\"], \"timerange\": {\"type\": \"relative\", \"range\": 86400}}"
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "graylog-stand-in"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"status\": \"WARNING\", \"explanations\": [{\"error_type\": \"UNKNOWN_FIELD\", \"error_title\": \"Unknown field\", \"error_message\": \"Unknown field: unknown_field\", \"begin_line\": 1, \"begin_column\": 0, \"end_line\": 1, \"end_column\": 13}]}"
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://graylog-tenant.invalid/api/search/validate",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "Basic REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ],
+          [
+            "x-requested-by",
+            "opentide"
+          ]
+        ],
+        "body": "{\"query\": \"EventID:1 AND (\", \"streams\": [\"65f0c0ffee0123456789abcd\"], \"timerange\": {\"type\": \"relative\", \"range\": 86400}}"
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "graylog-stand-in"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"status\": \"ERROR\", \"explanations\": [{\"error_type\": \"QUERY_PARSING_ERROR\", \"error_title\": \"Cannot parse query\", \"error_message\": \"incomplete query, expected `)`\", \"begin_line\": 1, \"begin_column\": 15, \"end_line\": 1, \"end_column\": 16}]}"
+      }
+    }
+  ]
+}

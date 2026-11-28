@@ -1,0 +1,426 @@
+// Kusto Query Language (KQL) as Sentinel and Defender hunting queries use it:
+// the shape of the tree the parser on `opentide-parse` builds (epic #1219,
+// #1230), read as the spec of the grammar beside the vendor's. `cargo xtask
+// codegen` turns it into the typed AST over rowan.
+//
+// Conventions
+// - A node is a CamelCase name; its `SyntaxKind` is the UPPER_SNAKE of it.
+//   `A = B | C` is a choice of nodes: it is not a node of the tree.
+// - A token is written as its text (`'where'`, `'('`) or, for a class of
+//   them, by name: `'ident'` (a word, or a keyword read as a name),
+//   `'quoted_ident'` (`['my col']`), `'string'`, `'number'`, `'timespan'`
+//   (`5m`), `'typed_literal'` (`datetime(2024-01-01)`), `'boolean'`,
+//   `'null'`, `'hint_name'` (`hint.strategy`), `'cmp_op'` (a word or symbol
+//   that compares two values: `==`, `has`, `!contains`, ...), `'set_op'`
+//   (`in~`, `!in`, `has_any`, ...: followed by a list), `'between_op'`.
+// - `or`, `and`, `+` and `*` chains are one flat n-ary node (a thousand
+//   terms are one node, not a thousand levels).
+// - A rule that wraps one child (tree-sitter's `expression`,
+//   `or_expression`, ... over a lone `primary_expression`) has no node
+//   unless its operator is there.
+// - Comments and whitespace are trivia tokens, in no rule.
+// - Broken input is an `Error` node in place, in no rule.
+
+SourceFile = (LetStatement | QueryParametersStatement)* (Query | ControlCommand)?
+
+LetStatement = 'let' name:'ident' '=' value:LetValue ';'?
+
+// `declare query_parameters(p: string = "x");`
+QueryParametersStatement =
+  'declare' keyword:'ident' '(' Parameter (',' Parameter)* ')' ';'?
+
+LetValue = Expr | TabularExpression | FunctionDefinition
+
+// `let f = (t: (*), n: int = 1) { let y = 2; t | take n };`
+FunctionDefinition =
+  '(' (Parameter (',' Parameter)*)? ')'
+  '{' LetStatement* body:LetValue ';'? '}'
+
+Parameter = name:'ident' ':' Type ('=' default:Expr)?
+
+// A scalar type, or `(*)` / `(col: type, ...)` for a tabular parameter.
+Type = name:('ident' | 'dynamic') | TableType
+TableType = '(' ('*' | TableColumn (',' TableColumn)*) ')'
+TableColumn = name:'ident' ':' Type
+
+Query = body:TabularExpression
+
+// `.show tables`: parsed so that the engine can report it as unsupported.
+ControlCommand = '.' name:'ident' 'ident'*
+
+// ---------------------------------------------------------------- tabular
+
+// The source is wrapped (TabularSource) because a union, a range and a print
+// are both a source and an operator: the typed AST must tell them apart.
+TabularExpression = TabularSource ('|' TabularOperator)*
+TabularSource = TabularPrimary
+
+TabularPrimary =
+  TableRef
+| QualifiedTable
+| ParenTabular
+| PrintOperator
+| UnionOperator
+| DatatableExpression
+| ExternaldataExpression
+| RangeOperator
+| FunctionCall
+| MaterializeExpression
+| SearchSource
+
+TableRef = '['? table:('ident' | 'quoted_ident' | 'string') ']'?
+// A table in another scope: `cluster("c").database("d").T`, `workspace("w").['T']`.
+QualifiedTable = FunctionCall ('.' FunctionCall)* '.' (TableRef | TablePattern)
+// A union leg's or a search's tables by pattern: `Sec*`, `*Events`, `*`.
+TablePattern = pieces:('ident' | 'number' | 'timespan' | '*')*
+ParenTabular = '(' TabularExpression ')'
+
+// `search "x"`, `search in (A, B) Account == "a"`, `find in (T) where x`.
+SearchSource =
+  name:('search' | 'find') OperatorOption*
+  ('in' '(' (table:('ident' | 'quoted_ident') | TablePattern) (',' (table:('ident' | 'quoted_ident') | TablePattern))* ')')? 'where'? predicate:Expr
+  FindProject?
+// `find … project a, b:long` or `find … project-smart`.
+FindProject = 'project' (FindColumn (',' FindColumn)* | '-' smart:'ident')
+FindColumn = name:('ident' | 'quoted_ident') (':' Type)?
+
+MaterializeExpression = 'materialize' '(' body:TabularExpression ')'
+
+DatatableExpression =
+  'datatable' '(' DatatableColumn (',' DatatableColumn)* ')'
+  '[' (Expr (',' Expr)* ','?)? ']'
+DatatableColumn = name:'ident' ':' Type
+
+// `externaldata (c: string) [@"https://..."] with (format = "csv")`.
+ExternaldataExpression =
+  name:('externaldata' | 'external_data') OperatorOption*
+  '(' DatatableColumn (',' DatatableColumn)* ','? ')'
+  '[' Expr (',' Expr)* ','? ']'
+  ('with' '(' OperatorOption (',' OperatorOption)* ')')?
+
+// `kind=inner`, `isfuzzy=true`, `hint.strategy=shuffle`.
+OperatorOption = name:('ident' | 'hint_name') '=' value:OptionValue
+OptionValue = sign:('-' | '+')? value:('ident' | 'boolean' | 'number' | 'timespan' | 'string')
+// mv-expand and mv-apply options are a fixed set of names.
+MvOption = name:('kind' | 'bagexpansion' | 'with_itemindex' | 'hint_name') '=' value:OptionValue
+// summarize, make-series and evaluate take `hint.*` options only.
+HintOption = name:'hint_name' '=' value:OptionValue
+
+TabularOperator =
+  WhereOperator
+| FilterOperator
+| ProjectOperator
+| ProjectAwayOperator
+| ProjectRenameOperator
+| ProjectKeepOperator
+| ProjectReorderOperator
+| ExtendOperator
+| SummarizeOperator
+| JoinOperator
+| UnionOperator
+| ParseOperator
+| ParseWhereOperator
+| ParseKvOperator
+| LookupOperator
+| TakeOperator
+| LimitOperator
+| TopOperator
+| CountOperator
+| MvExpandOperator
+| MvApplyOperator
+| MakeSeriesOperator
+| EvaluateOperator
+| SortOperator
+| DistinctOperator
+| RenderOperator
+| RangeOperator
+| TopNestedOperator
+| SampleDistinctOperator
+| ForkOperator
+| FacetOperator
+| PartitionOperator
+| ScanOperator
+| SerializeOperator
+| AsOperator
+| TopHittersOperator
+| ReduceOperator
+| SearchOperator
+| MakeGraphOperator
+| GraphMatchOperator
+| GraphShortestPathsOperator
+| GraphToTableOperator
+| GraphMarkComponentsOperator
+| KeywordOperator
+| UnknownOperator
+
+// The operators after `mv-apply ... on (` and in `fork`, `partition`, `facet`
+// branches have no source table.
+Subquery = TabularOperator ('|' TabularOperator)*
+
+WhereOperator = 'where' predicate:Expr
+FilterOperator = 'filter' predicate:Expr
+ProjectOperator = 'project' ColumnItem (',' ColumnItem)*
+ProjectAwayOperator = keyword:'project-away' ColumnRef (',' ColumnRef)*
+ProjectKeepOperator = keyword:'project-keep' ColumnRef (',' ColumnRef)*
+// `project-reorder a, b desc`, `project-reorder *, a`.
+ProjectReorderOperator = keyword:'project-reorder' ReorderItem (',' ReorderItem)*
+ReorderItem = ColumnRef order:('asc' | 'desc' | 'granny-asc' | 'granny-desc')?
+ProjectRenameOperator = keyword:'project-rename' RenameItem (',' RenameItem)*
+RenameItem = new:ColumnRef '=' old:ColumnRef
+
+// `Foo`, `['Foo bar']`, `User*`, `*Id`: a name, or a glob over the columns.
+ColumnRef = NameRef | ColumnPattern
+// The tokens of a pattern touch one another: no trivia between them.
+ColumnPattern = pieces:('ident' | 'number' | 'timespan' | '*')*
+
+ExtendOperator = 'extend' ColumnItem (',' ColumnItem)*
+ColumnItem = Assignment | TupleAssignment | Expr
+
+// The aggregates, then the `by` columns: one list of items, split at `by`.
+SummarizeOperator =
+  'summarize' HintOption*
+  (ColumnItem (',' ColumnItem)*)?
+  ('by' ColumnItem (',' ColumnItem)*)?
+
+// `Name = expr`, or `(A, B, C) = f(...)` for a function with several results.
+Assignment = name:NameRef '=' value:Expr
+TupleAssignment = NameTuple '=' value:Expr
+NameTuple = '(' NameRef (',' NameRef)* ')'
+
+JoinOperator =
+  'join' OperatorOption* TabularSource 'on' Expr (',' Expr)*
+LookupOperator =
+  'lookup' OperatorOption* TabularSource 'on' Expr (',' Expr)*
+
+// `union T1, (T2 | where x), f("a")`.
+UnionOperator = 'union' OperatorOption* UnionLeg (',' UnionLeg)*
+UnionLeg = TableRef | TablePattern | QualifiedTable | FunctionCall | ParenTabular
+
+// `parse col with "a" x:long * "b"`.
+ParseOperator =
+  'parse' OperatorOption* column:Expr 'with' ParsePart ParsePart*
+ParseWhereOperator =
+  keyword:'parse-where' OperatorOption* column:Expr 'with' ParsePart ParsePart*
+// A literal piece (`"id="`, `*`) or a typed column (`id:long`).
+ParsePart = ParsePiece | ParseColumn
+ParsePiece = piece:('string' | '*')
+ParseColumn = name:'ident' (':' Type)?
+// `parse-kv Message as (Level: string) with (pair_delimiter = ",")`.
+ParseKvOperator =
+  keyword:'parse-kv' args:Expr?
+  ('as' '(' DatatableColumn (',' DatatableColumn)* ','? ')')?
+  ('with' '(' OperatorOption (',' OperatorOption)* ')')?
+
+TakeOperator = 'take' count:'number'
+LimitOperator = 'limit' count:'number'
+TopOperator = 'top' count:'number' ('by' SortItem (',' SortItem)*)?
+CountOperator = 'count'
+
+SortOperator = name:('sort' | 'order') 'by'? SortItem (',' SortItem)*
+SortItem = Expr order:('asc' | 'desc')? ('nulls' nulls:('first' | 'last'))?
+
+MvExpandOperator =
+  name:('mv-expand' | 'mvexpand') MvOption* MvExpandItem (',' MvExpandItem)*
+  ('limit' limit:Expr)?
+MvExpandItem = ColumnItem ('to' 'typeof' '(' Type ')')?
+MvApplyOperator =
+  keyword:'mv-apply' MvOption* MvExpandItem (',' MvExpandItem)*
+  ('limit' limit:Expr)?
+  'on' '(' subquery:Subquery ')'
+
+// The axis, its bounds and step (or `in range(...)`), then the `by` columns:
+// one list of items, read by the keyword before each.
+MakeSeriesOperator =
+  keyword:'make-series' MvOption* SeriesAggregate (',' SeriesAggregate)*
+  'on' ColumnItem
+  (('from' ColumnItem)? ('to' ColumnItem)? 'step' ColumnItem | 'in' ColumnItem)
+  ('by' ColumnItem (',' ColumnItem)*)?
+SeriesAggregate = ColumnItem SeriesDefault?
+SeriesDefault = 'default' '=' Expr
+
+EvaluateOperator = 'evaluate' HintOption* plugin:FunctionCall
+DistinctOperator = 'distinct' HintOption* (StarArg | ColumnItem (',' ColumnItem)*)?
+// `render timechart with (title = "x", ycolumns = a, b)`.
+RenderOperator = 'render' kind:'ident' (OperatorOption | NamedArgument)* RenderWith?
+RenderWith = 'with' '(' (RenderProperty (',' RenderProperty)*)? ')'
+RenderProperty = NamedArgument | NameRef
+PrintOperator = 'print' ColumnItem (',' ColumnItem)*
+
+// `range x from 1 to 10 step 1`.
+RangeOperator =
+  'range' column:'ident' 'from' from:Expr 'to' to:Expr 'step' step:Expr
+
+// `top-nested 3 of x with others = "other" by count() desc, top-nested 2 of y by count()`.
+TopNestedOperator = TopNestedClause (',' TopNestedClause)*
+TopNestedClause =
+  keyword:'top-nested' count:Expr? TopNestedOf TopNestedOthers? TopNestedBy
+TopNestedOf = 'of' ColumnItem
+TopNestedOthers = 'with' 'others' '=' Expr
+TopNestedBy = 'by' ColumnItem order:('asc' | 'desc')? ('nulls' nulls:('first' | 'last'))?
+
+SampleDistinctOperator = keyword:'sample-distinct' HintOption* count:Expr 'of' column:Expr
+
+// `fork (where a > 1 | take 5) b = (count)`.
+ForkOperator = 'fork' ForkBranch ForkBranch*
+ForkBranch = (name:'ident' '=')? '(' subquery:Subquery ')'
+
+// `facet by a, b with (where x > 1 | take 5)` or `with take 5`.
+FacetOperator =
+  'facet' 'by' columns:'ident' (',' columns:'ident')*
+  ('with' ('(' subquery:Subquery ')' | operator:TabularOperator))?
+
+// `partition hint.strategy=native by Account (top 1 by TimeGenerated)`, or the
+// legacy `partition by Account { T | ... }`.
+PartitionOperator =
+  'partition' HintOption* 'by' column:'ident'
+  ('in' Expr)?
+  ('(' Subquery ')' | '{' TabularExpression '}')
+
+// `scan declare (n: long = 0) with (step s output=last: x == 1 => n = s.n + 1;)`.
+ScanOperator =
+  'scan' OperatorOption*
+  ('order' 'by' SortItem (',' SortItem)*)?
+  ('partition' 'by' Expr (',' Expr)*)?
+  ('declare' '(' (Parameter (',' Parameter)*)? ')')?
+  'with' '(' ScanStep ScanStep* ')'
+ScanStep =
+  'step' name:'ident' 'optional'? ('output' '=' output:('all' | 'last' | 'none'))?
+  ':' predicate:Expr ('=>' Assignment (',' Assignment)*)? ';'
+
+SerializeOperator = 'serialize' (ColumnItem (',' ColumnItem)*)?
+// `as hint.materialized=true T2`.
+AsOperator = 'as' HintOption* name:'ident'
+// `top-hitters 5 of x by y`.
+TopHittersOperator = keyword:'top-hitters' count:Expr 'of' value:Expr TopHittersBy?
+TopHittersBy = 'by' sum:Expr
+// `reduce kind=source by x with threshold=0.1, characters="ab"`.
+ReduceOperator =
+  'reduce' OperatorOption* 'by' value:Expr
+  ('with' (OperatorOption (',' OperatorOption)*)?)?
+
+// `T | search kind=case_sensitive in (U) "x"`.
+SearchOperator =
+  'search' OperatorOption*
+  ('in' '(' (table:('ident' | 'quoted_ident') | TablePattern) (',' (table:('ident' | 'quoted_ident') | TablePattern))* ')')? predicate:Expr
+
+// `invoke`, `getschema`, `sample`, `consume`, ...: an operator that takes at
+// most one argument.
+KeywordOperator =
+  name:('find' | 'invoke' | 'getschema' | 'sample'
+      | 'externaldata' | 'consume')
+  args:Expr?
+
+// The graph operators. Their arrows and brackets are runs of touching
+// tokens, as Kusto reads them: `-->` is `-`, `-`, `>`, and `]->` is `]`,
+// `-`, `>` with no blank between (the parser checks it).
+//
+// `T | make-graph a --> b`, `... with Nodes on id, Other on id2`,
+// `... with_node_id=id`, `... partitioned-by p (graph-match ...)`.
+MakeGraphOperator =
+  keyword:'make-graph' source:NameRef MakeGraphArrow target:NameRef
+  (MakeGraphNodes | node_id:OperatorOption)?
+  MakeGraphPartition?
+MakeGraphArrow = open:'-' close:'-' head:'cmp_op'?
+MakeGraphNodes = 'with' MakeGraphNodeTable (',' MakeGraphNodeTable)*
+MakeGraphNodeTable = TabularSource 'on' key:NameRef
+// `partitioned-by`: `partitioned`, `-` and `by` touch.
+MakeGraphPartition =
+  keyword:'ident' '-' 'by' column:('ident' | 'quoted_ident') '(' Subquery ')'
+
+// `graph-match cycles=none (a)-[e*1..3]->(b) where a.x == 1 project a, b`.
+GraphMatchOperator =
+  keyword:'graph-match' OperatorOption* GraphPattern
+  ('where' predicate:Expr)?
+  GraphProject?
+GraphShortestPathsOperator =
+  keyword:'graph-shortest-paths' OperatorOption* GraphPattern
+  ('where' predicate:Expr)?
+  GraphProject?
+GraphProject = 'project' ColumnItem (',' ColumnItem)*
+// Paths separated by commas; a path is nodes and edges as written, Kusto
+// checks what alternates after parsing.
+GraphPattern = GraphPath (',' GraphPath)*
+GraphPath = (GraphNode | GraphEdge)*
+GraphNode = '(' name:('ident' | 'quoted_ident')? ')'
+// `-[e]->`, `<-[e]-`, `-[e]-`, `<-[e]->`, and without the brackets `-->`,
+// `<--`, `--`.
+GraphEdge =
+  backward:'cmp_op'? open:'-'
+  ('[' name:('ident' | 'quoted_ident')? GraphRange? ']')?
+  close:'-' forward:'cmp_op'?
+// `*1..3`: both bounds, each a signed primary.
+GraphRange = '*' min:Expr '..' max:Expr
+
+// `graph-to-table nodes as N with_node_id=id, edges as E with_source_id=s`.
+GraphToTableOperator =
+  keyword:'graph-to-table' GraphToTableItem (',' GraphToTableItem)*
+GraphToTableItem =
+  kind:'ident' ('as' alias:('ident' | 'quoted_ident'))? OperatorOption*
+// `graph-mark-components kind=weak with_component_id=c`.
+GraphMarkComponentsOperator = keyword:'graph-mark-components' OperatorOption*
+
+// A name the engine does not know as an operator: the catalog decides.
+UnknownOperator = name:'ident' args:Expr?
+
+// ------------------------------------------------------------ expressions
+
+Expr =
+  OrExpr
+| AndExpr
+| NotExpr
+| ComparisonExpr
+| InExpr
+| BetweenExpr
+| AdditiveExpr
+| MultiplicativeExpr
+| UnaryExpr
+| MemberExpr
+| IndexExpr
+| FunctionCall
+| ToscalarExpr
+| ParenExpr
+| NameRef
+| Literal
+| DynamicLiteral
+// `* has "x"`: every column, on the left of a comparison or a set test.
+| StarExpr
+
+OrExpr = Expr ('or' Expr)*
+AndExpr = Expr ('and' Expr)*
+NotExpr = 'not' operand:Expr
+// `a == b`, `a has "x"`, `a matches regex "x"`, `a !~ b`.
+ComparisonExpr = lhs:Expr (op:('cmp_op' | ':') | 'matches' 'regex') rhs:Expr
+// `a in (1, 2)`, `a !in~ (T | project x)`, `a has_any (...)`.
+InExpr = lhs:Expr op:('in' | 'set_op') set:ExpressionList
+BetweenExpr = lhs:Expr op:'between_op' range:Range
+AdditiveExpr = Expr (op:('+' | '-') Expr)*
+MultiplicativeExpr = Expr (op:('*' | '/' | '%') Expr)*
+UnaryExpr = op:('-' | '+') operand:Expr
+
+// `(a, b, ...)`, or `(T | project x)` for a tabular subquery.
+ExpressionList = '(' (Expr (',' Expr)* | TabularExpression)? ')'
+Range = '(' from:Expr '..' to:Expr ')'
+
+MemberExpr = object:Expr '.' member:'ident'
+// `a[0]`, `d["k"]`, and the dotted form `d.["a.b"]`.
+IndexExpr = object:Expr '.'? '[' index:Expr ']'
+
+FunctionCall = name:'ident' '(' (Argument (',' Argument)*)? ')'
+Argument = NamedArgument | StarArg | Expr
+// `_Im_NetworkSession(starttime = ago(1d))`.
+NamedArgument = name:'ident' '=' value:Expr
+StarArg = '*'
+StarExpr = '*'
+
+ToscalarExpr = 'toscalar' '(' body:TabularExpression ')'
+ParenExpr = '(' Expr ')'
+NameRef = name:('ident' | 'quoted_ident')
+Literal = value:('string' | 'number' | 'boolean' | 'null' | 'timespan' | 'typed_literal')
+
+// `dynamic([1, "a"])`, `dynamic({"k": null})`, `dynamic(null)`.
+DynamicLiteral = 'dynamic' '(' JsonValue? ')'
+JsonValue = JsonArray | JsonObject | JsonScalar
+JsonArray = '[' (JsonValue (',' JsonValue)* ','?)? ']'
+JsonObject = '{' (JsonProperty (',' JsonProperty)* ','?)? '}'
+JsonProperty = key:'string' ':' value:JsonValue
+JsonScalar = '-'? value:('string' | 'number' | 'boolean' | 'null')

@@ -1,0 +1,40 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/oracles/elasticsearch/esql-reference/084_eval_b_coalesce_a_0.esql
+---
+SOURCE_FILE@0..36
+  QUERY@0..35
+    FROM_COMMAND@0..9
+      FROM_KW@0..4 "FROM"
+      WHITESPACE@4..5 " "
+      INDEX_PATTERN@5..9
+        INDEX_NAME@5..9
+          SOURCE_TEXT@5..9 "logs"
+    WHITESPACE@9..10 " "
+    PIPE@10..11 "|"
+    WHITESPACE@11..12 " "
+    EVAL_COMMAND@12..35
+      EVAL_KW@12..16 "EVAL"
+      WHITESPACE@16..17 " "
+      FIELD_ASSIGNMENT_OR_EXPRESSION@17..35
+        QUALIFIED_NAME@17..18
+          IDENTIFIER@17..18
+            IDENT@17..18 "b"
+        WHITESPACE@18..19 " "
+        EQ@19..20 "="
+        WHITESPACE@20..21 " "
+        FUNCTION_CALL@21..35
+          IDENTIFIER@21..29
+            IDENT@21..29 "COALESCE"
+          L_PAREN@29..30 "("
+          QUALIFIED_NAME@30..31
+            IDENTIFIER@30..31
+              IDENT@30..31 "a"
+          COMMA@31..32 ","
+          WHITESPACE@32..33 " "
+          NUMBER@33..34
+            NUMBER_LIT@33..34 "0"
+          R_PAREN@34..35 ")"
+  WHITESPACE@35..36 "\n"
+--- errors

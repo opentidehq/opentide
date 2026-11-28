@@ -1,0 +1,2 @@
+// prod:function_call valid
+SecurityEvent | where ago(1d) < TimeGenerated

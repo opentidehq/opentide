@@ -1,0 +1,948 @@
+# The release pipeline: every artifact opentide ships, built once, verified
+# once, kept as this run's artifacts. One definition for its three callers:
+#
+#   - ci.yml's `release` job: a release pull request (every OS) and the
+#     nightly, at a development version (PyPI X.Y.Z.devN, npm X.Y.Z-dev.N);
+#   - publish.yml's `build` job: a release or a candidate, at its version and
+#     tag; its own jobs then attest, tag and publish exactly these files
+#     (`dry_run` stops after this workflow).
+#
+#   plan ─┬─ native (12 legs) ────┐
+#         ├─ wasm ────────────────┼─ assemble ─┬─ smoke (6 platforms)
+#         └─ sources ─────────────┘            └─ av-scan, av-defender
+#               └─ smoke-sources (sdist, cargo install)
+#
+#   - `plan`: the commit (a 40-hex SHA), the versions and the tag;
+#   - `native`: two jobs per platform build everything it ships: the
+#     `opentide` and `opentide-lsp` binaries (Linux and macOS; no standalone
+#     Windows executable ships), the npm addon and the cp310-abi3 wheel,
+#     grouped where they share their compilation;
+#   - `wasm`: every WebAssembly build, the WASI command line run under wasmtime;
+#   - `sources`: the sdist, every publishable crate built from its package,
+#     the licence scan, THIRD-PARTY-LICENSES (cargo-about), the SBOMs
+#     (cargo-cyclonedx), and the registry placeholders' publishes rehearsed
+#     with --dry-run;
+#   - `assemble`: the GitHub Release's assets with the installer and
+#     SHA256SUMS, the npm tarballs, and the PyPI dist's shape;
+#   - verify, each once: `smoke` installs each platform's wheel, binaries and
+#     npm packages on that platform (scripts/build/smoke_release.sh platform);
+#     `smoke-sources` builds from the sdist and the crate packages as soon as
+#     they exist; the antivirus gate (#1743: markers, sizes, PE imports,
+#     entropy, ClamAV and YARA in `av-scan`, Microsoft Defender in
+#     `av-defender`) scans every artifact, when `av-gate` is set (the release
+#     pull request and publish.yml).
+#
+# Artifacts keep their names (wheels-<platform>, npm-packages, release-assets,
+# sdist, crates): publish.yml's attest, internal-release and registry jobs
+# download them by name. Nothing here publishes, holds a token or restores a
+# compiler cache: every caller builds the way a release does.
+name: Release pipeline
+
+on:
+  workflow_call:
+    inputs:
+      revision:
+        description: "The commit to build, as its 40-hex SHA (publish.yml's guard resolves it; ci.yml passes github.sha)."
+        required: true
+        type: string
+      tag:
+        description: "vX.Y.Z or vX.Y.Z-rc.N for the release's assets; empty: the workspace version's tag."
+        required: false
+        default: ""
+        type: string
+      pypi-version:
+        description: "The wheels' and the sdist's version (PEP 440); empty: X.Y.Z.devN."
+        required: false
+        default: ""
+        type: string
+      npm-version:
+        description: "The npm packages' version; empty: X.Y.Z-dev.N."
+        required: false
+        default: ""
+        type: string
+      crates-version:
+        description: "The crates' version, a candidate's X.Y.Z-rc.N; empty: the workspace's."
+        required: false
+        default: ""
+        type: string
+      retention-days:
+        description: "How long the artifacts are kept; 0 is the repository's default."
+        required: false
+        default: 0
+        type: number
+      av-gate:
+        description: "Scan every artifact (av-scan, av-defender): the release pull request and the release train set it."
+        required: false
+        default: false
+        type: boolean
+    outputs:
+      pypi:
+        description: "The wheels' and the sdist's version."
+        value: ${{ jobs.plan.outputs.pypi }}
+      npm:
+        description: "The npm packages' version."
+        value: ${{ jobs.plan.outputs.npm }}
+      crates:
+        description: "The crates' version."
+        value: ${{ jobs.plan.outputs.crates }}
+      version:
+        description: "The version the binaries report (the tag without its v)."
+        value: ${{ jobs.plan.outputs.semver }}
+
+permissions:
+  contents: read
+
+jobs:
+  plan:
+    name: Plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      revision: ${{ steps.revision.outputs.revision }}
+      workspace: ${{ steps.plan.outputs.workspace }}
+      crates: ${{ steps.plan.outputs.crates }}
+      pypi: ${{ steps.plan.outputs.pypi }}
+      npm: ${{ steps.plan.outputs.npm }}
+      tag: ${{ steps.plan.outputs.tag }}
+      version: ${{ steps.plan.outputs.version }}
+      semver: ${{ steps.plan.outputs.semver }}
+    steps:
+      # Before any checkout: a commit SHA, never a branch or tag that could move.
+      - name: The revision is a commit SHA
+        id: revision
+        env:
+          REVISION: ${{ inputs.revision }}
+        run: |
+          set -euo pipefail
+          if [[ ! "${REVISION}" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::revision must be a 40-hex commit SHA, not '${REVISION}'." >&2
+            exit 1
+          fi
+          echo "revision=${REVISION}" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ steps.revision.outputs.revision }}
+      # The assets keep language-server's names with the product's version
+      # (`highlights-v1.0.0.zip`): `version` is the tag as the assets spell it.
+      - name: The versions and the tag
+        id: plan
+        env:
+          INPUT_TAG: ${{ inputs.tag }}
+          PYPI_VERSION: ${{ inputs.pypi-version }}
+          NPM_VERSION: ${{ inputs.npm-version }}
+          CRATES_VERSION: ${{ inputs.crates-version }}
+          RUN_NUMBER: ${{ github.run_number }}
+        run: |
+          set -euo pipefail
+          workspace="$(python3 scripts/engine/release.py version)"
+          tag="${INPUT_TAG:-$(python3 scripts/engine/release.py tag)}"
+          version="$(python3 scripts/engine/release.py asset-version "${tag}")"
+          {
+            echo "workspace=${workspace}"
+            echo "crates=${CRATES_VERSION:-${workspace}}"
+            echo "pypi=${PYPI_VERSION:-${workspace}.dev${RUN_NUMBER}}"
+            echo "npm=${NPM_VERSION:-${workspace}-dev.${RUN_NUMBER}}"
+            echo "tag=${tag}"
+            echo "version=${version}"
+            echo "semver=${version#v}"
+          } | tee -a "$GITHUB_OUTPUT" >> "$GITHUB_STEP_SUMMARY"
+
+  # Everything a platform ships, in at most two jobs per platform with one
+  # toolchain (the release rust-toolchain.toml pins, installed by name:
+  # scripts/build/install-rust.sh) and one target directory each, grouped
+  # where the builds share their compilation, split where one job would set
+  # the run's length (measured: publish.yml dry runs 45689884299, one job per
+  # platform, macos-arm64 39 min and windows-x64 32; 45697222643, macOS npm
+  # with the wheel, 32):
+  #   - the binaries (`opentide-lsp`, then `opentide`, which reuses its crates:
+  #     11 min after it on macOS, 17 alone), then the npm addon (the facade
+  #     with `cli`, the binaries' own crate graph: 5 to 7 min after them);
+  #   - the wheel (maturin; on Linux in the manylinux_2_28 image, which shares
+  #     nothing with the host's builds);
+  #   - on Windows (no binary ships) the addon and the wheel apart: together
+  #     32 min, the run's longest.
+  # Each artifact reports the version its users see: the binaries the tag's
+  # (OPENTIDE_BUILD_VERSION), the addon npm's, the wheel the one
+  # report_version.py writes into .cargo/config.toml. x86_64 macOS is
+  # cross-compiled on Apple silicon; every other platform builds on its own
+  # architecture. No musllinux, no Windows binary (docs/internal/publishing.md).
+  # The macOS builds run on the larger arm64 runner (`macos-latest-xlarge`,
+  # billed per minute): on the standard one (3 vCPU, 7 GB) each LTO build took
+  # twice its Linux time, binaries + npm 29 to 33 min against Linux's 16, and
+  # set the run's length (CI run 45861794934). The smoke jobs stay standard.
+  native:
+    name: Build (${{ matrix.platform }}, ${{ matrix.part }})
+    needs: plan
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        # scripts/engine/release.py lists the same targets (TARGETS,
+        # BINARY_TARGETS) and npm platforms (scripts/engine/test_release.py).
+        include:
+          - { platform: linux-x64, part: binaries + npm, os: ubuntu-latest, target: x86_64-unknown-linux-gnu, binaries: true, addon: true, wheel: false, npm: linux-x64-gnu, tag: manylinux_2_28_x86_64 }
+          - { platform: linux-x64, part: wheel, os: ubuntu-latest, target: x86_64-unknown-linux-gnu, binaries: false, addon: false, wheel: true, npm: linux-x64-gnu, tag: manylinux_2_28_x86_64 }
+          - { platform: linux-arm64, part: binaries + npm, os: ubuntu-24.04-arm, target: aarch64-unknown-linux-gnu, binaries: true, addon: true, wheel: false, npm: linux-arm64-gnu, tag: manylinux_2_28_aarch64 }
+          - { platform: linux-arm64, part: wheel, os: ubuntu-24.04-arm, target: aarch64-unknown-linux-gnu, binaries: false, addon: false, wheel: true, npm: linux-arm64-gnu, tag: manylinux_2_28_aarch64 }
+          - { platform: macos-arm64, part: binaries + npm, os: macos-latest-xlarge, target: aarch64-apple-darwin, binaries: true, addon: true, wheel: false, npm: darwin-arm64, tag: macosx_11_0_arm64 }
+          - { platform: macos-arm64, part: wheel, os: macos-latest-xlarge, target: aarch64-apple-darwin, binaries: false, addon: false, wheel: true, npm: darwin-arm64, tag: macosx_11_0_arm64 }
+          - { platform: macos-x64, part: binaries + npm, os: macos-latest-xlarge, target: x86_64-apple-darwin, binaries: true, addon: true, wheel: false, npm: darwin-x64, tag: macosx_10_12_x86_64 }
+          - { platform: macos-x64, part: wheel, os: macos-latest-xlarge, target: x86_64-apple-darwin, binaries: false, addon: false, wheel: true, npm: darwin-x64, tag: macosx_10_12_x86_64 }
+          - { platform: windows-x64, part: npm, os: windows-latest, target: x86_64-pc-windows-msvc, binaries: false, addon: true, wheel: false, npm: win32-x64-msvc, tag: win_amd64 }
+          - { platform: windows-x64, part: wheel, os: windows-latest, target: x86_64-pc-windows-msvc, binaries: false, addon: false, wheel: true, npm: win32-x64-msvc, tag: win_amd64 }
+          - { platform: windows-arm64, part: npm, os: windows-11-arm, target: aarch64-pc-windows-msvc, binaries: false, addon: true, wheel: false, npm: win32-arm64-msvc, tag: win_arm64 }
+          - { platform: windows-arm64, part: wheel, os: windows-11-arm, target: aarch64-pc-windows-msvc, binaries: false, addon: false, wheel: true, npm: win32-arm64-msvc, tag: win_arm64 }
+    env:
+      TARGET: ${{ matrix.target }}
+      VERSION: ${{ needs.plan.outputs.version }}
+      SEMVER: ${{ needs.plan.outputs.semver }}
+      PYPI_VERSION: ${{ needs.plan.outputs.pypi }}
+      NPM_VERSION: ${{ needs.plan.outputs.npm }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ needs.plan.outputs.revision }}
+      # The other images carry rustup; this one may not.
+      - name: Rust on Windows on Arm
+        if: matrix.os == 'windows-11-arm'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $true
+          if (-not (Get-Command rustup -ErrorAction SilentlyContinue)) {
+            $installer = Join-Path $env:RUNNER_TEMP 'rustup-init.exe'
+            Invoke-WebRequest -Uri 'https://static.rust-lang.org/rustup/dist/aarch64-pc-windows-msvc/rustup-init.exe' -OutFile $installer
+            & $installer -y --profile minimal --default-toolchain none
+            Join-Path $env:USERPROFILE '.cargo\bin' | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
+          }
+      - name: Set up Rust
+        run: scripts/build/install-rust.sh "${TARGET}"
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+          package-manager-cache: false
+      # maturin takes the wheel's version from bindings/python/'s crate; npm's
+      # from bindings/node's manifests (after `npm ci`, which reads the lock as
+      # committed). This checkout only.
+      - name: The packages at the build's versions
+        env:
+          ADDON: ${{ matrix.addon }}
+        run: |
+          set -euo pipefail
+          if [[ "${ADDON}" == true ]]; then (cd bindings/node && npm ci); fi
+          python scripts/engine/release.py pypi-version "${PYPI_VERSION}"
+          python scripts/build/report_version.py "${PYPI_VERSION}"
+          python scripts/engine/release.py npm-version "${NPM_VERSION}"
+
+      # The binaries, each with its own cargo invocation so that neither takes
+      # the other's features, held to their size budgets: opentide-lsp 40 MiB,
+      # opentide (with the connectors' HTTP and TLS stack) 80 MiB.
+      - name: Build the opentide-lsp binary
+        if: matrix.binaries
+        env:
+          OPENTIDE_BUILD_VERSION: ${{ needs.plan.outputs.semver }}
+        run: cargo build --locked --release -p opentide-lsp --target "${TARGET}"
+      - name: Build the opentide binary
+        if: matrix.binaries
+        env:
+          OPENTIDE_BUILD_VERSION: ${{ needs.plan.outputs.semver }}
+        run: cargo build --locked --release -p opentide --features cli --bin opentide --target "${TARGET}"
+      - name: The binaries' size budgets
+        if: matrix.binaries
+        run: |
+          set -euo pipefail
+          mkdir -p out
+          for pair in opentide-lsp:41943040 opentide:83886080; do
+            binary="${pair%%:*}" budget="${pair##*:}"
+            bin="target/${TARGET}/release/${binary}"
+            size=$(wc -c < "${bin}")
+            echo "${bin} is ${size} bytes (budget ${budget})"
+            test "${size}" -lt "${budget}"
+            # One name per target, or the assemble job's merged download keeps one.
+            cp "${bin}" "out/${binary}-${VERSION}-${TARGET}"
+          done
+      # highlights-<v>.zip, written by the release opentide-lsp just built:
+      # its path to highlights/generated is this checkout's, compiled in.
+      - name: The highlights zip
+        if: matrix.platform == 'linux-x64' && matrix.binaries
+        run: |
+          set -euo pipefail
+          "target/${TARGET}/release/opentide-lsp" generate-highlights
+          mkdir -p highlights-dist
+          (cd highlights && zip -r "../highlights-dist/highlights-${VERSION}.zip" spec.toml generated)
+          zip -j "highlights-dist/highlights-${VERSION}.zip" LICENSE NOTICE
+
+      - name: Build the npm addon
+        if: matrix.addon
+        working-directory: bindings/node
+        run: OPENTIDE_BUILD_VERSION="${NPM_VERSION}" node build.mjs --release --target "${TARGET}"
+
+      - name: Build the wheel
+        if: matrix.wheel
+        uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
+        with:
+          maturin-version: v1.16.0
+          command: build
+          target: ${{ matrix.target }}
+          manylinux: "2_28"
+          args: --locked --out wheelhouse
+      - name: The wheel's name
+        if: matrix.wheel
+        env:
+          TAG: ${{ matrix.tag }}
+        run: |
+          set -euo pipefail
+          ls -l wheelhouse
+          expected="wheelhouse/opentide-${PYPI_VERSION}-cp310-abi3-${TAG}.whl"
+          found=(wheelhouse/*.whl)
+          if [[ "${#found[@]}" -ne 1 || "${found[0]}" != "${expected}" ]]; then
+            echo "::error::expected ${expected}, found ${found[*]}" >&2
+            exit 1
+          fi
+
+      - if: matrix.wheel
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: wheels-${{ matrix.platform }}
+          path: wheelhouse/*.whl
+          if-no-files-found: error
+          retention-days: ${{ inputs.retention-days }}
+      - if: matrix.addon
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: npm-native-${{ matrix.npm }}
+          path: |
+            bindings/node/opentide.${{ matrix.npm }}.node
+            bindings/node/index.js
+            bindings/node/index.d.ts
+          if-no-files-found: error
+          retention-days: ${{ inputs.retention-days }}
+      # The language server is an engine asset; the command line, which
+      # carries opentide's package data, a product asset (scanned as one).
+      - if: matrix.binaries
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: engine-asset-opentide-lsp-${{ matrix.target }}
+          path: out/opentide-lsp-*
+          if-no-files-found: error
+          retention-days: ${{ inputs.retention-days }}
+      - if: matrix.binaries
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: product-asset-opentide-${{ matrix.target }}
+          path: out/opentide-v*
+          if-no-files-found: error
+          retention-days: ${{ inputs.retention-days }}
+      - if: matrix.platform == 'linux-x64' && matrix.binaries
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: engine-asset-highlights
+          path: highlights-dist/*
+          if-no-files-found: error
+          retention-days: ${{ inputs.retention-days }}
+
+  # Every WebAssembly build reports the release's version, as the binaries do:
+  # the browser module (wasm-bindgen), the language server's WASI module and
+  # the command line's, which the VS Code extension pins
+  # (docs/internal/vscode-wasi.md; wasi-sdk, fetched and checked by the
+  # script, for `ring`'s C; 15 MiB gzipped at most, the .vsix's budget).
+  wasm:
+    name: WebAssembly
+    needs: plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      VERSION: ${{ needs.plan.outputs.version }}
+      OPENTIDE_BUILD_VERSION: ${{ needs.plan.outputs.semver }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ needs.plan.outputs.revision }}
+      - name: Set up Rust
+        run: |
+          rustup toolchain install --profile minimal --no-self-update
+          rustup target add wasm32-unknown-unknown wasm32-wasip1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+          package-manager-cache: false
+      # The prebuilt release; its version must match the wasm-bindgen crate in Cargo.lock.
+      - uses: taiki-e/install-action@3a3daafd3b7f23b8f65d9f5ba2db203fb59b79e2 # v2.90.2
+        with:
+          tool: wasm-bindgen@0.2.128
+      - run: bash scripts/engine/build-wasm.sh
+      - name: build the opentide command line (wasm32-wasip1)
+        run: bash scripts/engine/build-wasm.sh cli
+      # wasmtime itself (pinned by release and SHA-256) loads the module, which
+      # says the tag's version, and a command proves the engine runs (#1072).
+      - name: smoke test opentide.wasm under wasmtime
+        env:
+          WASMTIME_VERSION: "50.0.0"
+          WASMTIME_SHA256: 77c19ee0437991f9ac7837b9c269d9c7076744f85dad263fea5214cc2723c7ff
+        run: |
+          set -euo pipefail
+          archive="wasmtime-v${WASMTIME_VERSION}-x86_64-linux"
+          curl -fsSL -o "${RUNNER_TEMP}/wasmtime.tar.xz" \
+            "https://github.com/bytecodealliance/wasmtime/releases/download/v${WASMTIME_VERSION}/${archive}.tar.xz"
+          echo "${WASMTIME_SHA256}  ${RUNNER_TEMP}/wasmtime.tar.xz" | sha256sum -c -
+          tar -xJf "${RUNNER_TEMP}/wasmtime.tar.xz" -C "${RUNNER_TEMP}"
+          wasmtime="${RUNNER_TEMP}/${archive}/wasmtime"
+          module="target/wasm32-wasip1/wasi/opentide.wasm"
+          out="$("${wasmtime}" run "${module}" --version)"
+          echo "${out}"
+          grep -qF "${OPENTIDE_BUILD_VERSION}" <<< "${out}"
+          "${wasmtime}" run "${module}" --json explain yaml_parse > /dev/null
+      - name: package
+        run: |
+          set -euo pipefail
+          mkdir -p dist product
+          cp target/wasm32-wasip1/wasi-lsp/opentide-lsp.wasm "dist/opentide-lsp-wasm32-wasip1.wasm"
+          cp target/wasm32-wasip1/wasi/opentide.wasm "product/opentide-wasm32-wasip1.wasm"
+          wasm-bindgen --target web --out-dir pkg target/wasm32-unknown-unknown/release/opentide_wasm.wasm
+          # LICENSE, NOTICE and every licence file NOTICE cites, at the paths it names.
+          python3 scripts/engine/release.py legal pkg
+          cp -r licenses pkg/licenses
+          (cd pkg && zip -r "../dist/opentide-wasm-web-${VERSION}.zip" .)
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: engine-asset-wasm
+          path: dist/*
+          if-no-files-found: error
+          retention-days: ${{ inputs.retention-days }}
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: product-asset-opentide-wasm
+          path: product/*
+          if-no-files-found: error
+          retention-days: ${{ inputs.retention-days }}
+
+  # What is built from the sources rather than for a platform, off the
+  # critical path: the sdist (a platform without a wheel builds from it), the
+  # legal files and SBOMs, the registry placeholders' publishes rehearsed,
+  # then every publishable crate built from its package (`cargo package`, as
+  # crates.io builds it) with the licence scan. The crates come last: a
+  # candidate's bump to X.Y.Z-rc.N must not reach the sdist or the SBOMs.
+  sources:
+    name: Sources (sdist, crates, licences, SBOMs, registry dry runs)
+    needs: plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      PYPI_VERSION: ${{ needs.plan.outputs.pypi }}
+      SEMVER: ${{ needs.plan.outputs.semver }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ needs.plan.outputs.revision }}
+      # The release rust-toolchain.toml pins (`rustup toolchain install` with no name).
+      - name: Set up Rust
+        run: |
+          rustup toolchain install --profile minimal --no-self-update
+          rustup target add wasm32-unknown-unknown
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
+        with:
+          enable-cache: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+          package-manager-cache: false
+      # Prebuilt and checksummed by install-action. cargo-cyclonedx 0.5.10 has
+      # no prebuilt release there, so it is compiled (`cargo install`).
+      - uses: taiki-e/install-action@3a3daafd3b7f23b8f65d9f5ba2db203fb59b79e2 # v2.90.2
+        with:
+          tool: cargo-about@0.8.4
+      - name: cargo-cyclonedx
+        run: cargo install --locked cargo-cyclonedx --version 0.5.10
+
+      # The sdist carries .cargo/config.toml (pyproject.toml's `include`), so a
+      # build from it reports the same version (scripts/build/report_version.py).
+      - name: The sdist at the wheels' version
+        run: |
+          python scripts/engine/release.py pypi-version "${PYPI_VERSION}"
+          python scripts/build/report_version.py "${PYPI_VERSION}"
+      - name: Build sdist
+        uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
+        with:
+          maturin-version: v1.16.0
+          command: sdist
+          args: --out sdist
+      - name: Twine check
+        run: pipx run twine check sdist/*
+      - name: The checkout as committed again
+        run: git checkout -- .
+
+      # The notices the binaries ship: NOTICE covers the embedded data, Lucene,
+      # dk.brics and the wasi-libc the WASI builds link; the licence files it
+      # cites ship as THIRD-PARTY-DATA-LICENSES.txt; cargo-about lists every
+      # Rust crate for the targets about.toml names.
+      - name: licences and notices
+        run: |
+          set -euo pipefail
+          mkdir -p legal
+          cargo about generate --workspace about.hbs -o legal/THIRD-PARTY-LICENSES.html
+          cp LICENSE legal/LICENSE
+          cp NOTICE legal/NOTICE
+          for f in licenses/wasi-libc/*; do
+            printf '==> %s <==\n\n' "$f"; cat "$f"; printf '\n'
+          done > legal/WASI-LIBC-LICENSES.txt
+          python3 scripts/engine/release.py legal-bundle legal/THIRD-PARTY-DATA-LICENSES.txt
+      # CycloneDX SBOMs, reproducible (SOURCE_DATE_EPOCH), validated; the
+      # product's (opentide, the npm package, the wheel) apart from the engine's.
+      - name: SBOMs
+        env:
+          WHEEL_VERSION: ${{ inputs.pypi-version }}
+        run: |
+          set -euo pipefail
+          SOURCE_DATE_EPOCH="$(git log -1 --format=%ct)"
+          export SOURCE_DATE_EPOCH
+          wheel_version="${WHEEL_VERSION:-$(python3 scripts/engine/release.py version)}"
+          python3 scripts/engine/sbom.py generate sbom --wheel-version "${wheel_version}" --npm-version "${SEMVER}"
+          python3 scripts/engine/sbom.py validate sbom/*.cdx.json
+          mkdir -p sbom-product
+          mv sbom/opentide.cdx.json sbom/opentide-node.cdx.json sbom/opentide-wheel.cdx.json sbom-product/
+
+      # The registry placeholders (docs/internal/publishing.md lists every
+      # name): the `opentide` crate and the npm names, each publish rehearsed
+      # with --dry-run and no token. A version npm already has is only packed.
+      - name: crates.io placeholder, rehearsed
+        env:
+          MANIFEST: publishing/placeholders/crates/opentide/Cargo.toml
+          RUSTDOCFLAGS: -D warnings
+        run: |
+          set -euo pipefail
+          cargo fmt --manifest-path "${MANIFEST}" -- --check
+          cargo clippy --manifest-path "${MANIFEST}" --locked --all-targets -- -D warnings
+          cargo doc --manifest-path "${MANIFEST}" --locked --no-deps
+          cargo package --manifest-path "${MANIFEST}" --locked --list
+          cargo publish --manifest-path "${MANIFEST}" --locked --dry-run
+      - name: npm placeholders, rehearsed (npm 11.5.1 or later, as trusted publishing needs)
+        run: |
+          set -euo pipefail
+          npm install --global npm@11.21.1
+          version="$(npm --version)"
+          # shellcheck disable=SC2016 # a JavaScript template string, not the shell's
+          node -e '
+            const [major, minor, patch] = process.argv[1].split(".").map(Number);
+            const ok = major > 11 || (major === 11 && (minor > 5 || (minor === 5 && patch >= 1)));
+            if (!ok) {
+              console.error(`::error::npm ${process.argv[1]} is older than 11.5.1, which trusted publishing needs`);
+              process.exit(1);
+            }
+          ' "${version}"
+          for dir in publishing/placeholders/npm/opentide-scoped publishing/placeholders/npm/opentide; do
+            name="$(node -p "require('./${dir}/package.json').name")"
+            version="$(node -p "require('./${dir}/package.json').version")"
+            echo "::group::${name}@${version}"
+            (cd "${dir}" && npm pack --dry-run --json) > "${RUNNER_TEMP}/pack.json"
+            # shellcheck disable=SC2016 # a JavaScript template string, not the shell's
+            node -e '
+              const files = require(process.argv[1])[0].files.map((file) => file.path).sort();
+              const expected = ["LICENSE", "README.md", "package.json"];
+              if (JSON.stringify(files) !== JSON.stringify(expected)) {
+                console.error(`::error::packs ${files.join(", ")}; expected ${expected.join(", ")}`);
+                process.exit(1);
+              }
+              console.log(`packs ${files.join(", ")}`);
+            ' "${RUNNER_TEMP}/pack.json"
+            if [[ "$(npm view "${name}@${version}" version 2>/dev/null || true)" == "${version}" ]]; then
+              echo "::notice title=${name}@${version} is on npm::The name is reserved. npm publishes a version once, so only the pack is checked."
+            else
+              (cd "${dir}" && npm publish --dry-run)
+            fi
+            echo "::endgroup::"
+          done
+
+      # A candidate's crates are crates.io pre-releases, X.Y.Z-rc.N: this
+      # checkout only (the branch keeps X.Y.Z) carries that version and pins.
+      - name: A candidate's crates at its pre-release version
+        if: needs.plan.outputs.crates != needs.plan.outputs.workspace
+        env:
+          VERSION: ${{ needs.plan.outputs.crates }}
+        run: python3 scripts/engine/release.py bump "${VERSION}"
+      - run: python3 scripts/engine/release.py vendor
+      # `cargo publish --workspace` skips the members with `publish = false`
+      # (the bindings, xtask, opentide-cassette, opentide-wasm); `cargo package` names them.
+      # A compiler warning fails the build.
+      - env:
+          RUSTFLAGS: "-Dwarnings"
+        run: cargo package --locked --workspace --exclude opentide-native --exclude xtask --exclude opentide-cassette --exclude opentide-wasm --exclude opentide-node --allow-dirty
+      # No oracle reference ships. opentide-cli carries opentide's package data
+      # (its explain pages), as the wheel does: scanned as a product.
+      - name: license scan (no oracle references)
+        run: |
+          set -euo pipefail
+          find target/package -maxdepth 1 -name '*.crate' ! -name 'opentide-cli-*' -print0 | xargs -0 bash scripts/engine/license-scan.sh
+          bash scripts/engine/license-scan.sh --product target/package/opentide-cli-*.crate
+          bash scripts/engine/license-scan.sh crates/opentide-cassette crates/opentide-wasm bindings/node bindings/python
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: sdist
+          path: sdist/*.tar.gz
+          if-no-files-found: error
+          retention-days: ${{ inputs.retention-days }}
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: crates
+          path: target/package/*.crate
+          if-no-files-found: error
+          retention-days: ${{ inputs.retention-days }}
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: engine-asset-licences
+          path: legal/*
+          if-no-files-found: error
+          retention-days: ${{ inputs.retention-days }}
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: engine-asset-sbom
+          path: sbom/*
+          if-no-files-found: error
+          retention-days: ${{ inputs.retention-days }}
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: product-asset-sbom
+          path: sbom-product/*
+          if-no-files-found: error
+          retention-days: ${{ inputs.retention-days }}
+
+  # The release's artifacts put together, each checked as a set: the GitHub
+  # Release's assets (engine and product assets, the installer, SHA256SUMS,
+  # the asset set and the licence scan), the npm tarballs in publishing order
+  # (1-native, 2-package, 3-alias, 4-lsp) with their legal files and licence
+  # scan, and the PyPI dist's shape (one version, six cp310-abi3 wheels, one sdist).
+  assemble:
+    name: Assemble (release assets, npm packages, PyPI dist)
+    needs: [plan, native, wasm, sources]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      TAG: ${{ needs.plan.outputs.tag }}
+      NPM_VERSION: ${{ needs.plan.outputs.npm }}
+      CRATES_VERSION: ${{ needs.plan.outputs.crates }}
+      PYPI_VERSION: ${{ needs.plan.outputs.pypi }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ needs.plan.outputs.revision }}
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+          package-manager-cache: false
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          path: dist
+          pattern: engine-asset-*
+          merge-multiple: true
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          path: product
+          pattern: product-asset-*
+          merge-multiple: true
+      - name: Release assets
+        run: |
+          set -euo pipefail
+          bash scripts/engine/license-scan.sh dist
+          bash scripts/engine/license-scan.sh --product product
+          sed "s/__OPENTIDE_TAG__/${TAG}/" publishing/installers/opentide-installer.sh > product/opentide-installer.sh
+          grep -qF "${TAG}" product/opentide-installer.sh
+          mv product/* dist/
+          test -s dist/THIRD-PARTY-LICENSES.html && test -s dist/NOTICE && test -s dist/WASI-LIBC-LICENSES.txt
+          test -s dist/THIRD-PARTY-DATA-LICENSES.txt
+          python3 scripts/engine/release.py sums dist
+          python3 scripts/engine/release.py check-assets dist "${TAG}"
+          python3 scripts/engine/release.py verify-sums dist
+          {
+            echo "### Release assets of ${TAG}"
+            echo
+            echo '```'
+            cat dist/SHA256SUMS
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-assets
+          path: dist/*
+          if-no-files-found: error
+          retention-days: ${{ inputs.retention-days }}
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          path: native
+          pattern: npm-native-*
+      - name: npm packages, each with its addon
+        run: |
+          set -euo pipefail
+          for p in lsp-client lsp-worker wasi-host; do (cd "packages/$p" && npm ci); done
+          python3 scripts/engine/release.py npm-version "${NPM_VERSION}"
+          python3 scripts/engine/release.py lockstep "${CRATES_VERSION}" --npm "${NPM_VERSION}"
+          for dir in bindings/node/npm/*/; do
+            platform="$(basename "${dir}")"
+            cp "native/npm-native-${platform}/opentide.${platform}.node" "${dir}"
+          done
+          python3 scripts/engine/release.py legal bindings/node bindings/node/npm/*/
+          # napi-rs writes the same loader on every platform: take Linux x64's.
+          cp native/npm-native-linux-x64-gnu/index.js native/npm-native-linux-x64-gnu/index.d.ts bindings/node/
+          node scripts/engine/check-npm-packs.mjs
+          mkdir -p npm/1-native npm/2-package npm/3-alias npm/4-lsp
+          for dir in bindings/node/npm/*/; do
+            (cd "${dir}" && npm pack --pack-destination "${GITHUB_WORKSPACE}/npm/1-native")
+          done
+          (cd bindings/node && npm pack --pack-destination "${GITHUB_WORKSPACE}/npm/2-package")
+          (cd bindings/node/alias && npm pack --pack-destination "${GITHUB_WORKSPACE}/npm/3-alias")
+          for p in lsp-client lsp-worker wasi-host; do
+            (cd "packages/$p" && npm pack --pack-destination "${GITHUB_WORKSPACE}/npm/4-lsp")
+          done
+          for tarball in npm/1-native/*.tgz; do
+            grep -q '^package/opentide\..*\.node$' <<<"$(tar -tzf "${tarball}")"
+          done
+          legal="$(python3 -c 'import sys; sys.path.insert(0, "scripts/engine"); import release; print("\n".join(release.legal_files()))')"
+          for tarball in npm/1-native/*.tgz npm/2-package/*.tgz; do
+            listing="$(tar -tzf "${tarball}")"
+            while IFS= read -r file; do
+              grep -qxF "package/${file}" <<<"${listing}" || { echo "::error::${tarball} has no ${file}"; exit 1; }
+            done <<<"${legal}"
+          done
+          ls -lR npm
+          bash scripts/engine/license-scan.sh npm/4-lsp
+          bash scripts/engine/license-scan.sh --product npm/1-native npm/2-package npm/3-alias
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: npm-packages
+          path: npm
+          if-no-files-found: error
+          retention-days: ${{ inputs.retention-days }}
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          path: smoke-artifacts/dist
+          pattern: "{wheels-*,sdist}"
+          merge-multiple: true
+      - name: The PyPI dist's shape
+        env:
+          SMOKE_ARTIFACTS: ${{ github.workspace }}/smoke-artifacts
+        run: bash scripts/build/smoke_release.sh shape
+
+  # Each platform's artifacts installed the way a user installs them, on that
+  # platform (scripts/build/smoke_release.sh platform): the binary installer
+  # (Linux and macOS), the wheel with pip, and every npm tarball from a
+  # throwaway local registry. One cell per platform; every cell runs whatever
+  # another failed.
+  smoke:
+    name: Smoke (${{ matrix.name }})
+    needs: [plan, assemble]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: linux-x64, os: ubuntu-latest }
+          - { name: linux-arm64, os: ubuntu-24.04-arm }
+          - { name: macos-arm64, os: macos-latest }
+          - { name: macos-x64, os: macos-15-intel }
+          - { name: windows-x64, os: windows-latest }
+          - { name: windows-arm64, os: windows-11-arm }
+    env:
+      VERSION: ${{ needs.plan.outputs.semver }}
+      PYPI_VERSION: ${{ needs.plan.outputs.pypi }}
+      NPM_VERSION: ${{ needs.plan.outputs.npm }}
+      SMOKE_ARTIFACTS: ${{ github.workspace }}/smoke-artifacts
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ needs.plan.outputs.revision }}
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+          package-manager-cache: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release-assets
+          path: smoke-artifacts/release-assets
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: npm-packages
+          path: smoke-artifacts/npm
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: wheels-${{ matrix.name }}
+          path: smoke-artifacts/wheels
+      - name: Smoke test
+        shell: bash
+        run: bash scripts/build/smoke_release.sh platform
+
+  # The builds from source, as on a platform without a wheel or from
+  # crates.io: `pip install` from the sdist with the runner's own Rust, and
+  # `cargo install opentide --features cli` from the crate packages. They
+  # start as soon as `sources` has packed them, off the platforms' tail.
+  smoke-sources:
+    name: Smoke (${{ matrix.kind }})
+    needs: [plan, sources]
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        kind: [sdist, cargo]
+    env:
+      PYPI_VERSION: ${{ needs.plan.outputs.pypi }}
+      CRATES_VERSION: ${{ needs.plan.outputs.crates }}
+      SMOKE_ARTIFACTS: ${{ github.workspace }}/smoke-artifacts
+      KIND: ${{ matrix.kind }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ needs.plan.outputs.revision }}
+      - if: matrix.kind == 'sdist'
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+      # `cargo install` runs the release rust-toolchain.toml pins; the sdist
+      # builds with the runner's own Rust (the sdist leaves the pin out).
+      - name: Set up Rust
+        if: matrix.kind == 'cargo'
+        run: rustup toolchain install --profile minimal --no-self-update
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: ${{ matrix.kind == 'sdist' && 'sdist' || 'crates' }}
+          path: smoke-artifacts/${{ matrix.kind == 'sdist' && 'dist' || 'crates' }}
+      - name: Smoke test
+        run: bash scripts/build/smoke_release.sh "${KIND}"
+
+  # The antivirus gate (#1743), once over every artifact. Nothing is uploaded
+  # to an external scanner: every engine runs here, on signatures the runner
+  # fetched. `av-scan`: no marker string (`moneropool`, `sekurlsa`, `Login
+  # Data`, `Invoke-Mimikatz`, `jndi:ldap`) in plain text, archives opened
+  # (scripts/av/markers.py); each artifact within its size budget
+  # (tests/bench/sizes.toml); the Windows imports listed, none of the key
+  # translation in the language server; section entropy; ClamAV's fresh
+  # signatures on the artifacts and their extracted files
+  # (scripts/av/clamav-scan.sh); YARA, signature-base and protections-artifacts
+  # at pinned commits, with the reviewed allow-list
+  # (scripts/av/yara-allowlist.toml). `av-defender`: Microsoft Defender,
+  # signatures updated, every extracted file (scripts/av/defender-scan.ps1).
+  # A failure fails this workflow, so the caller's `build`: nothing is tagged,
+  # attested or published.
+  av-scan:
+    name: AV gate (markers, sizes, ClamAV, YARA)
+    needs: [plan, assemble]
+    if: inputs.av-gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ needs.plan.outputs.revision }}
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: "{wheels-*,sdist,npm-packages,crates,release-assets}"
+          path: av-artifacts
+          merge-multiple: true
+      - name: Install ClamAV and YARA, fetch the signatures and the rule sets
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq clamav clamav-freshclam clamav-daemon yara
+          sudo systemctl stop clamav-freshclam clamav-daemon.socket clamav-daemon || true
+          sudo freshclam --quiet
+          for database in main daily bytecode; do
+            file="$(find /var/lib/clamav -name "${database}.c[lv]d" | head -n 1)"
+            echo "${file}: $(sigtool --info "${file}" | grep -E '^(Version|Signatures)' | tr '\n' ' ')"
+          done
+          yara --version
+          bash scripts/av/fetch-rules.sh "${RUNNER_TEMP}/yara-rules"
+          python3 -m pip install --quiet pefile==2024.8.26
+      - name: Extract the archives
+        run: python3 scripts/av/extract.py av-artifacts av-extracted
+      - name: Marker strings, sizes, Windows imports, section entropy
+        run: |
+          set -o pipefail
+          ls -l av-artifacts
+          python3 scripts/av/markers.py av-artifacts | tee "${RUNNER_TEMP}/markers.txt"
+          python3 scripts/av/sizes.py av-artifacts | tee "${RUNNER_TEMP}/sizes.txt"
+          python3 scripts/av/pe_imports.py av-extracted | tee "${RUNNER_TEMP}/imports.txt"
+          python3 scripts/av/entropy.py av-extracted | tee "${RUNNER_TEMP}/entropy.txt"
+      - name: ClamAV scan
+        run: bash scripts/av/clamav-scan.sh "${RUNNER_TEMP}/clamav.txt" av-artifacts av-extracted
+      - name: YARA scan
+        run: |
+          set -o pipefail
+          python3 scripts/av/yara_gate.py \
+            --signature-base "${RUNNER_TEMP}/yara-rules/signature-base" \
+            --elastic "${RUNNER_TEMP}/yara-rules/protections-artifacts" \
+            --allowlist scripts/av/yara-allowlist.toml \
+            --report "${RUNNER_TEMP}/yara.txt" \
+            av-extracted
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "### AV gate"
+            echo '```'
+            cat "${RUNNER_TEMP}"/{markers,sizes,imports,entropy,clamav,yara}.txt 2>/dev/null || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  av-defender:
+    name: AV gate (Microsoft Defender)
+    needs: [plan, assemble]
+    if: inputs.av-gate
+    runs-on: windows-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ needs.plan.outputs.revision }}
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: "{wheels-*,sdist,npm-packages,crates,release-assets}"
+          path: av-artifacts
+          merge-multiple: true
+      - name: Extract the archives
+        shell: bash
+        run: python3 scripts/av/extract.py av-artifacts av-extracted
+      - name: Defender
+        shell: pwsh
+        run: ./scripts/av/defender-scan.ps1 -Path av-extracted -Report "$env:RUNNER_TEMP/defender.txt"
+      - name: Summary
+        if: always()
+        shell: pwsh
+        run: |
+          $report = Join-Path $env:RUNNER_TEMP 'defender.txt'
+          "### AV gate: Microsoft Defender" | Out-File -Append $env:GITHUB_STEP_SUMMARY
+          '```' | Out-File -Append $env:GITHUB_STEP_SUMMARY
+          if (Test-Path $report) { Get-Content $report | Out-File -Append $env:GITHUB_STEP_SUMMARY } else { 'no result' | Out-File -Append $env:GITHUB_STEP_SUMMARY }
+          '```' | Out-File -Append $env:GITHUB_STEP_SUMMARY

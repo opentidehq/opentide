@@ -1,0 +1,61 @@
+---
+source: crates/opentide-yaral/src/parser/tests.rs
+expression: "show(\"rule r { setup: graph_override ($a = $b) graph_exclude ($c) graph_append [$g, %t] cross join $a }\")"
+---
+SOURCE_FILE@0..97
+  RULE_DECLARATION@0..97
+    RULE_KW@0..4 "rule"
+    WHITESPACE@4..5 " "
+    RULE_NAME@5..6
+      IDENT@5..6 "r"
+    WHITESPACE@6..7 " "
+    L_BRACE@7..8 "{"
+    WHITESPACE@8..9 " "
+    SETUP_SECTION@9..95
+      SETUP_KW@9..14 "setup"
+      COLON@14..15 ":"
+      WHITESPACE@15..16 " "
+      GRAPH_JOIN@16..40
+        GRAPH_OVERRIDE_KW@16..30 "graph_override"
+        WHITESPACE@30..31 " "
+        L_PAREN@31..32 "("
+        COMPARISON@32..39
+          VARIABLE@32..34
+            VAR_TOKEN@32..34 "$a"
+          WHITESPACE@34..35 " "
+          EQ@35..36 "="
+          WHITESPACE@36..37 " "
+          VARIABLE@37..39
+            VAR_TOKEN@37..39 "$b"
+        R_PAREN@39..40 ")"
+      WHITESPACE@40..41 " "
+      GRAPH_JOIN@41..59
+        GRAPH_EXCLUDE_KW@41..54 "graph_exclude"
+        WHITESPACE@54..55 " "
+        L_PAREN@55..56 "("
+        VARIABLE@56..58
+          VAR_TOKEN@56..58 "$c"
+        R_PAREN@58..59 ")"
+      WHITESPACE@59..60 " "
+      GRAPH_APPEND@60..81
+        GRAPH_APPEND_KW@60..72 "graph_append"
+        WHITESPACE@72..73 " "
+        ARRAY_EXPR@73..81
+          L_BRACK@73..74 "["
+          VARIABLE@74..76
+            VAR_TOKEN@74..76 "$g"
+          COMMA@76..77 ","
+          WHITESPACE@77..78 " "
+          REFERENCE_LIST@78..80
+            REF_LIST_TOKEN@78..80 "%t"
+          R_BRACK@80..81 "]"
+      WHITESPACE@81..82 " "
+      CROSS_JOIN@82..95
+        CROSS_KW@82..87 "cross"
+        WHITESPACE@87..88 " "
+        JOIN_KW@88..92 "join"
+        WHITESPACE@92..93 " "
+        VARIABLE@93..95
+          VAR_TOKEN@93..95 "$a"
+    WHITESPACE@95..96 " "
+    R_BRACE@96..97 "}"

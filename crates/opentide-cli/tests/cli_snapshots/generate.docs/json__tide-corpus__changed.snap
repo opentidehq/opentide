@@ -1,0 +1,43 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: generate.docs/json/tide-corpus/changed
+---
+args: opentide --json generate docs --changed
+exit: 1
+
+━━━ stdout · json, 1 lines
+{
+  "changed_paths": [],
+  "changed_uuids": [],
+  "command": "generate docs",
+  "counts": {
+    "objectives": 0,
+    "rules": 0,
+    "threats": 0
+  },
+  "duration_ms": 0,
+  "error": "--changed could not read the git baseline: changed-object discovery requires a git repository with at least one commit",
+  "exit_code": 1,
+  "failure": {
+    "argument": null,
+    "code": "command_failed",
+    "crash_log": null,
+    "message": "--changed could not read the git baseline: changed-object discovery requires a git repository with at least one commit",
+    "suggestion": null
+  },
+  "message": "--changed could not read the git baseline: changed-object discovery requires a git repository with at least one commit",
+  "next_actions": [],
+  "ok": false,
+  "output": "<WS>/docs",
+  "schema_version": 1,
+  "status": "failed",
+  "summary": {}
+}
+
+━━━ stderr · json, 1 lines
+{
+  "detail": "changed-object discovery requires a git repository with at least one commit",
+  "event": "docs_changed_requires_git",
+  "level": "warning",
+  "timestamp": "0000-00-00 00:00:00"
+}

@@ -1,0 +1,2 @@
+# prod:modified_clause valid
++event.category:process -user.name:SYSTEM !host.name:a

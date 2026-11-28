@@ -1,0 +1,3 @@
+// prod:match_expression valid
+FROM logs-* METADATA _id
+| WHERE message:"failed login"

@@ -1,0 +1,2 @@
+``` prod:assignment valid
+index=main | eval k=host."-".source, "a.b"='c.d', {host}=source

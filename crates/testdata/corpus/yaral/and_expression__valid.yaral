@@ -1,0 +1,2 @@
+// prod:and_expression valid
+$e.metadata.event_type = "USER_LOGIN" AND $e.security_result.action = "BLOCK" aNd $e.target.port > 0

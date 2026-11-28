@@ -1,0 +1,29 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: deploy/json/tide-corpus/typo-choice
+---
+args: opentide --json deploy --strategy PREVEW --dry-run
+exit: 2
+
+━━━ stdout · json, 1 lines
+{
+  "command": "deploy",
+  "duration_ms": 0,
+  "error": "--strategy \"PREVEW\" is not a deployable strategy. Use PREVIEW or RELEASE",
+  "exit_code": 2,
+  "failure": {
+    "argument": "--strategy",
+    "code": "usage_invalid_choice",
+    "crash_log": null,
+    "message": "--strategy \"PREVEW\" is not a deployable strategy. Use PREVIEW or RELEASE",
+    "suggestion": "PREVIEW"
+  },
+  "message": "--strategy \"PREVEW\" is not a deployable strategy. Use PREVIEW or RELEASE",
+  "next_actions": [],
+  "ok": false,
+  "schema_version": 1,
+  "status": "failed",
+  "summary": {}
+}
+
+━━━ stderr · empty

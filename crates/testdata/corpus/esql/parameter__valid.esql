@@ -1,0 +1,3 @@
+// prod:parameter valid
+FROM logs-* METADATA _id
+| WHERE host.name == ?host AND x > ?1

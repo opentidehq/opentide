@@ -1,0 +1,3 @@
+// prod:fork_command valid
+FROM logs-* METADATA _id
+| FORK (WHERE a == 1) (WHERE b == 2 | LIMIT 5)

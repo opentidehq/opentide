@@ -1,0 +1,3 @@
+# Recordings and fixtures are committed whole: no ignore rule of the
+# repository applies below this directory (a recorded build/ or lib/ folder).
+!*

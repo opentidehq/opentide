@@ -1,0 +1,1 @@
+evt.type=bpf and proc.name in (oops and (evt.arg.cmd=5 or evt.arg.cmd=BPF_PROG_LOAD) and not bpf_profiled_procs

@@ -1,0 +1,89 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: rules.unreviewed/json/tide-corpus/default
+---
+args: opentide --json rules unreviewed
+exit: 0
+
+━━━ stdout · json, 1 lines
+{
+  "command": "rules unreviewed",
+  "count": 10,
+  "duration_ms": 0,
+  "evaluated_at": "0000-00-00T00:00:00.000000Z",
+  "exit_code": 0,
+  "failure": null,
+  "message": "10 rules unreviewed for 90 days",
+  "next_actions": [],
+  "ok": true,
+  "rules": [
+    {
+      "path": "objects/rules/rule-0001-sentinel-kql.yaml",
+      "reason": "schema",
+      "reviewed": null,
+      "schema": "rule::1.0"
+    },
+    {
+      "path": "objects/rules/rule-0002-defender-kql.yaml",
+      "reason": "schema",
+      "reviewed": null,
+      "schema": "rule::1.0"
+    },
+    {
+      "path": "objects/rules/rule-0003-splunk-spl.yaml",
+      "reason": "schema",
+      "reviewed": null,
+      "schema": "rule::1.0"
+    },
+    {
+      "path": "objects/rules/rule-0004-sentinel-one-s1ql.yaml",
+      "reason": "schema",
+      "reviewed": null,
+      "schema": "rule::1.0"
+    },
+    {
+      "path": "objects/rules/rule-0005-carbon-black-lucene.yaml",
+      "reason": "schema",
+      "reviewed": null,
+      "schema": "rule::1.0"
+    },
+    {
+      "path": "objects/rules/rule-0006-crowdstrike-deploy-only.yaml",
+      "reason": "schema",
+      "reviewed": null,
+      "schema": "rule::1.0"
+    },
+    {
+      "path": "objects/rules/rule-0007-harfanglab-deploy-only.yaml",
+      "reason": "schema",
+      "reviewed": null,
+      "schema": "rule::1.0"
+    },
+    {
+      "path": "objects/rules/rule-0008-staging-promote.yaml",
+      "reason": "schema",
+      "reviewed": null,
+      "schema": "rule::1.0"
+    },
+    {
+      "path": "objects/rules/rule-0009-elastic-kql.yaml",
+      "reason": "schema",
+      "reviewed": null,
+      "schema": "rule::1.0"
+    },
+    {
+      "path": "objects/rules/rule-0013-sysdig-falco.yaml",
+      "reason": "schema",
+      "reviewed": null,
+      "schema": "rule::1.0"
+    }
+  ],
+  "schema_version": 1,
+  "status": "completed",
+  "summary": {
+    "unreviewed": 10
+  },
+  "window": "90d"
+}
+
+━━━ stderr · empty

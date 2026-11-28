@@ -1,0 +1,4 @@
+// prod:missing_event_open valid
+sequence with maxspan=5m
+  [process where true]
+  ![file where true]

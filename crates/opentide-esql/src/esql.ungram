@@ -1,0 +1,287 @@
+// The tree of an ES|QL query: the named nodes of the tree-sitter grammar
+// (grammars/tree-sitter-opentide-esql/grammar.js) it replaces, one node per
+// named production, with its labels as the grammar's fields. Hidden rules
+// (`_sources`, `_fields`, `_name_patterns`, `_named_parameters`, ...) are
+// written inline where they are used.
+//
+// Quoted names are tokens. Keywords are lower case: the lexer reads every
+// word as `ident` and the parser re-kinds the ones the grammar expects here
+// (ES|QL keywords are contextual). `and`/`or` chains and runs of `+ -` or
+// `* / %` are one flat node; the analysis counts a chain's depth as the
+// tree-sitter engine did (each term one level).
+
+SourceFile = SetCommand* Query?
+
+SetCommand = 'set' name:Identifier '=' value:MapValue ';'
+
+// The first command is the source command: it and the processing commands share
+// the unknown command, so the accessor lists them as one.
+Query = Command ('|' Command)*
+
+Command = SourceCommand | ProcessingCommand
+
+// ---- Source commands -------------------------------------------------------
+
+SourceCommand =
+  FromCommand | TsCommand | RowCommand | ShowCommand | PromqlCommand
+| ExplainCommand | UnknownCommand
+
+FromCommand = 'from' Source (',' Source)* metadata:Metadata?
+
+TsCommand = 'ts' Source (',' Source)* metadata:Metadata?
+
+Source = IndexPattern | SourceSubquery
+
+IndexPattern = (cluster:Cluster ':')? name:IndexName ('::' selector:Selector)?
+
+Cluster = 'source_text'
+
+Selector = 'source_text'
+
+IndexName = 'source_text' | String
+
+SourceSubquery =
+  '(' source:SubquerySource ('|' ProcessingCommand)* ')'
+
+SubquerySource = FromCommand | TsCommand | RowCommand
+
+Metadata =
+  '['? 'metadata' MetadataField (',' MetadataField)* ']'?
+
+MetadataField = 'source_text'
+
+RowCommand = 'row' FieldAssignmentOrExpression (',' FieldAssignmentOrExpression)*
+
+ShowCommand = 'show' 'info'
+
+ExplainCommand = 'explain' '(' query:Query ')'
+
+PromqlCommand = 'promql' (PromqlText | String | '(' | ')')*
+
+PromqlText = 'promql_word'
+
+// ---- Processing commands ---------------------------------------------------
+
+ProcessingCommand =
+  WhereCommand | EvalCommand | KeepCommand | DropCommand | RenameCommand
+| SortCommand | LimitCommand | StatsCommand | InlineStatsCommand
+| DissectCommand | GrokCommand | EnrichCommand | MvExpandCommand | JoinCommand
+| ChangePointCommand | CompletionCommand | SampleCommand | ForkCommand
+| RerankCommand | FuseCommand | UriPartsCommand | RegisteredDomainCommand
+| UserAgentCommand | IpLocationCommand | MetricsInfoCommand | TsInfoCommand
+| TsCollapseCommand | DedupCommand | MmrCommand | HighlightCommand
+| DenseVectorCommand | FillNullCommand | UnknownCommand
+
+WhereCommand = 'where' condition:BooleanExpression
+
+EvalCommand = 'eval' FieldAssignmentOrExpression (',' FieldAssignmentOrExpression)*
+
+KeepCommand = 'keep' NamePattern (',' NamePattern)*
+
+DropCommand = 'drop' NamePattern (',' NamePattern)*
+
+RenameCommand = 'rename' RenameClause (',' RenameClause)*
+
+RenameClause = NamePattern (('as' | '=') NamePattern)*
+
+SortCommand = 'sort' OrderExpression (',' OrderExpression)*
+
+OrderExpression =
+  key:BooleanExpression direction:('asc' | 'desc')? ('nulls' nulls:('first' | 'last'))?
+
+LimitCommand = 'limit' BooleanExpression ('by' BooleanExpression (',' BooleanExpression)*)?
+
+StatsCommand =
+  'stats' (AggregateField (',' AggregateField)*)?
+  ('by' FieldAssignmentOrExpression (',' FieldAssignmentOrExpression)*)?
+
+InlineStatsCommand =
+  ('inline' 'stats' | 'inlinestats') AggregateField (',' AggregateField)*
+  ('by' FieldAssignmentOrExpression (',' FieldAssignmentOrExpression)*)?
+
+// The name, the value and the filter are all expressions by type: the first is the name when an `=` follows.
+AggregateField = BooleanExpression (('=' | 'where') BooleanExpression)*
+
+// The first expression is the name when an `=` follows (a name is an expression by type).
+FieldAssignmentOrExpression = BooleanExpression ('=' BooleanExpression)*
+
+DissectCommand =
+  'dissect' PrimaryExpression PrimaryExpression* (CommandOption (',' CommandOption)*)?
+
+CommandOption = name:Identifier '=' value:Constant
+
+GrokCommand = 'grok' PrimaryExpression (','? PrimaryExpression)*
+
+EnrichCommand =
+  'enrich' policy:EnrichPolicy ('on' match_field:NamePattern)?
+  ('with' EnrichWithClause (',' EnrichWithClause)*)?
+
+EnrichPolicy = String | (mode:EnrichMode ':')? name:PolicyName
+
+EnrichMode = 'policy_part'
+
+PolicyName = 'policy_part'
+
+EnrichWithClause = NamePattern ('=' NamePattern)*
+
+MvExpandCommand = 'mv_expand' field:QualifiedName
+
+JoinCommand =
+  kind:('lookup' | 'left' | 'right' | 'full') 'join' target:IndexPattern
+  ('as'? qualifier:JoinQualifier)? 'on' BooleanExpression (',' BooleanExpression)*
+
+JoinQualifier = 'source_text'
+
+ChangePointCommand = 'change_point' BooleanExpression (('on' | 'as' | ',' | 'by') BooleanExpression)*
+
+CompletionCommand =
+  'completion' PrimaryExpression (('=' | 'with') (PrimaryExpression | Identifier | QuotedIdentifier))* NamedParameters?
+
+NamedParameters = 'with' options:MapExpression
+
+RerankCommand =
+  'rerank' (target:QualifiedName '=')? query:Constant 'on'
+  FieldAssignmentOrExpression (',' FieldAssignmentOrExpression)* NamedParameters?
+
+SampleCommand = 'sample' probability:Constant
+
+ForkCommand = 'fork' ForkBranch*
+
+ForkBranch = '(' ProcessingCommand ('|' ProcessingCommand)* ')'
+
+FuseCommand =
+  'fuse' Identifier? (('score' | 'key' | 'group' | 'by' | ',')* QualifiedName | NamedParameters)*
+
+UriPartsCommand = 'uri_parts' target:QualifiedName '=' input:PrimaryExpression
+
+RegisteredDomainCommand = 'registered_domain' target:QualifiedName '=' input:PrimaryExpression
+
+UserAgentCommand =
+  'user_agent' target:QualifiedName '=' input:PrimaryExpression NamedParameters?
+
+IpLocationCommand =
+  'ip_location' target:QualifiedName '=' input:PrimaryExpression NamedParameters?
+
+MetricsInfoCommand = 'metrics_info'
+
+TsInfoCommand = 'ts_info'
+
+TsCollapseCommand = 'ts_collapse'
+
+DedupCommand = 'dedup'
+
+MmrCommand = 'mmr' PrimaryExpression? (('on' | 'limit') PrimaryExpression)* NamedParameters?
+
+HighlightCommand =
+  'highlight' query:BooleanExpression? ('on' NamePattern (',' NamePattern)*)? NamedParameters?
+
+DenseVectorCommand = 'dense_vector' PrimaryExpression? (('=' | ',') PrimaryExpression)* NamedParameters?
+
+FillNullCommand = 'fillnull' value:Constant 'on' NamePattern (',' NamePattern)*
+
+UnknownCommand = name:CommandName (String | UnknownText)*
+
+CommandName = 'command_word'
+
+UnknownText = 'unknown_word'
+
+// ---- Expressions -----------------------------------------------------------
+
+BooleanExpression =
+  NotExpression | AndExpression | OrExpression | InExpression | IsNullExpression
+| LikeExpression | MatchExpression | ValueExpression
+
+NotExpression = 'not' operand:BooleanExpression
+
+AndExpression = BooleanExpression ('and' BooleanExpression)*
+
+OrExpression = BooleanExpression ('or' BooleanExpression)*
+
+InExpression =
+  (ValueExpression | InTuple) 'not'? 'in'
+  ('(' ValueExpression (',' ValueExpression)* ')' | SourceSubquery)
+
+InTuple = '(' ValueExpression (',' ValueExpression)* ')'
+
+IsNullExpression = operand:ValueExpression 'is' negated:'not'? 'null'
+
+LikeExpression =
+  ValueExpression 'not'? ('like' | 'rlike') '('? ValueExpression (',' ValueExpression)* ')'?
+
+MatchExpression = PrimaryExpression (':' PrimaryExpression)*
+
+ValueExpression = Comparison | OperatorExpression
+
+Comparison =
+  left:OperatorExpression operator:('==' | '!=' | '<' | '<=' | '>' | '>=') right:OperatorExpression
+
+OperatorExpression = UnaryExpression | BinaryExpression | PrimaryExpression
+
+UnaryExpression = operator:('-' | '+') operand:OperatorExpression
+
+BinaryExpression =
+  OperatorExpression (operator:('*' | '/' | '%' | '+' | '-') OperatorExpression)*
+
+PrimaryExpression =
+  Constant | QualifiedName | FunctionCall | ParenthesizedExpression | InlineCast
+
+ParenthesizedExpression = '(' BooleanExpression ')'
+
+InlineCast = value:PrimaryExpression '::' type_name:TypeName
+
+TypeName = Identifier
+
+FunctionCall =
+  (Identifier | BooleanExpression) '('
+  (Star | BooleanExpression (',' BooleanExpression)* (',' MapExpression)?)?
+  ')'
+
+Star = '*'
+
+MapExpression = '{' (MapEntry (',' MapEntry)*)? '}'
+
+MapEntry = key:String ':' value:MapValue
+
+Constant = Null | QualifiedInterval | Number | Boolean | Parameter | String | Array
+
+Null = 'null'
+
+Boolean = 'true' | 'false'
+
+QualifiedInterval = value:Number unit:TimeUnit
+
+TimeUnit = 'ident'
+
+Number = 'number_lit'
+
+Array = '[' ('+' | '-')? (Number | Boolean | String) (',' ('+' | '-')? (Number | Boolean | String))* ']'
+
+String = 'string_lit'
+
+// Choices that are no node of their own in the tree.
+MapValue = Constant | MapExpression
+
+InferenceId = Identifier | QuotedIdentifier | Parameter
+
+InLeft = ValueExpression | InTuple
+
+LikeListItem = String | Parameter
+
+
+// ---- Names -----------------------------------------------------------------
+
+NamePattern = PatternPart ('.' PatternPart)*
+
+PatternPart = IdPattern | QuotedIdentifier | Parameter
+
+IdPattern = 'id_pattern'
+
+QualifiedName = NamePart ('.' NamePart)*
+
+NamePart = Identifier | QuotedIdentifier | Parameter
+
+Identifier = 'ident'
+
+QuotedIdentifier = 'quoted_ident'
+
+Parameter = 'param'

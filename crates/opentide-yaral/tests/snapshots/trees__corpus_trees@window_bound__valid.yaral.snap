@@ -1,0 +1,112 @@
+---
+source: crates/opentide-yaral/tests/trees.rs
+expression: debug_parse(&source)
+input_file: crates/testdata/corpus/yaral/window_bound__valid.yaral
+---
+SOURCE_FILE@0..257
+  COMMENT@0..26 "// prod:window_bound valid"
+  WHITESPACE@26..27 "\n"
+  RULE_DECLARATION@27..256
+    RULE_KW@27..31 "rule"
+    WHITESPACE@31..32 " "
+    RULE_NAME@32..33
+      IDENT@32..33 "r"
+    WHITESPACE@33..34 " "
+    L_BRACE@34..35 "{"
+    WHITESPACE@35..38 "\n  "
+    META_SECTION@38..60
+      META_KW@38..42 "meta"
+      COLON@42..43 ":"
+      WHITESPACE@43..48 "\n    "
+      META_ENTRY@48..60
+        META_KEY@48..54
+          IDENT@48..54 "author"
+        WHITESPACE@54..55 " "
+        EQ@55..56 "="
+        WHITESPACE@56..57 " "
+        LITERAL@57..60
+          STRING@57..60 "\"a\""
+    WHITESPACE@60..63 "\n  "
+    EVENTS_SECTION@63..146
+      EVENTS_KW@63..69 "events"
+      COLON@69..70 ":"
+      WHITESPACE@70..75 "\n    "
+      COMPARISON@75..112
+        UDM_FIELD@75..97
+          VARIABLE@75..77
+            VAR_TOKEN@75..77 "$e"
+          MEMBER@77..86
+            ACCESS_DOT@77..78 "."
+            FIELD_NAME@78..86 "metadata"
+          MEMBER@86..97
+            ACCESS_DOT@86..87 "."
+            FIELD_NAME@87..97 "event_type"
+        WHITESPACE@97..98 " "
+        EQ@98..99 "="
+        WHITESPACE@99..100 " "
+        LITERAL@100..112
+          STRING@100..112 "\"USER_LOGIN\""
+      WHITESPACE@112..117 "\n    "
+      COMPARISON@117..146
+        VARIABLE@117..122
+          VAR_TOKEN@117..122 "$user"
+        WHITESPACE@122..123 " "
+        EQ@123..124 "="
+        WHITESPACE@124..125 " "
+        UDM_FIELD@125..146
+          VARIABLE@125..127
+            VAR_TOKEN@125..127 "$e"
+          MEMBER@127..134
+            ACCESS_DOT@127..128 "."
+            FIELD_NAME@128..134 "target"
+          MEMBER@134..139
+            ACCESS_DOT@134..135 "."
+            FIELD_NAME@135..139 "user"
+          MEMBER@139..146
+            ACCESS_DOT@139..140 "."
+            FIELD_NAME@140..146 "userid"
+    WHITESPACE@146..149 "\n  "
+    MATCH_SECTION@149..174
+      MATCH_KW@149..154 "match"
+      COLON@154..155 ":"
+      WHITESPACE@155..160 "\n    "
+      MATCH_CLAUSE@160..174
+        VARIABLE@160..165
+          VAR_TOKEN@160..165 "$user"
+        WHITESPACE@165..166 " "
+        MATCH_WINDOW@166..174
+          OVER_KW@166..170 "over"
+          WHITESPACE@170..171 " "
+          DURATION@171..174 "10m"
+    WHITESPACE@174..177 "\n  "
+    OUTCOME_SECTION@177..234
+      OUTCOME_KW@177..184 "outcome"
+      COLON@184..185 ":"
+      WHITESPACE@185..190 "\n    "
+      COMPARISON@190..211
+        VARIABLE@190..196
+          VAR_TOKEN@190..196 "$first"
+        WHITESPACE@196..197 " "
+        EQ@197..198 "="
+        WHITESPACE@198..199 " "
+        WINDOW_BOUND@199..211
+          WINDOW_START_KW@199..211 "window_start"
+      WHITESPACE@211..216 "\n    "
+      COMPARISON@216..234
+        VARIABLE@216..221
+          VAR_TOKEN@216..221 "$last"
+        WHITESPACE@221..222 " "
+        EQ@222..223 "="
+        WHITESPACE@223..224 " "
+        WINDOW_BOUND@224..234
+          WINDOW_END_KW@224..234 "window_end"
+    WHITESPACE@234..237 "\n  "
+    CONDITION_SECTION@237..254
+      CONDITION_KW@237..246 "condition"
+      COLON@246..247 ":"
+      WHITESPACE@247..252 "\n    "
+      VARIABLE@252..254
+        VAR_TOKEN@252..254 "$e"
+    WHITESPACE@254..255 "\n"
+    R_BRACE@255..256 "}"
+  WHITESPACE@256..257 "\n"

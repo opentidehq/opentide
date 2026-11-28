@@ -1,0 +1,173 @@
+{
+  "name": "opentide yaral",
+  "opentideHighlightSpec": "0.3.2",
+  "patterns": [
+    {
+      "comment": "capture:comment",
+      "match": "//.*$|(?:^|(?<=[\\s|(\\[{,;]))/\\*[\\s\\S]*?\\*/",
+      "name": "comment.line.opentide"
+    },
+    {
+      "begin": "(?:^|(?<=[\\s|(\\[{,;]))/\\*",
+      "comment": "capture:comment",
+      "end": "\\*/",
+      "name": "comment.line.opentide"
+    },
+    {
+      "comment": "capture:string",
+      "match": "\"(\\\\.|[^\"\\\\])*\"|'(\\\\.|[^'\\\\])*'",
+      "name": "string.quoted.opentide"
+    },
+    {
+      "comment": "capture:number",
+      "match": "\\b[0-9]+(\\.[0-9]+)?\\b",
+      "name": "constant.numeric.opentide"
+    },
+    {
+      "comment": "tm_extras:builtin-call",
+      "match": "(?i)(?<![\\w.$@#:])(?:metrics\\.resource_creation_success|metrics\\.resource_deletion_success|metrics\\.file_executions_success|metrics\\.resource_creation_total|metrics\\.alert_event_name_count|metrics\\.network_bytes_outbound|metrics\\.auth_attempts_success|metrics\\.file_executions_total|metrics\\.network_bytes_inbound|metrics\\.resource_read_success|metrics\\.file_executions_fail|metrics\\.http_queries_success|metrics\\.auth_attempts_total|metrics\\.dns_queries_success|metrics\\.network_bytes_total|metrics\\.auth_attempts_fail|metrics\\.dns_bytes_outbound|metrics\\.http_queries_total|metrics\\.resource_read_fail|metrics\\.dns_queries_total|metrics\\.http_queries_fail|timestamp\\.as_unix_seconds|timestamp\\.current_seconds|timestamp\\.get_day_of_week|metrics\\.dns_queries_fail|optimization\\.sample_rate|strings\\.count_substrings|strings\\.extract_hostname|timestamp\\.get_timestamp|strings\\.extract_domain|arrays\\.index_to_float|strings\\.base64_decode|hash\\.fingerprint2011|net\\.ip_in_range_cidr|timestamp\\.get_minute|arrays\\.index_to_int|arrays\\.index_to_str|strings\\.from_base64|strings\\.starts_with|arrays\\.join_string|math\\.is_increasing|strings\\.url_decode|timestamp\\.get_date|timestamp\\.get_hour|timestamp\\.get_week|math\\.geo_distance|strings\\.ends_with|strings\\.coalesce|strings\\.contains|strings\\.from_hex|strings\\.to_lower|strings\\.to_upper|arrays\\.contains|bytes\\.to_base64|strings\\.reverse|window\\.variance|array_distinct|cast\\.as_string|count_distinct|re\\.capture_all|strings\\.concat|strings\\.length|arrays\\.concat|arrays\\.length|cast\\.as_float|strings\\.ltrim|strings\\.rtrim|strings\\.split|timestamp\\.now|window\\.median|window\\.stddev|cast\\.as_bool|cast\\.as_uint|strings\\.trim|window\\.first|window\\.range|arrays\\.size|cast\\.as_int|hash\\.sha256|math\\.random|window\\.last|window\\.mode|arrays\\.max|arrays\\.min|math\\.floor|math\\.round|re\\.capture|re\\.replace|window\\.avg|math\\.ceil|math\\.sqrt|earliest|math\\.abs|math\\.log|math\\.pow|re\\.regex|latest|stddev|array|count|group|avg|max|min|sum)(?=\\s*\\()",
+      "name": "support.function.opentide"
+    },
+    {
+      "comment": "tm_extras:field",
+      "match": "(?<![\\w.$@#])[$@#]?[A-Za-z_][\\w.]*(?=\\s*(?i:==|!=|=~|!~|<=|>=|:=|=|<|>))",
+      "name": "variable.other.property.opentide"
+    },
+    {
+      "comment": "capture:keyword",
+      "match": "(?i)(?<![A-Za-z0-9_])(?:after|all|and|any|asc|before|by|cidr|condition|cross|dedup|desc|events|every|export|first|graph_append|graph_exclude|graph_override|if|in|join|limit|match|meta|nocase|not|of|options|or|order|outcome|over|regex|rule|select|setup|stage|unselect)(?![A-Za-z0-9_])",
+      "name": "keyword.control.opentide"
+    },
+    {
+      "comment": "capture:operator",
+      "match": "(?i)(?<![A-Za-z0-9_])(?:\\-)(?![A-Za-z0-9_])",
+      "name": "keyword.operator.opentide"
+    },
+    {
+      "comment": "capture:operator",
+      "match": "!",
+      "name": "keyword.operator.opentide"
+    },
+    {
+      "comment": "capture:operator",
+      "match": "!=",
+      "name": "keyword.operator.opentide"
+    },
+    {
+      "comment": "capture:operator",
+      "match": "%",
+      "name": "keyword.operator.opentide"
+    },
+    {
+      "comment": "capture:operator",
+      "match": "\\*",
+      "name": "keyword.operator.opentide"
+    },
+    {
+      "comment": "capture:operator",
+      "match": "\\+",
+      "name": "keyword.operator.opentide"
+    },
+    {
+      "comment": "capture:operator",
+      "match": "/",
+      "name": "keyword.operator.opentide"
+    },
+    {
+      "comment": "capture:operator",
+      "match": "<",
+      "name": "keyword.operator.opentide"
+    },
+    {
+      "comment": "capture:operator",
+      "match": "<=",
+      "name": "keyword.operator.opentide"
+    },
+    {
+      "comment": "capture:operator",
+      "match": "=",
+      "name": "keyword.operator.opentide"
+    },
+    {
+      "comment": "capture:operator",
+      "match": ">",
+      "name": "keyword.operator.opentide"
+    },
+    {
+      "comment": "capture:operator",
+      "match": ">=",
+      "name": "keyword.operator.opentide"
+    },
+    {
+      "comment": "capture:punctuation.bracket",
+      "match": "\\(",
+      "name": "punctuation.bracket.opentide"
+    },
+    {
+      "comment": "capture:punctuation.bracket",
+      "match": "\\)",
+      "name": "punctuation.bracket.opentide"
+    },
+    {
+      "comment": "capture:punctuation.bracket",
+      "match": "\\[",
+      "name": "punctuation.bracket.opentide"
+    },
+    {
+      "comment": "capture:punctuation.bracket",
+      "match": "\\]",
+      "name": "punctuation.bracket.opentide"
+    },
+    {
+      "comment": "capture:punctuation.bracket",
+      "match": "\\{",
+      "name": "punctuation.bracket.opentide"
+    },
+    {
+      "comment": "capture:punctuation.bracket",
+      "match": "\\}",
+      "name": "punctuation.bracket.opentide"
+    },
+    {
+      "comment": "capture:punctuation.delimiter",
+      "match": ",",
+      "name": "punctuation.delimiter.opentide"
+    },
+    {
+      "comment": "capture:punctuation.delimiter",
+      "match": "\\.",
+      "name": "punctuation.delimiter.opentide"
+    },
+    {
+      "comment": "capture:punctuation.delimiter",
+      "match": ":",
+      "name": "punctuation.delimiter.opentide"
+    },
+    {
+      "comment": "tm_extras:placeholder-path",
+      "match": "\\$[A-Za-z_]\\w*(?:\\.[A-Za-z_]\\w*)+",
+      "name": "variable.other.property.opentide"
+    },
+    {
+      "comment": "tm_extras:placeholder",
+      "match": "\\$[A-Za-z_]\\w*",
+      "name": "variable.other.opentide"
+    },
+    {
+      "comment": "tm_extras:boolean",
+      "match": "(?i)(?<![\\w.$@#])(?:true|false)(?![\\w.])",
+      "name": "constant.language.boolean.opentide"
+    },
+    {
+      "comment": "tm_extras:call",
+      "match": "(?<![\\w.$@#:])[A-Za-z_][\\w.]*(?=\\s*\\()",
+      "name": "entity.name.function.opentide"
+    },
+    {
+      "comment": "tm_extras:identifier",
+      "match": "(?<![\\w.$@#])[A-Za-z_]\\w*(?![\\w(])",
+      "name": "variable.other.opentide"
+    }
+  ],
+  "scopeName": "source.yaral"
+}

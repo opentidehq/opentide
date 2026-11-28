@@ -1,0 +1,1 @@
+_Im_NetworkSession(starttime=ago(1d), dstportnumber=22) | where DstPortNumber == 22

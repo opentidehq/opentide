@@ -1,0 +1,191 @@
+# Rust line coverage per crate, against the gates of xtask/coverage.toml (plan
+# §5.4 "Strength", UC-X.2 #844): 90% for opentide-schema, -workspace, -compile
+# and -cli once they exist, 80% for every other workspace member. Python's gate
+# (85%) stays in ci.yml's `test` job.
+#
+# A workflow of its own, not a job of ci.yml: an instrumented build of the whole
+# workspace takes a target directory of its own (target/llvm-cov-target) and a
+# cache of its own, and ci.yml is being restructured by UC-0.3 (#801).
+#
+# In the nightly set (ci.yml's header): nightly and on Run workflow only. Not
+# a required check: it runs on no pull request.
+name: Coverage
+
+on:
+  # Part of the nightly: nightly.yml calls this workflow (ci.yml's `nightly` scope,
+  # .github/AGENTS.md); Run workflow runs it alone. Never on a pull request
+  # or a push, so it never blocks a merge.
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  # A pull request's new push cancels its stale run; every other run (a push
+  # to development, integration/unified-core or main, the nightly, Run
+  # workflow) has a group of its own, its run id, so none cancels another and
+  # each push to a base branch gets a complete run (tests/test_ci/test_workflows.py).
+  group: coverage-${{ github.event_name }}-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  rust:
+    name: Rust coverage gates
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    permissions:
+      contents: read
+    env:
+      CARGO_TERM_COLOR: always
+      # insta compares snapshots and never writes one in CI (crates/AGENTS.md).
+      INSTA_UPDATE: "no"
+    steps:
+      # The instrumented build is three dependency trees in one target
+      # (nextest's, maturin's and the Node addon's, target/<triple>/debug),
+      # kept until the report maps the profiles to them, plus the profiles:
+      # the runner's free disk ran out while the Node addon built (#1896).
+      # The image's toolchains this job never uses (.NET, Android, GHC,
+      # CodeQL's bundle) go first; Python and Node come from the setup
+      # actions below, after this step.
+      - name: Free disk space
+        run: |
+          df -h /
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
+            /usr/local/.ghcup /opt/hostedtoolcache/CodeQL
+          df -h /
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
+        with:
+          enable-cache: true
+
+      # The tests that compare the engine with the Pydantic models run .venv's
+      # interpreter (crates/AGENTS.md, "Tests"), as in ci.yml's `engine` job.
+      - name: Set up Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+
+      # The Node binding's package tests, as ci.yml's `node` job runs them.
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: bindings/node/package-lock.json
+
+      # The release rust-toolchain.toml pins, then the LLVM tools that
+      # cargo-llvm-cov merges the profiles with: an install that names no
+      # toolchain ignores --component (tests/test_ci/test_workflows.py).
+      - name: Set up Rust
+        run: |
+          rustup toolchain install --profile minimal --no-self-update
+          rustup component add llvm-tools-preview
+
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          # Saved by the nightly and pushes to development only (the default
+          # branch, whose caches every pull request reads): a target tree per
+          # integration merge, whose Cargo.lock nearly always changed, evicted
+          # the compiler caches pull requests restore (#841).
+          save-if: ${{ github.event_name == 'schedule' || github.ref == 'refs/heads/development' }}
+          workspaces: . -> target
+          shared-key: coverage
+
+      - uses: taiki-e/install-action@3a3daafd3b7f23b8f65d9f5ba2db203fb59b79e2 # v2.90.2
+        with:
+          # maturin as in ci.yml's `native` job: the version pyproject.toml's
+          # build-system pins.
+          tool: cargo-llvm-cov@0.9.1,cargo-nextest@0.9.148,maturin@1.16.0
+
+      # The CLI's snapshot cases on the generated workspaces (UC-0.6), which
+      # xtask writes: the tests below read where from the environment.
+      - name: Generated workspaces for the CLI snapshots
+        run: |
+          out="$RUNNER_TEMP/generated-workspaces"
+          cargo xtask corpus faults --out "$out/fault"
+          cargo xtask corpus generate --seed 1 --threats 30 --objectives 30 --rules 50 --out "$out/heavy-small"
+          echo "OPENTIDE_REPLAY_FIXTURES=fault=$out/fault,heavy-small=$out/heavy-small" >> "$GITHUB_ENV"
+          echo "OPENTIDE_SNAPSHOT_REQUIRE_GENERATED=1" >> "$GITHUB_ENV"
+
+      # One instrumented build, measured by two suites. cargo-llvm-cov's
+      # show-env exports the instrumentation (a rustc wrapper that instruments
+      # the workspace's crates only) and where each process writes its profile;
+      # `maturin develop` then builds `opentide._native` with it in the `dev`
+      # profile, where the report looks for the objects, so the binding the
+      # Python package loads writes counters too. Not `uv sync`'s build: uv
+      # adds a `build-args` given on its command line to pyproject.toml's
+      # (`--profile develop`), and maturin's backend passes each entry of that
+      # list as one argument, so the build refused `--profile dev` and the
+      # job failed in 30 s.
+      #
+      # - Every Rust test of the workspace, as nextest's `ci` profile runs them.
+      #   Doctests are not measured (cargo-llvm-cov needs nightly for them);
+      #   ci.yml's `engine` job runs them.
+      # - The whole Python suite, unit and end-to-end: the binding's functions
+      #   are wrappers that only Python calls (directly, or through
+      #   opentide.analysis and the CLI), so Rust tests alone measure a
+      #   fraction of opentide-native. Only the GitLab lint tests are left out:
+      #   they need binaries this job does not install, and reach no Rust.
+      # - The Node package's tests, on an addon napi-rs builds in the `dev`
+      #   profile with the same instrumentation: like the PyO3 binding's,
+      #   opentide-node's functions are N-API wrappers (an `Env`, a promise)
+      #   that only JavaScript calls. The tests compare the addon's documents
+      #   with .venv's console script, which `maturin develop` installed.
+      #
+      # One profile per binary, merged online, not one per process: show-env's
+      # default name has `%p`, and every process that loads an instrumented
+      # object writes a whole profile of it (13 MB for the CLI's `--version`).
+      # The Python suite starts thousands (xdist workers, the E2E suite's
+      # console scripts, all loading `_native`), and the runner's disk filled
+      # (#1751). `%4m` is LLVM's pool of four files per binary, which the
+      # profiler runtime merges into under a file lock; the report merges
+      # every target/*.profraw whatever its name.
+      - name: Instrumented tests (Rust, and Python through the binding)
+        env:
+          LLVM_PROFILE_FILE_NAME: opentide-%4m.profraw
+        run: |
+          eval "$(cargo llvm-cov show-env --sh)"
+          cargo llvm-cov clean --workspace
+          uv sync --group dev --no-install-project
+          VIRTUAL_ENV="$PWD/.venv" maturin develop --uv --locked --profile dev
+          cargo nextest run --workspace --locked --profile ci
+          uv run --no-sync pytest tests/ -q --no-cov -p no:cacheprovider -n 4 \
+            -m "not gitlab_ci_lint"
+          OPENTIDE_BUILD_VERSION="$(python3 scripts/engine/release.py version)"
+          export OPENTIDE_BUILD_VERSION
+          (cd bindings/node && npm ci && node build.mjs && node --test test/*.test.mjs)
+
+      # The report reads the profiles where show-env pointed them (target/,
+      # not cargo-llvm-cov's own target/llvm-cov-target): the same exports.
+      # `--target` the host's triple: napi-rs builds the Node addon with
+      # `--target` (target/<triple>/debug), and the report maps profiles to
+      # the objects it finds, there and in target/debug only when it is given
+      # the triple; without it the Node tests' counters matched no object.
+      - name: Coverage reports
+        run: |
+          eval "$(cargo llvm-cov show-env --sh)"
+          host="$(rustc -vV | sed -n 's/^host: //p')"
+          cargo llvm-cov report --target "$host" --json --summary-only --output-path target/coverage.json
+          cargo llvm-cov report --target "$host" --lcov --output-path target/lcov.info
+
+      # One row per crate in the job summary; fails when a crate is below its
+      # gate, when the policy loosens one, or when a member measured nothing.
+      - name: Gate per crate
+        run: |
+          set -o pipefail
+          cargo xtask coverage gate --report target/coverage.json | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload the LCOV report
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: rust-coverage
+          path: |
+            target/lcov.info
+            target/coverage.json
+          if-no-files-found: ignore
+          retention-days: 14

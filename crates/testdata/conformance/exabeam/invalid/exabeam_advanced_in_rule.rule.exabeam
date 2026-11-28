@@ -1,0 +1,1 @@
+SELECT user, COUNT(*) AS logins WHERE activity_type:"app-login" GROUP-BY user

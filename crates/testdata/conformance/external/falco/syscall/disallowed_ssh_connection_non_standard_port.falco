@@ -1,0 +1,1 @@
+outbound and proc.exe endswith ssh and fd.l4proto=tcp and ssh_non_standard_ports_network

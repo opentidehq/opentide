@@ -1,0 +1,1 @@
+index=main | lookup dnslookup clientip AS src OUTPUTNEW clienthost AS h, clientip

@@ -1,0 +1,3 @@
+// prod:parameter invalid
+FROM logs-* METADATA _id
+| WHERE host.name == ?-

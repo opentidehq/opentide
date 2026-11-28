@@ -1,0 +1,13 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: validate/plain/fault/ci-sink-github
+---
+args: opentide validate
+exit: 1
+view: diagnostics (code, severity, file, line, column and counts; a warning's text; log events by name; no other message text)
+
+━━━ stdout · text, not held
+
+━━━ stderr · text, not held
+
+━━━ tmp/github-step-summary.md · created 0644

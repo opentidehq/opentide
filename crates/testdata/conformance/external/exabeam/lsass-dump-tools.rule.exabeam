@@ -1,0 +1,3 @@
+activity_type:"process-create"
+AND (process_command_line:WLDi("*comsvcs.dll*MiniDump*") OR process_command_line:WLDi("*procdump*lsass*"))
+AND NOT user:"`SYSTEM`"

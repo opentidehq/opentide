@@ -1,0 +1,33 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: setup.skills.show/json/none/catalogue-remote
+---
+args: opentide --json setup skills show mitre-attack
+exit: 0
+
+━━━ stdout · json, 1 lines
+{
+  "command": "setup skills show",
+  "duration_ms": 0,
+  "exit_code": 0,
+  "failure": null,
+  "install_hint": "opentide setup skills --install mitre-attack --generic --yes",
+  "manifest_refreshed": false,
+  "manifest_source": "remote",
+  "message": "Completed successfully",
+  "next_actions": [],
+  "ok": true,
+  "schema_version": 1,
+  "skill": {
+    "description": "MITRE ATT&CK mapping discipline and technique reference for opentide threats, objectives and detection rules — technique vs sub-technique selection, tactic assignment, multi-technique chaining, version pinning, revocation handling, coverage gap analysis, platform matrix awareness, and a locally searchable technique index. Use when populating threat.att&ck fields in threats, mapping objective signals to techniques, tagging detection rules, assessing detection coverage against the ATT&CK matrix, or looking up technique IDs and descriptions.",
+    "installed": false,
+    "name": "mitre-attack",
+    "path": ".agents/skills/mitre-attack/",
+    "slug": "mitre-attack"
+  },
+  "source": "opentidehq/skills@main",
+  "status": "completed",
+  "summary": {}
+}
+
+━━━ stderr · empty

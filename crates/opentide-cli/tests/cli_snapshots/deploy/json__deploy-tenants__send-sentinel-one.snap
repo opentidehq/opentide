@@ -1,0 +1,166 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: deploy/json/deploy-tenants/send-sentinel-one
+---
+args: opentide --json deploy --platform sentinel_one --strategy PREVIEW --strategy RELEASE --all --keep-deprecated
+exit: 1
+
+━━━ stdout · json, 1 lines
+{
+  "changes": [
+    {
+      "action": "create",
+      "name": "SentinelOne create rule",
+      "platform": "sentinel_one",
+      "status": "STAGING",
+      "tenant": "lab",
+      "uuid": "00000000-0000-4000-8047-000000000011"
+    },
+    {
+      "action": "delete",
+      "name": "SentinelOne retire rule",
+      "platform": "sentinel_one",
+      "status": "REMOVED",
+      "tenant": "lab",
+      "uuid": "00000000-0000-4000-8047-000000000012"
+    },
+    {
+      "action": "disable",
+      "name": "SentinelOne disable rule never deployed",
+      "platform": "sentinel_one",
+      "status": "DISABLED",
+      "tenant": "lab",
+      "uuid": "00000000-0000-4000-8047-000000000013"
+    },
+    {
+      "action": "update",
+      "name": "SentinelOne update rule",
+      "platform": "sentinel_one",
+      "status": "STAGING",
+      "tenant": "lab",
+      "uuid": "00000000-0000-4000-8047-000000000014"
+    }
+  ],
+  "command": "deploy",
+  "deployed": [
+    "sentinel_one"
+  ],
+  "dry_run": false,
+  "duration_ms": 0,
+  "error": "Deployment to sentinel_one failed on SentinelOne update rule: sentinel_one_rule_not_found: could not update the rule on tenant 'lab': SentinelOne has no such rule (HTTP 404): {\"errors\": [{\"code\": 4040010, \"title\": \"Not Found\", \"detail\": \"Rule 1800000000000000014 not found\"}]}. Check in the SentinelOne console whether the rule still exists. If not, remove its sentinel_one entry from the rule's deployment state in .opentide/states/deployment/",
+  "exit_code": 1,
+  "failure": {
+    "argument": null,
+    "code": "issues_found",
+    "crash_log": null,
+    "message": "Deployment to sentinel_one failed on SentinelOne update rule: sentinel_one_rule_not_found: could not update the rule on tenant 'lab': SentinelOne has no such rule (HTTP 404): {\"errors\": [{\"code\": 4040010, \"title\": \"Not Found\", \"detail\": \"Rule 1800000000000000014 not found\"}]}. Check in the SentinelOne console whether the rule still exists. If not, remove its sentinel_one entry from the rule's deployment state in .opentide/states/deployment/",
+    "suggestion": null
+  },
+  "failures": [
+    {
+      "error": "sentinel_one_rule_not_found: could not update the rule on tenant 'lab': SentinelOne has no such rule (HTTP 404): {\"errors\": [{\"code\": 4040010, \"title\": \"Not Found\", \"detail\": \"Rule 1800000000000000014 not found\"}]}. Check in the SentinelOne console whether the rule still exists. If not, remove its sentinel_one entry from the rule's deployment state in .opentide/states/deployment/",
+      "id": "00000000-0000-4000-8047-000000000014",
+      "name": "SentinelOne update rule",
+      "platform": "sentinel_one",
+      "tenant": "lab"
+    }
+  ],
+  "message": "Deployment failed · 1 created, 1 deleted, 1 skipped, 1 failed, 0 not attempted · <SECONDS>",
+  "next_actions": [],
+  "ok": false,
+  "plan": {
+    "sentinel_one": [
+      "00000000-0000-4000-8047-000000000011",
+      "00000000-0000-4000-8047-000000000012",
+      "00000000-0000-4000-8047-000000000013",
+      "00000000-0000-4000-8047-000000000014"
+    ]
+  },
+  "results": [
+    {
+      "action": "disable",
+      "error": null,
+      "id": "00000000-0000-4000-8047-000000000013",
+      "name": "SentinelOne disable rule never deployed",
+      "platform": "sentinel_one",
+      "reason": "rule 00000000-0000-4000-8047-000000000013 has no sentinel_one id for tenant \"lab\" in <WS>/.opentide/states/deployment/00000000-0000-4000-8047-000000000013.json, so nothing is known to exist on that tenant and there is nothing to disablement. If a remote copy exists, it must be removed by hand.",
+      "seconds": 0.0,
+      "status": "skipped",
+      "tenant": "lab"
+    },
+    {
+      "action": "create",
+      "error": null,
+      "id": "00000000-0000-4000-8047-000000000011",
+      "name": "SentinelOne create rule",
+      "platform": "sentinel_one",
+      "reason": null,
+      "seconds": 0.0,
+      "status": "deployed",
+      "tenant": "lab"
+    },
+    {
+      "action": "delete",
+      "error": null,
+      "id": "00000000-0000-4000-8047-000000000012",
+      "name": "SentinelOne retire rule",
+      "platform": "sentinel_one",
+      "reason": null,
+      "seconds": 0.0,
+      "status": "deployed",
+      "tenant": "lab"
+    },
+    {
+      "action": "update",
+      "error": "sentinel_one_rule_not_found: could not update the rule on tenant 'lab': SentinelOne has no such rule (HTTP 404): {\"errors\": [{\"code\": 4040010, \"title\": \"Not Found\", \"detail\": \"Rule 1800000000000000014 not found\"}]}. Check in the SentinelOne console whether the rule still exists. If not, remove its sentinel_one entry from the rule's deployment state in .opentide/states/deployment/",
+      "id": "00000000-0000-4000-8047-000000000014",
+      "name": "SentinelOne update rule",
+      "platform": "sentinel_one",
+      "reason": null,
+      "seconds": 0.0,
+      "status": "failed",
+      "tenant": "lab"
+    }
+  ],
+  "schema_version": 1,
+  "status": "failed",
+  "strategies": [
+    "PREVIEW",
+    "RELEASE"
+  ],
+  "summary": {
+    "create": 1,
+    "delete": 1,
+    "disable": 0,
+    "failed": 1,
+    "not_attempted": 0,
+    "platforms": 1,
+    "seconds": 0.0,
+    "skipped": 1,
+    "tenants": 1,
+    "unchanged": 0,
+    "update": 0,
+    "upsert": 0
+  },
+  "warnings": [
+    "Some rules reported deployment warnings"
+  ]
+}
+
+━━━ stderr
+{"detail":"rule 00000000-0000-4000-8047-000000000013 has no sentinel_one id for tenant \"***\" in <WS>/.opentide/states/deployment/00000000-0000-4000-8047-000000000013.json, so nothing is known to exist on that tenant and there is nothing to disablement. If a remote copy exists, it must be removed by hand.","code":"external_id_missing","uuid":"00000000-0000-4000-8047-000000000013","platform":"sentinel_one","tenant":"***","event":"external_id_missing","level":"warning","timestamp":"0000-00-00 00:00:00"}
+{"uuid":"00000000-0000-4000-8047-000000000011","platform":"sentinel_one","tenant":"***","external_id":"1900000000000000001","event":"external_id_recorded","level":"warning","timestamp":"0000-00-00 00:00:00"}
+{"detail":"{\"errors\": [{\"code\": 4040010, \"title\": \"Not Found\", \"detail\": \"Rule 1800000000000000014 not found\"}]}","advice":"Check in the SentinelOne console whether the rule still exists. If not, remove its sentinel_one entry from the rule's deployment state in .opentide/states/deployment/","event":"fatal_error","level":"critical","timestamp":"0000-00-00 00:00:00"}
+
+━━━ ws/.opentide/states/deployment/00000000-0000-4000-8047-000000000011.json · created 0644
+{
+  "object_uuid": "00000000-0000-4000-8047-000000000011",
+  "platforms": {
+    "sentinel_one": {
+      "lab": "1900000000000000001"
+    }
+  },
+  "schema": "deployment.state::1.0"
+}
+
+━━━ ws/.opentide/states/deployment/00000000-0000-4000-8047-000000000012.json · deleted

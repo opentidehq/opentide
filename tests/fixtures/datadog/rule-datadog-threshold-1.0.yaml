@@ -1,0 +1,50 @@
+# The complete block of the RFC (docs/internal/rfc-datadog-cloud-siem.md
+# §5.2), whose first deploy sends the body of §7.2.
+name: Okta brute force followed by a successful login
+metadata:
+  uuid: 2b0d7c1e-0b55-4f0e-9d0b-3c0f2a8f9a11
+  schema: rule::1.0
+  version: 1
+  created: "2026-11-26"
+  modified: "2026-11-26"
+  tlp: clear
+  author: Detection Engineering
+description: |
+  One user fails to log in to Okta more than ten times in five minutes,
+  then logs in successfully.
+techniques:
+  - T1110.001
+response:
+  alert_severity: High
+configurations:
+  datadog:
+    schema: platform::datadog::1.0
+    enabled: true
+    status: PRODUCTION
+    queries:
+      - name: failed
+        query: |
+          source:okta @evt.name:user.session.start @evt.outcome:FAILURE
+        from: logs
+        group_by: ["@usr.email"]
+      - name: success
+        query: |
+          source:okta @evt.name:user.session.start @evt.outcome:SUCCESS
+        group_by: ["@usr.email"]
+    detection:
+      method: threshold
+      window: 5m
+    cases:
+      - name: brute force then success
+        condition: failed > 10 && success > 0
+        severity: high
+        notify: [soc]
+    signal:
+      group_by: ["@usr.email"]
+      keep_alive: 1h
+      max_duration: 1d
+      downgrade_non_production: true
+      group_in_notification_title: true
+    message: |
+      {{@usr.email}} failed to log in {{events_matched_per_query.failed}} times, then succeeded.
+    tags: ["team:identity"]

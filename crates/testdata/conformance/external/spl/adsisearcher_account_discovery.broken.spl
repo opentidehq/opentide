@@ -1,0 +1,11 @@
+`powershell` EventCode=4104 ScriptBlockText = "*[adsisearcher]*" ScriptBlockText = "*objectcategory=user*" ScriptBlockText = "*.findAll()*"
+  | fillnull
+  | notacommand count min(_time) as firstTime max(_time) as lastTime
+    BY dest signature signature_id
+       user_id vendor_product EventID
+       Guid Opcode Name
+       Path ProcessID ScriptBlockId
+       ScriptBlockText
+  | `security_content_ctime(firstTime)`
+  | `security_content_ctime(lastTime)`
+  | `adsisearcher_account_discovery_filter`

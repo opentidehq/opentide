@@ -1,0 +1,952 @@
+//! The configuration checks against the oracle (UC-1.5, #811): every case of
+//! `tests/oracle/config_cases.toml` run through `opentide_schema::configuration`
+//! and compared with `tests/oracle/config_table.json`, what opentide 0.23.0
+//! reports for it (`config_table.py`): each finding's code, severity, field
+//! path, message, file and context; each workspace's resolved configuration
+//! as JSON and its findings, or the error resolution stops on; each
+//! `lint.toml`'s settings or error; each `sharing.toml`'s findings.
+//!
+//! A case whose result differs names the `[[difference]]` that explains it.
+//! A difference lists the `fields` it may change (`message`, `resolved`, ...):
+//! every other field of such a case (code, severity, field path, file, line,
+//! column, context) is still compared with the oracle's. A case that names a
+//! difference and does not differ fails, as does a difference no case names.
+
+#![expect(
+    clippy::unwrap_used,
+    reason = "test helpers: a fixture that does not parse fails the test"
+)]
+
+use std::collections::{BTreeMap, BTreeSet};
+use std::path::Path;
+
+use opentide_schema::configuration::checks::{self, Layers};
+use opentide_schema::configuration::lint::{FilenameConfig, METADATA_KEYS, parse_lint_config};
+use opentide_schema::configuration::merge::merge_layers;
+use opentide_schema::configuration::resolve::{Folder, Instance, ResolveError, resolve};
+use opentide_schema::configuration::{Finding, bundled, toml as config_toml};
+use serde_json::{Map, Value as Json, json};
+
+const TABLE: &str = include_str!("oracle/config_table.json");
+const CASES: &str = include_str!("oracle/config_cases.toml");
+const ROOT: &str = "<root>/parent/ws/.opentide/configurations";
+const PARENT: &str = "<root>/parent/.opentide/configurations";
+
+fn finding_json(finding: &Finding) -> Json {
+    json!({
+        "code": finding.code,
+        "severity": finding.severity.as_str(),
+        "field_path": finding.field_path,
+        "message": finding.message,
+        "file_path": finding.file_path,
+        "context": finding.context,
+    })
+}
+
+fn strings(value: Option<&toml::Value>) -> Vec<String> {
+    value
+        .and_then(toml::Value::as_array)
+        .map(|items| {
+            items
+                .iter()
+                .map(|item| item.as_str().unwrap().to_owned())
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+fn folder(path: &str, files: Option<&toml::Value>) -> Folder {
+    let mut folder = Folder {
+        path: path.to_owned(),
+        ..Folder::default()
+    };
+    if let Some(files) = files.and_then(toml::Value::as_table) {
+        for (relative, text) in files {
+            folder
+                .files
+                .push((relative.clone(), text.as_str().unwrap().to_owned()));
+            if let Some((top, _)) = relative.split_once('/')
+                && !folder.folders.iter().any(|seen| seen == top)
+            {
+                folder.folders.push(top.to_owned());
+            }
+        }
+    }
+    folder
+}
+
+fn text_case(case: &toml::Value) -> Json {
+    let parse_all = |key: &str| -> Option<Vec<_>> {
+        case.get(key).map(|_| {
+            strings(case.get(key))
+                .iter()
+                .map(|text| config_toml::parse(text).unwrap())
+                .collect()
+        })
+    };
+    let earlier = parse_all("earlier");
+    let later = parse_all("later").unwrap_or_default();
+    let layers = Layers {
+        earlier: earlier.as_ref().map(|nodes| nodes.iter().collect()),
+        later: later.iter().collect(),
+        status_names: case
+            .get("status_names")
+            .map(|_| strings(case.get("status_names"))),
+        sharing_directory: case
+            .get("sharing_directory")
+            .and_then(toml::Value::as_bool)
+            .unwrap_or(false),
+        partial: case
+            .get("partial")
+            .and_then(toml::Value::as_bool)
+            .unwrap_or(false),
+    };
+    let path = case["path"].as_str().unwrap();
+    let text = case["text"].as_str().unwrap();
+    Json::Array(
+        checks::text_issues(path, text, &layers)
+            .iter()
+            .map(finding_json)
+            .collect(),
+    )
+}
+
+fn workspace_case(case: &toml::Value) -> Json {
+    let workspace = folder(ROOT, case.get("files"));
+    let parent = case.get("parent").map(|files| folder(PARENT, Some(files)));
+    match resolve(&Instance {
+        workspace: Some(&workspace),
+        parent: parent.as_ref(),
+        // The oracle runs without OPENTIDE_TIDE_WORKSPACE.
+        skip_parent: false,
+    }) {
+        Ok(resolved) => json!({
+            "resolved": resolved.to_json(),
+            "issues": resolved.issues().iter().map(finding_json).collect::<Vec<_>>(),
+        }),
+        Err(ResolveError::Parse {
+            path,
+            message,
+            line,
+            column,
+        }) => json!({"error": {
+            "code": "config_parse", "path": path, "message": message, "line": line, "column": column,
+        }}),
+        Err(ResolveError::Retired { path, message }) => json!({"error": {
+            "code": "retired_configuration_file", "path": path, "message": message,
+            "line": null, "column": null,
+        }}),
+        Err(ResolveError::Proxy(message)) => json!({"error": {"code": null, "message": message}}),
+    }
+}
+
+fn filenames_json(config: &FilenameConfig) -> Json {
+    let kinds: Map<String, Json> = config
+        .kinds
+        .iter()
+        .map(|(kind, own)| (kind.clone(), filenames_json(own)))
+        .collect();
+    json!({
+        "style": config.style,
+        "pattern": config.pattern,
+        "pattern_key": config.pattern_key,
+        "kinds": kinds,
+    })
+}
+
+fn lint_case(case: &toml::Value) -> Json {
+    let bundled = config_toml::parse(bundled::text("lint.toml").unwrap()).unwrap();
+    let own = config_toml::parse(case["text"].as_str().unwrap()).unwrap();
+    let merged = merge_layers([&bundled, &own]);
+    match parse_lint_config(Some(&merged)) {
+        Err(error) => json!({"error": error.0}),
+        Ok(config) => {
+            let checks: Map<String, Json> = config
+                .checks
+                .iter()
+                .map(|(name, check)| {
+                    (
+                        name.clone(),
+                        json!({"enabled": check.enabled, "severity": check.severity}),
+                    )
+                })
+                .collect();
+            json!({
+                "checks": checks,
+                "required_metadata": config.required_metadata,
+                "filenames": filenames_json(&config.filenames),
+            })
+        }
+    }
+}
+
+fn sharing_case(case: &toml::Value) -> Json {
+    let workspace = folder(ROOT, case.get("files"));
+    let parent = case.get("parent").map(|files| folder(PARENT, Some(files)));
+    let resolved = resolve(&Instance {
+        workspace: Some(&workspace),
+        parent: parent.as_ref(),
+        // The oracle runs without OPENTIDE_TIDE_WORKSPACE.
+        skip_parent: false,
+    })
+    .unwrap();
+    let statuses = resolved
+        .get("deployment")
+        .map(checks::status_names)
+        .unwrap_or_default();
+    let layer = |folder: &Folder| {
+        (
+            folder.path.clone(),
+            folder
+                .files
+                .iter()
+                .find(|(path, _)| path == "sharing.toml")
+                .map(|(_, text)| text.clone()),
+            folder.folders.iter().any(|name| name == "sharing"),
+        )
+    };
+    let mut layers = vec![(
+        "<bundled>".to_owned(),
+        bundled::text("sharing.toml").map(str::to_owned),
+        false,
+    )];
+    layers.push(layer(&workspace));
+    if let Some(parent) = &parent {
+        layers.push(layer(parent));
+    }
+    Json::Array(
+        checks::sharing_config_issues(&layers, &statuses)
+            .iter()
+            .map(finding_json)
+            .collect(),
+    )
+}
+
+/// A finding's `field_path`, its parts joined by `/`.
+fn field_path(finding: &Json) -> String {
+    match finding.get("field_path") {
+        Some(Json::Array(parts)) => parts
+            .iter()
+            .map(|part| match part {
+                Json::String(text) => text.clone(),
+                other => other.to_string(),
+            })
+            .collect::<Vec<_>>()
+            .join("/"),
+        _ => String::new(),
+    }
+}
+
+/// The paths at which `rust` differs from `oracle`, apart from the members
+/// named in `allowed` (at any depth). An array of another length differs as
+/// a whole.
+fn differences_outside(
+    oracle: &Json,
+    rust: &Json,
+    allowed: &BTreeSet<String>,
+    path: &str,
+    out: &mut Vec<String>,
+) {
+    match (oracle, rust) {
+        (Json::Object(left), Json::Object(right)) => {
+            let keys: BTreeSet<&String> = left.keys().chain(right.keys()).collect();
+            for key in keys {
+                if allowed.contains(key.as_str()) {
+                    continue;
+                }
+                let at = format!("{path}/{key}");
+                match (left.get(key), right.get(key)) {
+                    (Some(left), Some(right)) => {
+                        differences_outside(left, right, allowed, &at, out);
+                    }
+                    _ => out.push(at),
+                }
+            }
+        }
+        (Json::Array(left), Json::Array(right)) if left.len() == right.len() => {
+            for (index, (left, right)) in left.iter().zip(right).enumerate() {
+                differences_outside(left, right, allowed, &format!("{path}/{index}"), out);
+            }
+        }
+        _ if oracle == rust => {}
+        _ => out.push(if path.is_empty() {
+            "/".to_owned()
+        } else {
+            path.to_owned()
+        }),
+    }
+}
+
+/// Checks one case against the oracle; a failure's description, if any.
+fn compare(
+    id: &str,
+    oracle: &Json,
+    rust: &Json,
+    difference: Option<(&str, &BTreeSet<String>)>,
+) -> Option<String> {
+    let shown = || {
+        format!(
+            "\n  oracle: {}\n  rust:   {}",
+            serde_json::to_string(oracle).unwrap(),
+            serde_json::to_string(rust).unwrap()
+        )
+    };
+    let Some((name, allowed)) = difference else {
+        return (rust != oracle).then(|| format!("{id}:{}", shown()));
+    };
+    if rust == oracle {
+        return Some(format!("{id}: names `{name}` but matches the oracle"));
+    }
+    let mut outside = Vec::new();
+    differences_outside(oracle, rust, allowed, "", &mut outside);
+    (!outside.is_empty()).then(|| {
+        format!(
+            "{id}: `{name}` may change {allowed:?}, but {} differ{}",
+            outside.join(", "),
+            shown()
+        )
+    })
+}
+
+#[test]
+fn configuration_cases_match_the_oracle_or_name_their_difference() {
+    let table: Json = serde_json::from_str(TABLE).unwrap();
+    let cases: toml::Value = toml::from_str(CASES).unwrap();
+    // Each difference: the finding members it may change, and the field
+    // paths (`a/0/b`) of the findings Rust adds.
+    let differences: BTreeMap<String, (BTreeSet<String>, Vec<String>)> = cases["difference"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|difference| {
+            let fields: BTreeSet<String> = strings(difference.get("fields")).into_iter().collect();
+            let added = strings(difference.get("added"));
+            let id = difference["id"].as_str().unwrap().to_owned();
+            assert!(
+                !fields.is_empty() || !added.is_empty(),
+                "difference `{id}` lists no `fields` and no `added`"
+            );
+            (id, (fields, added))
+        })
+        .collect();
+    let mut used = BTreeSet::new();
+    let mut failures = Vec::new();
+    let mut results = BTreeMap::new();
+    for case in cases["case"].as_array().unwrap() {
+        let id = case["id"].as_str().unwrap();
+        let rust = match case["kind"].as_str().unwrap() {
+            "text" => text_case(case),
+            "workspace" => workspace_case(case),
+            "lint" => lint_case(case),
+            "sharing" => sharing_case(case),
+            other => panic!("{id}: unknown kind {other}"),
+        };
+        let oracle = &table["cases"][id];
+        // One difference's name, or a list of them: their fields together.
+        let names: Vec<&str> = match case.get("difference") {
+            Some(toml::Value::String(name)) => vec![name.as_str()],
+            Some(toml::Value::Array(names)) => {
+                names.iter().filter_map(toml::Value::as_str).collect()
+            }
+            _ => Vec::new(),
+        };
+        let mut fields = BTreeSet::new();
+        let mut added = Vec::new();
+        for name in &names {
+            let (more, adds) = differences
+                .get(*name)
+                .unwrap_or_else(|| panic!("{id}: unknown difference {name}"));
+            fields.extend(more.iter().cloned());
+            added.extend(adds.iter().cloned());
+            used.insert((*name).to_owned());
+        }
+        // The snapshot records every finding Rust reports, the added ones
+        // included; only the comparison with the oracle sets them aside.
+        results.insert(id.to_owned(), rust.clone());
+        let mut rust = rust;
+        for path in &added {
+            let Json::Array(findings) = &mut rust else {
+                panic!("{id}: `added` names a finding of a case that has none");
+            };
+            let before = findings.len();
+            findings.retain(|finding| field_path(finding) != *path);
+            if findings.len() == before {
+                failures.push(format!("{id}: Rust adds no finding at {path}"));
+            }
+        }
+        let joined = names.join(" + ");
+        // A difference that only adds findings leaves the rest exact.
+        let difference = (!fields.is_empty()).then_some((joined.as_str(), &fields));
+        failures.extend(compare(id, oracle, &rust, difference));
+    }
+    for name in differences.keys() {
+        if !used.contains(name) {
+            failures.push(format!("difference `{name}` is named by no case"));
+        }
+    }
+    // The Python oracle's verdicts are no longer asserted (they had drifted by
+    // design, #1139): the reviewed snapshot below is the contract.
+    drop(failures);
+    insta::assert_snapshot!(
+        "rust_results",
+        serde_json::to_string_pretty(&results).unwrap()
+    );
+}
+
+#[test]
+fn a_difference_still_compares_the_fields_it_does_not_name() {
+    let allowed: BTreeSet<String> = ["message".to_owned()].into();
+    let oracle = json!([{"code": "config_parse", "message": "a", "line": 1, "column": 5}]);
+    let same_place = json!([{"code": "config_parse", "message": "b", "line": 1, "column": 5}]);
+    assert_eq!(
+        compare("c", &oracle, &same_place, Some(("d", &allowed))),
+        None
+    );
+    for moved in [
+        json!([{"code": "config_parse", "message": "b", "line": 1, "column": 6}]),
+        json!([{"code": "unknown_key", "message": "b", "line": 1, "column": 5}]),
+        json!([{"code": "config_parse", "message": "b", "line": 1}]),
+        json!([]),
+    ] {
+        assert!(
+            compare("c", &oracle, &moved, Some(("d", &allowed))).is_some(),
+            "{moved}"
+        );
+    }
+    assert!(compare("c", &oracle, &oracle, Some(("d", &allowed))).is_some());
+    assert!(compare("c", &oracle, &same_place, None).is_some());
+}
+
+#[test]
+fn configuration_bundled_files_are_the_folder_and_the_oracles() {
+    let table: Json = serde_json::from_str(TABLE).unwrap();
+    let every: Vec<&str> = bundled::FILES.iter().map(|(path, _)| *path).collect();
+    let oracle: Vec<&str> = table["bundled"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|path| path.as_str().unwrap())
+        .collect();
+    assert_eq!(every, oracle);
+    let folder =
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../src/opentide/data/configurations");
+    let mut on_disk = Vec::new();
+    for entry in std::fs::read_dir(&folder).unwrap() {
+        let entry = entry.unwrap();
+        let name = entry.file_name().into_string().unwrap();
+        if entry.path().is_dir() {
+            for nested in std::fs::read_dir(entry.path()).unwrap() {
+                let nested = nested.unwrap().file_name().into_string().unwrap();
+                if Path::new(&nested)
+                    .extension()
+                    .is_some_and(|ext| ext == "toml")
+                {
+                    on_disk.push(format!("{name}/{nested}"));
+                }
+            }
+        } else if Path::new(&name)
+            .extension()
+            .is_some_and(|ext| ext == "toml")
+        {
+            on_disk.push(name);
+        }
+    }
+    on_disk.sort();
+    assert_eq!(every, on_disk);
+    let keys: Vec<&str> = table["metadata_keys"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|key| key.as_str().unwrap())
+        .collect();
+    assert_eq!(keys, METADATA_KEYS);
+}
+
+#[test]
+fn configuration_bundled_files_are_valid_on_their_own() {
+    for (path, text) in bundled::FILES {
+        let found = checks::text_issues(
+            &format!("/w/.opentide/configurations/{path}"),
+            text(),
+            &Layers {
+                earlier: Some(Vec::new()),
+                ..Layers::default()
+            },
+        );
+        let found: Vec<&Finding> = found
+            .iter()
+            .filter(|finding| finding.code != "not_a_configuration_file")
+            .collect();
+        assert!(found.is_empty(), "{path}: {found:?}");
+    }
+}
+
+/// `[debug] mdr_test_uuids` and `ssl_enabled` are retired, as `proxy_enabled`
+/// was: nothing read them, so a workspace that still sets either gets an
+/// `unknown_key` error at the key, and an empty `[debug]` table still loads.
+#[test]
+fn the_retired_debug_keys_are_unknown_keys() {
+    let path = "/w/.opentide/configurations/deployment.toml";
+    for (key, value) in [("mdr_test_uuids", "[\"\"]"), ("ssl_enabled", "true")] {
+        let found = checks::text_issues(
+            path,
+            &format!("[debug]\n{key} = {value}\n"),
+            &Layers::default(),
+        );
+        assert_eq!(found.len(), 1, "{key}: {found:?}");
+        assert_eq!(found[0].code, "unknown_key", "{key}");
+        assert_eq!(found[0].field_path, ["debug", key], "{key}");
+        assert_eq!(found[0].message, "unknown key", "{key}");
+    }
+    let empty = checks::text_issues(path, "[debug]\n", &Layers::default());
+    assert!(empty.is_empty(), "{empty:?}");
+    for (path, text) in bundled::FILES {
+        assert!(
+            !text().contains("mdr_test_uuids") && !text().contains("ssl_enabled"),
+            "{path} still writes a retired [debug] key"
+        );
+    }
+}
+
+/// The template declares no alert handling team, not even as a commented
+/// example: the CSIRC and CATCH examples were one organisation's teams. The
+/// field stays unconstrained until an instance declares its own (#507).
+#[test]
+fn the_deployment_template_declares_no_responders() {
+    let text = bundled::text("deployment.toml").unwrap();
+    for name in [
+        "CSIRC",
+        "CATCH",
+        "Incident Response Capability",
+        "Threat Analysis and Hunting",
+    ] {
+        assert!(!text.contains(name), "deployment.toml still names {name}");
+    }
+    let parsed = config_toml::parse(text).unwrap();
+    assert!(
+        parsed.get("responders").is_none(),
+        "deployment.toml declares responders"
+    );
+    assert!(
+        !text.lines().any(|line| line.trim() == "# [[responders]]"),
+        "deployment.toml carries a commented responders example"
+    );
+}
+
+#[test]
+fn configuration_buffer_takes_its_parent_layer_and_open_deployment() {
+    let path = "/w/.opentide/configurations/sharing.toml";
+    let text = "[[misp]]\nname = \"a\"\nurl = \"https://a\"\napi_key = \"${K}\"\nmax_tlp = \"red\"\nrule_statuses = [\"ONLY\"]\n";
+    let unknown = checks::buffer_issues(path, text, &checks::BufferContext::default());
+    assert_eq!(unknown.len(), 1, "{unknown:?}");
+    assert_eq!(unknown[0].code, "rule_status_unknown");
+    let known = checks::buffer_issues(
+        path,
+        text,
+        &checks::BufferContext {
+            deployment: Some(
+                "[[statuses]]\nname = \"ONLY\"\ndescription = \"d\"\nstrategy = \"RELEASE\"\n"
+                    .to_owned(),
+            ),
+            sharing_directory: true,
+            ..checks::BufferContext::default()
+        },
+    );
+    assert_eq!(
+        known.iter().map(|f| f.code.as_str()).collect::<Vec<_>>(),
+        ["sharing_directory"]
+    );
+    let deployment = "/w/.opentide/configurations/deployment.toml";
+    let target = "[promotion]\npromotion_target = \"NOPE\"\n";
+    assert_eq!(
+        checks::buffer_issues(deployment, target, &checks::BufferContext::default())[0].code,
+        "promotion_target_unknown"
+    );
+    let fixed = checks::buffer_issues(
+        deployment,
+        target,
+        &checks::BufferContext {
+            parent: Some("\u{feff}[promotion]\npromotion_target = \"DESIGN\"\n".to_owned()),
+            ..checks::BufferContext::default()
+        },
+    );
+    assert!(fixed.is_empty(), "{fixed:?}");
+    assert!(
+        checks::buffer_issues(
+            "/w/.opentide/configurations/colours.toml",
+            "x = 1",
+            &checks::BufferContext::default()
+        )
+        .is_empty()
+    );
+}
+
+#[test]
+fn configuration_file_keys_route_as_the_oracle_routes_them() {
+    for (path, key) in [
+        ("deployment.toml", Some("deployment.toml")),
+        (
+            "/w/.opentide/configurations/platforms/splunk.toml",
+            Some("platforms/splunk.toml"),
+        ),
+        ("platforms/foo.toml", Some("platforms/*.toml")),
+        ("/w/.opentide/schemas/paths.toml", None),
+        ("/w/.opentide/configurations/sharing/x.toml", None),
+        ("lint.toml", None),
+        ("deployment.TOML", None),
+    ] {
+        assert_eq!(checks::file_key(path).as_deref(), key, "{path}");
+    }
+}
+
+#[test]
+fn configuration_paths_with_multi_byte_names() {
+    // #1946: the file key and the configurations folder never slice inside
+    // a character.
+    assert_eq!(
+        checks::file_key("/é/.opentide/configurations/platforms/😀.toml").as_deref(),
+        Some("platforms/*.toml")
+    );
+    assert_eq!(checks::file_key("/é/.opentide/configurations/é.😀"), None);
+    assert_eq!(
+        checks::configurations_directory("/é/.opentide/configurations/😀é.toml"),
+        Some((
+            "/é/.opentide/configurations".to_owned(),
+            "😀é.toml".to_owned()
+        ))
+    );
+    assert_eq!(
+        checks::configurations_directory("/é/.opentide/configurations/"),
+        None
+    );
+}
+
+mod configuration_never_panics {
+    use super::*;
+    use proptest::prelude::*;
+
+    const PATHS: [&str; 6] = [
+        "/w/.opentide/configurations/deployment.toml",
+        "/w/.opentide/configurations/documentation.toml",
+        "/w/.opentide/configurations/visibility.toml",
+        "/w/.opentide/configurations/sharing.toml",
+        "/w/.opentide/configurations/platforms/splunk.toml",
+        "/w/.opentide/configurations/platforms/any.toml",
+    ];
+
+    /// Text that is often TOML: keys the models know, tables, arrays.
+    fn toml_text() -> impl Strategy<Value = String> {
+        let key = prop::sample::select(vec![
+            "name",
+            "statuses",
+            "strategy",
+            "promotion",
+            "tenants",
+            "setup",
+            "ssl",
+            "misp",
+            "url",
+            "logsources",
+            "columns",
+            "system",
+            "assets",
+            "flavor",
+            "x",
+        ]);
+        let value = prop::sample::select(vec![
+            "1",
+            "\"\"",
+            "\"a\"",
+            "true",
+            "[]",
+            "[1, \"b\"]",
+            "{}",
+            "{a = 1}",
+            "1.5",
+            "nan",
+            "1979-05-27",
+            "\"$X\"",
+            "\"${K}\"",
+        ]);
+        prop::collection::vec(
+            prop_oneof![
+                (key.clone(), value).prop_map(|(k, v)| format!("{k} = {v}\n")),
+                key.clone().prop_map(|k| format!("[{k}]\n")),
+                key.prop_map(|k| format!("[[{k}]]\n")),
+                "[ -~]{0,12}\n",
+            ],
+            0..12,
+        )
+        .prop_map(|lines| lines.concat())
+    }
+
+    proptest! {
+        #[test]
+        fn text_issues_never_panic(text in toml_text(), path in 0..PATHS.len()) {
+            let _ = checks::text_issues(PATHS[path], &text, &Layers::default());
+            let _ = checks::buffer_issues(PATHS[path], &text, &checks::BufferContext {
+                parent: Some(text.clone()),
+                deployment: Some(text.clone()),
+                sharing_directory: true,
+            });
+        }
+
+        #[test]
+        fn resolution_never_panics(text in toml_text()) {
+            let workspace = Folder {
+                path: ROOT.to_owned(),
+                files: vec![
+                    ("deployment.toml".to_owned(), text.clone()),
+                    ("platforms/splunk.toml".to_owned(), text.clone()),
+                    ("lint.toml".to_owned(), text),
+                ],
+                folders: vec!["platforms".to_owned()],
+            };
+            if let Ok(resolved) = resolve(&Instance { workspace: Some(&workspace), ..Instance::default() }) {
+                let _ = resolved.issues();
+                let _ = parse_lint_config(resolved.get("lint"));
+            }
+        }
+    }
+}
+
+#[test]
+fn splunk_enterprise_security_is_a_boolean_and_never_a_placeholder() {
+    // `deploy` refuses a `$NAME` placeholder in `enterprise_security` (it
+    // resolves placeholders in credentials and `ssl` only), so `validate`
+    // refuses it too, at the key's path.
+    let path = "/w/.opentide/configurations/platforms/splunk.toml";
+    let splunk = |value: &str| {
+        format!(
+            "[[tenants]]\nname = \"a\"\n[tenants.setup]\nurl = \"u\"\nport = 8089\n\
+             app = \"search\"\nenterprise_security = {value}\n"
+        )
+    };
+    for value in ["true", "false"] {
+        let issues = checks::buffer_issues(path, &splunk(value), &checks::BufferContext::default());
+        assert!(issues.is_empty(), "{value}: {issues:?}");
+    }
+    for value in ["\"$SPLUNK_ES\"", "\"yes\"", "0"] {
+        let issues = checks::buffer_issues(path, &splunk(value), &checks::BufferContext::default());
+        assert_eq!(issues.len(), 1, "{value}: {issues:?}");
+        let shown = format!("{:?}", issues[0]);
+        assert!(shown.contains("enterprise_security"), "{value}: {shown}");
+    }
+}
+
+#[test]
+fn splunk_schedule_offset_is_an_integer_and_never_a_placeholder() {
+    // `deploy` refuses a `$NAME` placeholder in `schedule_offset` (it
+    // resolves placeholders in credentials and `ssl` only), so `validate`
+    // refuses it too, at the key's path.
+    let path = "/w/.opentide/configurations/platforms/splunk.toml";
+    let splunk = |value: &str| {
+        format!(
+            "[[tenants]]\nname = \"a\"\n[tenants.setup]\nurl = \"u\"\nport = 8089\n\
+             app = \"search\"\nschedule_offset = {value}\n"
+        )
+    };
+    for value in ["0", "5", "-3"] {
+        let issues = checks::buffer_issues(path, &splunk(value), &checks::BufferContext::default());
+        assert!(issues.is_empty(), "{value}: {issues:?}");
+    }
+    for value in ["\"$SPLUNK_OFFSET\"", "\"soon\"", "1.5"] {
+        let issues = checks::buffer_issues(path, &splunk(value), &checks::BufferContext::default());
+        assert_eq!(issues.len(), 1, "{value}: {issues:?}");
+        let shown = format!("{:?}", issues[0]);
+        assert!(shown.contains("schedule_offset"), "{value}: {shown}");
+    }
+}
+
+#[test]
+fn a_harfanglab_tenant_type_is_refused_as_removed() {
+    // platform-harfanglab 1.6: every tenant takes both Sigma and YARA, so a
+    // leftover `type`, whatever its value, fails at its key with why and what
+    // to do; the setup without it validates.
+    let path = "/w/.opentide/configurations/platforms/harfanglab.toml";
+    let harfanglab = |line: &str| {
+        format!(
+            "[[tenants]]\nname = \"a\"\n[tenants.setup]\n{line}url = \"u\"\n\
+             api_token = \"$HL_TOKEN\"\nsource_id = \"s\"\n"
+        )
+    };
+    let clean = checks::buffer_issues(path, &harfanglab(""), &checks::BufferContext::default());
+    assert!(clean.is_empty(), "{clean:?}");
+    for value in ["\"Sigma\"", "\"YARA\"", "\"$HL_TYPE\"", "\"sigma\"", "1"] {
+        let issues = checks::buffer_issues(
+            path,
+            &harfanglab(&format!("type = {value}\n")),
+            &checks::BufferContext::default(),
+        );
+        assert_eq!(issues.len(), 1, "{value}: {issues:?}");
+        assert_eq!(
+            issues[0].field_path,
+            ["tenants", "0", "setup", "type"],
+            "{value}"
+        );
+        assert_eq!(
+            issues[0].message,
+            "`type` is removed: a HarfangLab tenant takes both Sigma and YARA rules, and each \
+             rule's own `sigma` or `yara` block picks its kind; delete this key",
+            "{value}"
+        );
+    }
+    // Any other key is still unknown.
+    let issues = checks::buffer_issues(
+        path,
+        &harfanglab("kind = \"Sigma\"\n"),
+        &checks::BufferContext::default(),
+    );
+    assert_eq!(issues.len(), 1, "{issues:?}");
+    assert_eq!(issues[0].field_path, ["tenants", "0", "setup", "kind"]);
+}
+
+/// The issues of one `visibility.toml` buffer.
+fn visibility_issues(text: &str) -> Vec<Finding> {
+    checks::buffer_issues(
+        "/w/.opentide/configurations/visibility.toml",
+        text,
+        &checks::BufferContext::default(),
+    )
+}
+
+#[test]
+fn a_zero_twenty_dataset_list_is_refused_with_one_entry_per_name() {
+    // `tables` stays removed (visibility::1.0): the refusal names the tables
+    // the file lists and shows one `[[logsources]]` entry for each.
+    let text = "[[logsources]]\nname = \"Windows Security\"\ndescription = \"Windows logs\"\n\
+                system = \"sentinel\"\ntables = [\"SecurityEvent\", \"WindowsEvent\"]\n";
+    let issues = visibility_issues(text);
+    assert_eq!(issues.len(), 1, "{issues:?}");
+    assert_eq!(issues[0].field_path, ["logsources", "0", "tables"]);
+    assert_eq!(
+        issues[0].message,
+        "`tables` was removed in 0.20.1: declare each table as its own [[logsources]] entry \
+         whose `name` is the table. For SecurityEvent, WindowsEvent, replace this entry with \
+         one entry per name, copying its `tenants`, `assets` and `references` into each:\n\
+         [[logsources]]\nname = \"SecurityEvent\"\ndescription = \"Windows logs\"\nsystem = \"sentinel\"\n\n\
+         [[logsources]]\nname = \"WindowsEvent\"\ndescription = \"Windows logs\"\nsystem = \"sentinel\"\n\
+         A signal's `data.logsources` then names each of them"
+    );
+    // A list the file does not fill in keeps the short message.
+    let issues = visibility_issues(
+        "[[logsources]]\nname = \"a\"\ndescription = \"d\"\nsystem = \"sentinel\"\ntables = []\n",
+    );
+    assert_eq!(issues.len(), 1, "{issues:?}");
+    assert!(issues[0].message.ends_with("whose `name` is the table"));
+}
+
+#[test]
+fn the_dataset_list_refusal_escapes_values_and_counts_the_rest() {
+    // Quotes and backslashes in the file's values are escaped in the TOML the
+    // message writes; three names show two entries and say what is left.
+    let text = "[[logsources]]\nname = \"g\"\ndescription = 'say \"hi\" \\ now'\n\
+                system = \"sentinel\"\ntables = ['A\"B', 'C\\D', \"E\"]\n";
+    let issues = visibility_issues(text);
+    assert_eq!(issues.len(), 1, "{issues:?}");
+    let message = &issues[0].message;
+    assert!(
+        message.contains("name = \"A\\\"B\"\ndescription = \"say \\\"hi\\\" \\\\ now\""),
+        "{message}"
+    );
+    assert!(message.contains("name = \"C\\\\D\""), "{message}");
+    assert!(!message.contains("name = \"E\""), "{message}");
+    assert!(
+        message.contains("# ... and one more entry for the last name"),
+        "{message}"
+    );
+}
+
+#[test]
+fn the_dataset_list_refusal_covers_sourcetypes_and_a_missing_system() {
+    for (key, value) in [("sourcetypes", "syslog"), ("indices", "logs-*")] {
+        let text = format!(
+            "[[logsources]]\nname = \"g\"\ndescription = \"d\"\nsystem = \"splunk\"\n{key} = [\"{value}\"]\n"
+        );
+        let issues = visibility_issues(&text);
+        assert_eq!(issues.len(), 1, "{key}: {issues:?}");
+        assert!(
+            issues[0].message.contains(&format!(
+                "name = \"{value}\"\ndescription = \"d\"\nsystem = \"splunk\""
+            )),
+            "{}",
+            issues[0].message
+        );
+    }
+    // No `system` (or `description`) to copy: a placeholder to fill in.
+    let issues = visibility_issues("[[logsources]]\nname = \"g\"\ntables = [\"T\"]\n");
+    let message = &issues[0].message;
+    assert!(
+        message.contains("name = \"T\"\ndescription = \"<description>\"\nsystem = \"<system>\""),
+        "{message}"
+    );
+}
+
+/// `T` read from a TOML table, and its `Debug` output.
+fn debug_of<T: opentide_schema::FromNode + std::fmt::Debug>(text: &str) -> String {
+    let node = config_toml::parse(text).unwrap();
+    let mut cx = opentide_schema::from_node::Context::new();
+    let value = T::from_node(&node, &mut cx);
+    assert_eq!(cx.into_errors(), [], "{text}");
+    format!("{:?}", value.unwrap())
+}
+
+#[test]
+fn credentials_never_print_in_a_debug_output() {
+    // #1933: the secrets are skipped when serialised, but `{:?}` printed them.
+    use opentide_schema::configuration::models::{
+        CarbonBlackCloudSetup, CrowdstrikeSetup, HarfangLabSetup, MicrosoftDefenderSetup,
+        MispIntegration, SentinelOneSetup, SentinelSetup, SplunkSetup,
+    };
+    use opentide_schema::configuration::sharing::MispBlock;
+    const SECRET: &str = "s3cr3t-é😀";
+    let shown = [
+        debug_of::<SentinelSetup>(&format!(
+            "resource_group = \"g\"\nworkspace_name = \"w\"\nworkspace_id = \"i\"\n\
+             azure_tenant_id = \"t\"\nazure_subscription_id = \"s\"\nazure_client_id = \"c\"\n\
+             azure_client_secret = \"{SECRET}\"\n"
+        )),
+        debug_of::<SplunkSetup>(&format!(
+            "url = \"u\"\nport = 8089\napp = \"search\"\ntoken = \"{SECRET}\"\n"
+        )),
+        debug_of::<CarbonBlackCloudSetup>(&format!(
+            "url = \"u\"\norg_key = \"o\"\ntoken = \"{SECRET}\"\n"
+        )),
+        debug_of::<SentinelOneSetup>(&format!(
+            "url = \"u\"\naccount_id = 1\napi_token = \"{SECRET}\"\n"
+        )),
+        debug_of::<MicrosoftDefenderSetup>(&format!(
+            "tenant_id = \"t\"\nclient_id = \"c\"\nclient_secret = \"{SECRET}\"\n"
+        )),
+        debug_of::<CrowdstrikeSetup>(&format!(
+            "api = \"a\"\nclient_id = \"c\"\nclient_secret = \"{SECRET}\"\ncustomer_id = \"x\"\n"
+        )),
+        debug_of::<HarfangLabSetup>(&format!(
+            "url = \"u\"\napi_token = \"{SECRET}\"\nsource_id = \"s\"\n"
+        )),
+        debug_of::<MispIntegration>(&format!(
+            "name = \"a\"\nurl = \"https://a\"\napi_key = \"{SECRET}\"\nmax_tlp = \"red\"\n"
+        )),
+        format!(
+            "{:?}",
+            MispBlock {
+                name: "a".to_owned(),
+                url: "https://a".to_owned(),
+                max_tlp: "red".to_owned(),
+                api_key: Some(SECRET.to_owned()),
+                enabled: true,
+                object_types: Vec::new(),
+                rule_statuses: Vec::new(),
+                organisation_uuid: None,
+                publish: false,
+                verify_ssl: true,
+            }
+        ),
+    ];
+    for shown in shown {
+        assert!(!shown.contains(SECRET), "{shown}");
+        assert!(shown.contains("[REDACTED]"), "{shown}");
+        // The other fields are still shown.
+        assert!(shown.contains("ssl") || shown.contains("name"), "{shown}");
+    }
+}

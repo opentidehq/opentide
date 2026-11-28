@@ -1,0 +1,31 @@
+---
+source: crates/opentide-cql/tests/parser_trees.rs
+expression: debug_parse(source)
+---
+SOURCE_FILE@0..32
+  PIPELINE@0..32
+    AND_FILTER@0..32
+      FIELD_FILTER@0..12
+        FIELD_NAME@0..3
+          WORD@0..3 "src"
+        EQ@3..4 "="
+        STRING@4..12
+          STRING_TOKEN@4..12 "\"client\""
+      WHITESPACE@12..13 " "
+      OR_FILTER@13..32
+        FIELD_FILTER@13..25
+          FIELD_NAME@13..15
+            WORD@13..15 "ip"
+          EQ@15..16 "="
+          UNQUOTED_PATTERN@16..25
+            WORD@16..25 "127.0.0.1"
+        WHITESPACE@25..26 " "
+        OR@26..28
+          OR_KW@26..28 "or"
+        WHITESPACE@28..29 " "
+        FIELD_FILTER@29..32
+          FIELD_NAME@29..30
+            WORD@29..30 "x"
+          EQ@30..31 "="
+          UNQUOTED_PATTERN@31..32
+            WORD@31..32 "1"

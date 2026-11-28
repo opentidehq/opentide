@@ -1,0 +1,12 @@
+// prod:duration valid
+rule r {
+  meta:
+    author = "a"
+  events:
+    $e.metadata.event_type = "USER_LOGIN"
+    $u = $e.target.user.userid
+  match:
+    $u by 2h
+  condition:
+    $e
+}

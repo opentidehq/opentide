@@ -1,0 +1,4 @@
+# `cargo xtask <command>` runs the repository's Rust tooling (xtask/, its
+# AGENTS.md). --locked: the tooling never rewrites Cargo.lock.
+[alias]
+xtask = "run --locked --quiet --package xtask --"

@@ -1,0 +1,1 @@
+create_symlink and proc.name in (oops and (evt.arg.target in (sensitive_file_names) or evt.arg.target in (sensitive_directory_names))

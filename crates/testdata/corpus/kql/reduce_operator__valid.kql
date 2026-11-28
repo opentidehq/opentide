@@ -1,0 +1,2 @@
+// prod:reduce_operator valid
+SecurityEvent | where EventID == 4688 | reduce kind=source by CommandLine with threshold=0.1, characters="/\\"

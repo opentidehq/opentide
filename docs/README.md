@@ -7,7 +7,7 @@ opentide documentation lives in this directory and is published on **[opentide.o
 | Usage | `usage/` | Human operators — setup, workflows, concepts |
 | CLI | `cli/` | Command-line reference |
 | MCP | `mcp/` | Agent and editor integrations |
-| SDK | `sdk/` | Python API consumers |
+| SDK | `sdk/` | Python and Rust API consumers |
 
 Internal maintainer docs (test plan, publishing) live in `internal/` and are excluded from the public site tree.
 
@@ -62,7 +62,7 @@ Update docs in the **same PR** when you change:
 |-----------|--------------|
 | CLI commands / flags | `docs/cli/` |
 | MCP tools / resources | `docs/mcp/` |
-| Public Python API | `docs/sdk/` |
+| Public Python API, the `opentide` crate's API | `docs/sdk/` |
 | Setup / onboarding flows | `docs/usage/` |
 | Platform capabilities | `docs/usage/concepts/platforms.md` |
 
@@ -127,4 +127,4 @@ Scaffolding notes: [`fumadocs/`](./fumadocs/). The website repo syncs `docs/` at
 scripts/validate-docs.sh
 ```
 
-CI runs the same check via [`.github/workflows/docs.yml`](../.github/workflows/docs.yml) on docs changes.
+CI runs the same check in [`ci.yml`](../.github/workflows/ci.yml)'s `docs` job on every pull request that changes `docs/` (a docs-only pull request runs it alone).

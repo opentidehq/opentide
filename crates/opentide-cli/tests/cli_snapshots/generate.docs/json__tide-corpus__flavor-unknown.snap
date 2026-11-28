@@ -1,0 +1,29 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: generate.docs/json/tide-corpus/flavor-unknown
+---
+args: opentide --json generate docs --flavor bogus
+exit: 2
+
+━━━ stdout · json, 1 lines
+{
+  "command": "generate docs",
+  "duration_ms": 0,
+  "error": "Unknown docs flavor `bogus`: choose generic, github, gitlab or azure_devops",
+  "exit_code": 2,
+  "failure": {
+    "argument": "--flavor",
+    "code": "usage_invalid_choice",
+    "crash_log": null,
+    "message": "Unknown docs flavor `bogus`: choose generic, github, gitlab or azure_devops",
+    "suggestion": null
+  },
+  "message": "Unknown docs flavor `bogus`: choose generic, github, gitlab or azure_devops",
+  "next_actions": [],
+  "ok": false,
+  "schema_version": 1,
+  "status": "failed",
+  "summary": {}
+}
+
+━━━ stderr · empty

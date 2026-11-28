@@ -1,0 +1,35 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/corpus/esql/inline_stats_command__invalid.esql
+---
+SOURCE_FILE@0..80
+  COMMENT@0..36 "// prod:inline_stats_command invalid"
+  WHITESPACE@36..37 "\n"
+  QUERY@37..79
+    FROM_COMMAND@37..61
+      FROM_KW@37..41 "FROM"
+      WHITESPACE@41..42 " "
+      INDEX_PATTERN@42..48
+        INDEX_NAME@42..48
+          SOURCE_TEXT@42..48 "logs-*"
+      WHITESPACE@48..49 " "
+      METADATA@49..61
+        METADATA_KW@49..57 "METADATA"
+        WHITESPACE@57..58 " "
+        METADATA_FIELD@58..61
+          SOURCE_TEXT@58..61 "_id"
+    WHITESPACE@61..62 "\n"
+    PIPE@62..63 "|"
+    WHITESPACE@63..64 " "
+    INLINE_STATS_COMMAND@64..79
+      INLINE_KW@64..70 "INLINE"
+      WHITESPACE@70..71 " "
+      STATS_KW@71..76 "STATS"
+      WHITESPACE@76..77 " "
+      AGGREGATE_FIELD@77..79
+        QUALIFIED_NAME@77..79
+          IDENTIFIER@77..79
+            IDENT@77..79 "BY"
+  WHITESPACE@79..80 "\n"
+--- errors

@@ -1,0 +1,376 @@
+{
+  "format": 1,
+  "scenario": "harfanglab/deploy",
+  "recorded_from": [
+    "{python}",
+    "tests/cassettes/harfanglab/client.py",
+    "deploy"
+  ],
+  "digest": "sha256:c48617697279e02fa814585b0c802f9797becff23c1cb7e872297b88072ee166",
+  "interactions": [
+    {
+      "request": {
+        "method": "PUT",
+        "url": "https://hl-tenant.invalid/api/data/threat_intelligence/SigmaRule/00000000-0000-4000-8003-000000000007/",
+        "headers": [
+          [
+            "authorization",
+            "Token REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"name\": \"Mimikatz: sekurlsa\", \"content\": \"title: 'Mimikatz: sekurlsa \\u2014 \\u00dcn\\u00efcode'\\nid: 00000000-0000-4000-8003-000000000007\\nstatus: experimental\\nlogsource:\\n    category: process_creation\\n    product: windows\\ndetection:\\n    selection:\\n        CommandLine|contains:\\n            - sekurlsa\\n    condition: selection\\nlevel: high\\n\", \"source_id\": \"src-0001\", \"enabled\": true, \"global_state\": \"block\", \"hl_status\": \"testing\", \"block_on_agent\": true, \"quarantine_on_agent\": false, \"rule_confidence_override\": \"strong\", \"rule_level_override\": \"high\", \"overwrite\": true}"
+      },
+      "response": {
+        "status": 404,
+        "headers": [
+          [
+            "server",
+            "hl-stand-in"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"detail\": \"Not found.\"}"
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://hl-tenant.invalid/api/data/threat_intelligence/SigmaRule/",
+        "headers": [
+          [
+            "authorization",
+            "Token REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"name\": \"Mimikatz: sekurlsa\", \"content\": \"title: 'Mimikatz: sekurlsa \\u2014 \\u00dcn\\u00efcode'\\nid: 00000000-0000-4000-8003-000000000007\\nstatus: experimental\\nlogsource:\\n    category: process_creation\\n    product: windows\\ndetection:\\n    selection:\\n        CommandLine|contains:\\n            - sekurlsa\\n    condition: selection\\nlevel: high\\n\", \"source_id\": \"src-0001\", \"enabled\": true, \"global_state\": \"block\", \"hl_status\": \"testing\", \"block_on_agent\": true, \"quarantine_on_agent\": false, \"rule_confidence_override\": \"strong\", \"rule_level_override\": \"high\", \"overwrite\": true}"
+      },
+      "response": {
+        "status": 201,
+        "headers": [
+          [
+            "server",
+            "hl-stand-in"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"id\": \"sigma-1\", \"name\": \"Mimikatz: sekurlsa\"}"
+      }
+    },
+    {
+      "request": {
+        "method": "PUT",
+        "url": "https://hl-tenant.invalid/api/data/threat_intelligence/SigmaRule/sigma-1/",
+        "headers": [
+          [
+            "authorization",
+            "Token REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"name\": \"Mimikatz: sekurlsa\", \"content\": \"title: 'Mimikatz: sekurlsa \\u2014 \\u00dcn\\u00efcode'\\nid: 00000000-0000-4000-8003-000000000007\\nstatus: experimental\\nlogsource:\\n    category: process_creation\\n    product: windows\\ndetection:\\n    selection:\\n        CommandLine|contains:\\n            - sekurlsa\\n    condition: selection\\nlevel: high\\n\", \"source_id\": \"src-0001\", \"enabled\": true, \"global_state\": \"block\", \"hl_status\": \"testing\", \"block_on_agent\": true, \"quarantine_on_agent\": false, \"rule_confidence_override\": \"strong\", \"rule_level_override\": \"high\", \"overwrite\": true}"
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "hl-stand-in"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"id\": \"sigma-1\", \"name\": \"Mimikatz: sekurlsa\", \"enabled\": true}"
+      }
+    },
+    {
+      "request": {
+        "method": "PUT",
+        "url": "https://hl-tenant.invalid/api/data/threat_intelligence/SigmaRule/sigma-1/",
+        "headers": [
+          [
+            "authorization",
+            "Token REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"name\": \"Mimikatz: sekurlsa\", \"content\": \"title: 'Mimikatz: sekurlsa \\u2014 \\u00dcn\\u00efcode'\\nid: 00000000-0000-4000-8003-000000000007\\nstatus: experimental\\nlogsource:\\n    category: process_creation\\n    product: windows\\ndetection:\\n    selection:\\n        CommandLine|contains:\\n            - sekurlsa\\n    condition: selection\\nlevel: high\\n\", \"source_id\": \"src-0001\", \"enabled\": false, \"global_state\": \"disabled\", \"hl_status\": \"testing\", \"block_on_agent\": false, \"quarantine_on_agent\": false, \"rule_confidence_override\": \"strong\", \"rule_level_override\": \"high\", \"overwrite\": true}"
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "hl-stand-in"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"id\": \"sigma-1\", \"name\": \"Mimikatz: sekurlsa\", \"enabled\": false}"
+      }
+    },
+    {
+      "request": {
+        "method": "DELETE",
+        "url": "https://hl-tenant.invalid/api/data/threat_intelligence/SigmaRule/sigma-1/",
+        "headers": [
+          [
+            "authorization",
+            "Token REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 204,
+        "headers": [
+          [
+            "server",
+            "hl-stand-in"
+          ]
+        ],
+        "body": ""
+      }
+    },
+    {
+      "request": {
+        "method": "PUT",
+        "url": "https://hl-tenant.invalid/api/data/threat_intelligence/SigmaRule/00000000-0000-4000-8003-000000000007/",
+        "headers": [
+          [
+            "authorization",
+            "Token REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"name\": \"Rejected rule\", \"content\": \"title: 'Mimikatz: sekurlsa \\u2014 \\u00dcn\\u00efcode'\\nid: 00000000-0000-4000-8003-000000000007\\nstatus: experimental\\nlogsource:\\n    category: process_creation\\n    product: windows\\ndetection:\\n    selection:\\n        CommandLine|contains:\\n            - sekurlsa\\n    condition: selection\\nlevel: high\\n\", \"source_id\": \"src-0001\", \"enabled\": true, \"global_state\": \"block\", \"hl_status\": \"testing\", \"block_on_agent\": true, \"quarantine_on_agent\": false, \"rule_confidence_override\": \"strong\", \"rule_level_override\": \"high\", \"overwrite\": true}"
+      },
+      "response": {
+        "status": 400,
+        "headers": [
+          [
+            "server",
+            "hl-stand-in"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"content\": [\"Invalid rule: detection.condition is missing\"]}"
+      }
+    },
+    {
+      "request": {
+        "method": "PUT",
+        "url": "https://hl-tenant.invalid/api/data/threat_intelligence/SigmaRule/00000000-0000-4000-8003-000000000007/",
+        "headers": [
+          [
+            "authorization",
+            "Token REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"name\": \"Forbidden rule\", \"content\": \"title: 'Mimikatz: sekurlsa \\u2014 \\u00dcn\\u00efcode'\\nid: 00000000-0000-4000-8003-000000000007\\nstatus: experimental\\nlogsource:\\n    category: process_creation\\n    product: windows\\ndetection:\\n    selection:\\n        CommandLine|contains:\\n            - sekurlsa\\n    condition: selection\\nlevel: high\\n\", \"source_id\": \"src-0001\", \"enabled\": true, \"global_state\": \"block\", \"hl_status\": \"testing\", \"block_on_agent\": true, \"quarantine_on_agent\": false, \"rule_confidence_override\": \"strong\", \"rule_level_override\": \"high\", \"overwrite\": true}"
+      },
+      "response": {
+        "status": 403,
+        "headers": [
+          [
+            "server",
+            "hl-stand-in"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"detail\": \"You do not have permission to perform this action.\"}"
+      }
+    },
+    {
+      "request": {
+        "method": "DELETE",
+        "url": "https://hl-tenant.invalid/api/data/threat_intelligence/SigmaRule/sigma-missing/",
+        "headers": [
+          [
+            "authorization",
+            "Token REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 404,
+        "headers": [
+          [
+            "server",
+            "hl-stand-in"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"detail\": \"Not found.\"}"
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://hl-tenant.invalid/api/data/threat_intelligence/YaraFile/",
+        "headers": [
+          [
+            "authorization",
+            "Token REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"name\": \"HarfangLab YARA Loader\", \"content\": \"import \\\"pe\\\"\\n\\nrule harfanglab_yara_loader {\\n    meta:\\n        id = \\\"00000000-0000-4000-8003-000000000008\\\"\\n    strings:\\n        $a = \\\"loader\\\"\\n    condition:\\n        $a\\n}\", \"source_id\": \"src-0001\", \"global_state\": \"alert\", \"hl_status\": \"stable\", \"rule_confidence_override\": \"moderate\", \"rule_level_override\": \"critical\", \"overwrite\": true}"
+      },
+      "response": {
+        "status": 201,
+        "headers": [
+          [
+            "server",
+            "hl-stand-in"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"id\": \"yara-1\", \"name\": \"HarfangLab YARA Loader\"}"
+      }
+    },
+    {
+      "request": {
+        "method": "DELETE",
+        "url": "https://hl-tenant.invalid/api/data/threat_intelligence/YaraFile/00000000-0000-4000-8003-000000000007/",
+        "headers": [
+          [
+            "authorization",
+            "Token REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 204,
+        "headers": [
+          [
+            "server",
+            "hl-stand-in"
+          ]
+        ],
+        "body": ""
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://hl-tenant.invalid/api/data/threat_intelligence/YaraFile/",
+        "headers": [
+          [
+            "authorization",
+            "Token REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"name\": \"Rejected YARA\", \"content\": \"import \\\"pe\\\"\\n\\nrule harfanglab_yara_loader {\\n    meta:\\n        id = \\\"00000000-0000-4000-8003-000000000008\\\"\\n    strings:\\n        $a = \\\"loader\\\"\\n    condition:\\n        $a\\n}\", \"source_id\": \"src-0001\", \"global_state\": \"alert\", \"hl_status\": \"stable\", \"rule_confidence_override\": \"moderate\", \"rule_level_override\": \"critical\", \"overwrite\": true}"
+      },
+      "response": {
+        "status": 400,
+        "headers": [
+          [
+            "server",
+            "hl-stand-in"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"content\": [\"Invalid rule: detection.condition is missing\"]}"
+      }
+    },
+    {
+      "request": {
+        "method": "DELETE",
+        "url": "https://hl-tenant.invalid/api/data/threat_intelligence/YaraFile/yara-missing/",
+        "headers": [
+          [
+            "authorization",
+            "Token REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 404,
+        "headers": [
+          [
+            "server",
+            "hl-stand-in"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"detail\": \"Not found.\"}"
+      }
+    }
+  ]
+}

@@ -1,0 +1,1 @@
+from * metadata _id, _index, _version | frobnicate ScriptBlockText like "*Import-Module *" and ScriptBlockText like "*Microsoft.ActiveDirectory.Management.dll*" or ScriptBlockText like "*ipmo Microsoft.ActiveDirectory.Management.dll*"

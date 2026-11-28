@@ -1,0 +1,2141 @@
+//! `opentide generate exports [navigator|objects|revisions]`, `generate docs`,
+//! `generate explorer` and `generate inflight [prune]`, on
+//! `opentide-compile`'s `generate` module.
+//!
+//! A phase runs as a checklist step that counts the files it wrote and
+//! removed, as it records them ([`Changes`]); the result is
+//! `Generated 3 files in 0.1s · exports`, with the steps behind it.
+
+use std::fmt::Write as _;
+use std::path::{Path, PathBuf};
+use std::time::Instant;
+
+use opentide_compile::generate::docs::catalog::{Catalog, Scope};
+use opentide_compile::generate::docs::facts::Environment as DeploymentFacts;
+use opentide_compile::generate::docs::flavor::Flavor;
+use opentide_compile::generate::docs::render::Pages;
+use opentide_compile::generate::docs::vocab::Vocab;
+use opentide_compile::generate::docs::{
+    Counts, FlavorHints, Settings as DocsSettings, changed, index_pages, inflight as docs_inflight,
+    pages, stale_pages,
+};
+use opentide_compile::generate::exports::{Settings, Target, export};
+use opentide_compile::generate::files::{Changes, common_dir};
+use opentide_compile::generate::visibility::{self, DatasetRead, Inputs};
+use opentide_compile::generate::{Output, PhaseError, explorer, inflight};
+use opentide_compile::git;
+use opentide_compile::strategy::Statuses;
+use opentide_schema::vocab::Vocabularies;
+use opentide_workspace::{FileSystem, OsFs, Workspace};
+
+use super::{Report, placement};
+use crate::env::Env;
+use crate::envelope::Failure;
+use crate::json::Json;
+use crate::render::progress::{Step, StepStatus, plural, seconds_text};
+
+/// Where a generate command runs.
+pub struct Context<'a> {
+    /// `--repo`.
+    pub repo: Option<&'a str>,
+    /// The environment.
+    pub env: &'a Env,
+    /// The working directory.
+    pub cwd: &'a Path,
+    /// `--proxy`: `generate docs` fetches CVE details through it.
+    pub proxy: Option<&'a str>,
+    /// opentide's version, for the CVE lookups' `User-Agent`.
+    pub version: &'a str,
+}
+
+/// `failure.code` of a phase that failed (`default_failure_code("failed")`).
+const COMMAND_FAILED: &str = super::COMMAND_FAILED;
+
+/// A phase run as one step: the files it wrote and removed.
+struct Phase {
+    step: Step,
+    error: Option<String>,
+}
+
+/// Runs `work` as the step `name`, counting the files it records in its
+/// [`Changes`].
+fn run_phase(
+    name: &str,
+    cwd: &Path,
+    workspace: &Path,
+    work: impl FnOnce(&mut Changes) -> Result<(), String>,
+) -> Phase {
+    let mut changes = Changes::default();
+    let started = Instant::now();
+    // The phase's files are written only when it succeeds: a phase that fails
+    // leaves the previous run's output as it was.
+    let result = work(&mut changes).and_then(|()| {
+        changes
+            .commit()
+            .map_err(|(path, error)| format!("{}: {error}", path.display()))
+    });
+    let mut step = Step::new(name);
+    step.seconds = started.elapsed().as_secs_f64();
+    match result {
+        Ok(()) => {
+            let (written, removed) = (changes.written(), changes.removed());
+            step.status = StepStatus::Ok;
+            if !removed.is_empty() && written.is_empty() {
+                step.count = Some(removed.len());
+                step.place = common_dir(&removed, cwd, workspace);
+                step.detail = "removed".into();
+                step.unit = "file removed".into();
+            } else {
+                step.count = Some(written.len());
+                step.place = common_dir(&written, cwd, workspace);
+            }
+            Phase { step, error: None }
+        }
+        Err(error) => {
+            step.status = StepStatus::Failed;
+            Phase {
+                step,
+                error: Some(error),
+            }
+        }
+    }
+}
+
+/// A step as the result's `steps` carry it.
+fn step_json(step: &Step) -> Json {
+    let status = match step.status {
+        StepStatus::Ok => "ok",
+        StepStatus::Failed | StepStatus::Running => "failed",
+        StepStatus::Skipped => "skipped",
+    };
+    Json::object([
+        ("name", Json::str(&step.name)),
+        ("status", Json::str(status)),
+        (
+            "count",
+            step.count.map_or(Json::Null, |count| {
+                Json::Int(i64::try_from(count).unwrap_or(i64::MAX))
+            }),
+        ),
+        ("unit", Json::str(&step.unit)),
+        ("seconds", Json::Float(rounded(step.seconds))),
+        ("where", Json::opt_str(step.place.clone())),
+    ])
+}
+
+fn rounded(seconds: f64) -> f64 {
+    (seconds * 1000.0).round() / 1000.0
+}
+
+/// `Generated 3 files in 0.1s · exports`, the steps and the summary
+/// (`generation_result`), after the command's own keys.
+fn generated(command: &str, leading: Vec<(String, Json)>, steps: Vec<Step>) -> Report {
+    let written: usize = steps
+        .iter()
+        .filter(|step| step.unit == "file")
+        .filter_map(|step| step.count)
+        .sum();
+    let removed: usize = steps
+        .iter()
+        .filter(|step| step.unit == "file removed")
+        .filter_map(|step| step.count)
+        .sum();
+    let seconds: f64 = steps.iter().map(|step| step.seconds).sum();
+    let subject = match steps.as_slice() {
+        [one] => one.name.clone(),
+        [] => "nothing to run".to_owned(),
+        many => plural(many.len(), "phase", None),
+    };
+    let message = if removed > 0 && written == 0 {
+        format!(
+            "Removed {} in {} · {subject}",
+            plural(removed, "file", None),
+            seconds_text(seconds)
+        )
+    } else {
+        format!(
+            "Generated {} in {} · {subject}",
+            plural(written, "file", None),
+            seconds_text(seconds)
+        )
+    };
+    let mut data = leading;
+    data.push((
+        "steps".into(),
+        Json::Array(steps.iter().map(step_json).collect()),
+    ));
+    let mut report = Report::completed(command, data);
+    report.outcome.message = message;
+    report.outcome.summary = vec![
+        ("files".into(), count_json(written)),
+        ("removed".into(), count_json(removed)),
+        ("phases".into(), count_json(steps.len())),
+        ("seconds".into(), Json::Float(rounded(seconds))),
+    ];
+    report.steps = steps;
+    report
+}
+
+fn count_json(count: usize) -> Json {
+    Json::Int(i64::try_from(count).unwrap_or(i64::MAX))
+}
+
+/// A phase that failed (`phase_failure`): exit 1, the phase named in
+/// `phase` and leading the message.
+pub(crate) fn phase_failed(
+    command: &str,
+    phase: &str,
+    detail: &str,
+    extra: Vec<(String, Json)>,
+    steps: Vec<Step>,
+) -> Report {
+    let message = format!("{phase}: {detail}");
+    let mut report = Report::failed(command, 1, Failure::new(COMMAND_FAILED, &message));
+    let mut data = vec![("phase".to_owned(), Json::str(phase))];
+    data.extend(extra);
+    report.outcome.data = data;
+    report.steps = steps;
+    report
+}
+
+/// The workspace a generate command reads, or the report of why it cannot.
+fn workspace(command: &str, cx: &Context<'_>) -> Result<Workspace, Box<Report>> {
+    if let Some(refused) = super::no_workspace(command, cx.repo, cx.env, cx.cwd) {
+        return Err(Box::new(refused));
+    }
+    let (_, options) = placement(cx.repo, cx.env, cx.cwd);
+    super::open_for(command, options)
+}
+
+/// The workspace a generate command reads, opened as the first work of its
+/// step `step`: the configuration is read inside the phase, so a
+/// configuration that does not resolve (a paths.toml its model refuses,
+/// #936, #946) fails that phase, with `phase`, `extra` and the failed row.
+fn workspace_in_step(
+    command: &str,
+    step: &str,
+    phase: &str,
+    extra: Vec<(String, Json)>,
+    cx: &Context<'_>,
+) -> Result<Workspace, Box<Report>> {
+    if let Some(refused) = super::no_workspace(command, cx.repo, cx.env, cx.cwd) {
+        return Err(Box::new(refused));
+    }
+    let (_, options) = placement(cx.repo, cx.env, cx.cwd);
+    super::open_for(command, options).map_err(|opened| {
+        let detail = opened.outcome.message.clone();
+        let ran = run_phase(step, cx.cwd, cx.cwd, |_| Err(detail));
+        let detail = ran.error.clone().unwrap_or_default();
+        let mut report = phase_failed(command, phase, &detail, extra, vec![ran.step]);
+        // A TOML file that does not parse keeps its code and its place.
+        if let Some(failure) = &opened.outcome.failure
+            && failure.code == super::CONFIG_PARSE
+            && let Some(own) = report.outcome.failure.as_mut()
+        {
+            own.code.clone_from(&failure.code);
+            report.outcome.data.extend(
+                opened
+                    .outcome
+                    .data
+                    .iter()
+                    .filter(|(key, _)| key == "diagnostics")
+                    .cloned(),
+            );
+        }
+        Box::new(report)
+    })
+}
+
+/// The object files the index could not load, as a phase that logged an
+/// error and carried on reports them (`generate.md`, "When a phase fails"):
+/// `logged an error: malformed_object_yaml (path=…, error=…)`, or
+/// `logged 3 errors, first: …`. A phase that reads the registry fails on
+/// them (D1: `generate` skipped a broken rule and exited 0).
+fn logged_errors(workspace: &Workspace) -> Result<(), String> {
+    let errors = &workspace.index().load_errors;
+    let Some(first) = errors.first() else {
+        return Ok(());
+    };
+    let root = workspace.root();
+    let path = first
+        .path
+        .strip_prefix(root)
+        .unwrap_or(&first.path)
+        .to_string_lossy()
+        .replace('\\', "/");
+    let event = if first.code == "yaml_parse" {
+        "malformed_object_yaml"
+    } else {
+        first.code
+    };
+    let first = format!("{event} (path={path}, error={})", first.error);
+    Err(if errors.len() == 1 {
+        format!("logged an error: {first}")
+    } else {
+        format!("logged {} errors, first: {first}", errors.len())
+    })
+}
+
+/// `raised`, a phase's own result, with the errors it logged
+/// ([`logged_errors`]): a phase that logged an error and then raised reports
+/// both, the logged error after a `;` (`generate.md`, "When a phase fails"),
+/// because the skipped object is often what broke the later one (D1: a
+/// malformed objective a rule references failed `docs` on the reference and
+/// never named the file).
+fn with_logged(raised: Result<(), String>, workspace: &Workspace) -> Result<(), String> {
+    match (raised, logged_errors(workspace)) {
+        (Err(raised), Err(logged)) => Err(format!("{raised}; {logged}")),
+        (Err(raised), Ok(())) => Err(raised),
+        (Ok(()), logged) => logged,
+    }
+}
+
+/// Writes the exports of `targets`, one after another: the ones before a
+/// failure are on disk.
+fn exports_phase(
+    changes: &mut Changes,
+    targets: &[Target],
+    workspace: &Workspace,
+    settings: &Settings,
+    vocabularies: &Vocabularies,
+) -> Result<(), String> {
+    let mut outputs = Vec::new();
+    for target in targets {
+        match export(*target, workspace.index(), settings, vocabularies) {
+            Ok(output) => outputs.push(output),
+            Err(PhaseError { detail }) => {
+                write(changes, &outputs)?;
+                return Err(detail);
+            }
+        }
+    }
+    write(changes, &outputs)
+}
+
+/// Whether the phase `name` reads the object registry: a malformed object
+/// file fails it ([`logged_errors`]). `snippets` reads the templates only.
+fn reads_registry(name: &str) -> bool {
+    matches!(
+        name,
+        "docs" | "exports" | "schemas" | "templates" | "vocabs"
+    )
+}
+
+/// Writes `outputs`, as one phase's work.
+fn write(changes: &mut Changes, outputs: &[Output]) -> Result<(), String> {
+    changes
+        .write_all(outputs)
+        .map_err(|(path, error)| format!("{}: {error}", path.display()))
+}
+
+/// `opentide generate exports`, or one export when `target` names it.
+pub fn exports(target: Option<Target>, cx: &Context<'_>) -> Report {
+    let command = match target {
+        Some(target) => format!("generate exports {}", target.name()),
+        None => "generate exports".to_owned(),
+    };
+    let name = target.map_or_else(
+        || "exports".to_owned(),
+        |one| format!("exports {}", one.name()),
+    );
+    let target_key =
+        |target: Option<Target>| target.map(|one| ("target".to_owned(), Json::str(one.name())));
+    let workspace = match workspace_in_step(
+        &command,
+        &name,
+        "exports",
+        target_key(target).into_iter().collect(),
+        cx,
+    ) {
+        Ok(workspace) => workspace,
+        Err(report) => return *report,
+    };
+    let root = workspace.root().to_path_buf();
+    let settings = Settings::new(workspace.configuration(), &root);
+    let vocabularies = Vocabularies::bundled();
+    let targets: Vec<Target> = target.map_or_else(|| Target::ALL.to_vec(), |one| vec![one]);
+    let phase = run_phase(&name, cx.cwd, &root, |changes| {
+        let raised = exports_phase(changes, &targets, &workspace, &settings, &vocabularies);
+        with_logged(raised, &workspace)
+    });
+    match phase.error {
+        Some(detail) => phase_failed(
+            &command,
+            "exports",
+            &detail,
+            target_key(target).into_iter().collect(),
+            vec![phase.step],
+        ),
+        None => {
+            let leading = match target {
+                Some(_) => target_key(target).into_iter().collect(),
+                None => vec![("phase".to_owned(), Json::str("exports"))],
+            };
+            generated(&command, leading, vec![phase.step])
+        }
+    }
+}
+
+/// The values `--flavor` takes, as the help spells them; `azure-devops`
+/// is read as `azure_devops` too.
+const FLAVORS: [&str; 4] = ["generic", "github", "gitlab", "azure_devops"];
+
+/// The page family a `generate docs` subcommand writes, or the index.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DocsScope {
+    /// One family's pages.
+    Objects(Scope),
+    /// The index pages.
+    Index,
+}
+
+impl DocsScope {
+    /// Its word on the command line.
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Objects(scope) => scope.folder(),
+            Self::Index => "index",
+        }
+    }
+}
+
+/// `opentide generate docs` and its subcommands, parsed.
+#[derive(Debug, Clone, Default)]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "the command's flags, one field each"
+)]
+pub struct DocsArgs {
+    /// The subcommand: one family, or the index.
+    pub scope: Option<DocsScope>,
+    /// `--output`.
+    pub output: Option<String>,
+    /// `--flavor`.
+    pub flavor: Option<String>,
+    /// `--rules`.
+    pub rules: bool,
+    /// `--threats`.
+    pub threats: bool,
+    /// `--objectives`.
+    pub objectives: bool,
+    /// `--changed`.
+    pub changed: bool,
+}
+
+impl From<&crate::tree::GenerateDocsArgs> for DocsArgs {
+    fn from(args: &crate::tree::GenerateDocsArgs) -> Self {
+        use crate::tree::GenerateDocsCommand as Command;
+        // A subcommand takes its own `--output` and `--flavor`; the group's
+        // `--rules`, `--threats`, `--objectives` and `--changed` belong to the
+        // group alone.
+        let (scope, pages) = match &args.command {
+            None => (None, &args.pages),
+            Some(Command::Rules(leaf)) => (Some(DocsScope::Objects(Scope::Rules)), &leaf.pages),
+            Some(Command::Objectives(leaf)) => {
+                (Some(DocsScope::Objects(Scope::Objectives)), &leaf.pages)
+            }
+            Some(Command::Threats(leaf)) => (Some(DocsScope::Objects(Scope::Threats)), &leaf.pages),
+            Some(Command::Index(leaf)) => (Some(DocsScope::Index), &leaf.pages),
+        };
+        let group = args.command.is_none();
+        Self {
+            scope,
+            output: pages.output.clone(),
+            flavor: pages.flavor.clone(),
+            rules: group && args.rules,
+            threats: group && args.threats,
+            objectives: group && args.objectives,
+            changed: group && args.changed,
+        }
+    }
+}
+
+impl From<&crate::tree::GenerateExportsArgs> for Option<Target> {
+    fn from(args: &crate::tree::GenerateExportsArgs) -> Self {
+        use crate::tree::GenerateExportsCommand as Command;
+        args.command.as_ref().map(|command| match command {
+            Command::Navigator(_) => Target::Navigator,
+            Command::Objects(_) => Target::Objects,
+            Command::Revisions(_) => Target::Revisions,
+        })
+    }
+}
+
+/// What a docs run did, for its result.
+#[derive(Default)]
+struct DocsRun {
+    data: Vec<(String, Json)>,
+    message: Option<String>,
+    /// `--changed` outside a checkout: the run's own failure.
+    failure: Option<String>,
+    /// The inflight previews left out, one warning each.
+    warnings: Vec<String>,
+}
+
+/// The CVE details `generate docs` writes with `[cve] retrieve_details` on
+/// (UC-4.4, #834; 0.26.0): each identifier asked of Vulnerability-Lookup with
+/// its linked records, then the EPSS score of its CVE, each once per run,
+/// through the run's proxy (`lookup_cves`).
+fn cve_source(
+    resolved: &opentide_schema::configuration::resolve::Resolved,
+    cx: &Context<'_>,
+) -> Result<opentide_compile::generate::docs::cve::CveSource, String> {
+    use opentide_compile::generate::docs::cve::{CveDetail, CveSource, EpssDetail};
+    let settings = super::cve::Settings::from_documentation(resolved.get("documentation"))?;
+    let links = settings.links();
+    let environment = opentide_connectors::Environment::from_pairs(cx.env.iter());
+    let lookup = opentide_connectors::vulnerability::VulnerabilityLookup::new(
+        opentide_connectors::vulnerability::LookupSettings {
+            base_url: settings.base_url.clone(),
+            timeout: settings.timeout,
+        },
+        &environment,
+        cx.proxy,
+        cx.version,
+    );
+    Ok(CveSource::new(move |id: &str| {
+        match lookup.get(id, true, &|key: &str| links.page_url(key)) {
+            Ok(Some(record)) => {
+                let epss = match record.cve_id().map(|cve| lookup.epss(&cve)) {
+                    Some(Ok(Some(score))) => EpssDetail::Score(score),
+                    Some(Err(_)) => EpssDetail::Unavailable,
+                    None | Some(Ok(None)) => EpssDetail::None,
+                };
+                CveDetail::Found(Box::new(record.into_docs(epss)))
+            }
+            Ok(None) => CveDetail::NotFound,
+            Err(_) => CveDetail::Unavailable,
+        }
+    }))
+}
+
+fn counts_json(counts: Counts) -> Json {
+    Json::object([
+        ("rules", count_json(counts.rules)),
+        ("objectives", count_json(counts.objectives)),
+        ("threats", count_json(counts.threats)),
+    ])
+}
+
+fn strings_json<'s>(items: impl IntoIterator<Item = &'s String>) -> Json {
+    Json::Array(items.into_iter().map(Json::str).collect())
+}
+
+/// Writes `outputs` and removes `stale`.
+fn publish(changes: &mut Changes, outputs: &[Output], stale: &[PathBuf]) -> Result<(), String> {
+    write(changes, outputs)?;
+    changes
+        .remove_all(stale)
+        .map_err(|(path, error)| format!("{}: {error}", path.display()))
+}
+
+/// The nested-file warning (`with_nested_object_warning`): files in
+/// subfolders of an object folder are not objects and get no page.
+pub(crate) fn nested_warning(workspace: &Workspace) -> Option<String> {
+    let index = workspace.index();
+    if index.nested.is_empty() {
+        return None;
+    }
+    let root = workspace.root();
+    let paths: Vec<String> = index
+        .nested
+        .iter()
+        .map(|nested| {
+            let shown = nested.path.strip_prefix(root).unwrap_or(&nested.path);
+            shown.to_string_lossy().replace('\\', "/")
+        })
+        .collect();
+    Some(format!(
+        "{} object file(s) in subfolders of an object folder are not object instances and are \
+         skipped (opentide reads only files directly in each object folder; see \
+         https://github.com/opentidehq/opentide/issues/584): {}",
+        paths.len(),
+        paths.join(", ")
+    ))
+}
+
+/// `opentide generate docs` (`run_generate_docs`, `run_document`).
+pub fn docs(args: &DocsArgs, cx: &Context<'_>) -> Report {
+    let command = match args.scope {
+        Some(scope) => format!("generate docs {}", scope.name()),
+        None => "generate docs".to_owned(),
+    };
+    if args.changed && (args.scope.is_some() || args.rules || args.threats || args.objectives) {
+        let mut failure = Failure::new(
+            crate::envelope::code::USAGE_ERROR,
+            "--changed cannot be combined with scoped docs generation",
+        );
+        failure.argument = Some("--changed".into());
+        return Report::failed(&command, crate::envelope::USAGE_EXIT_CODE, failure);
+    }
+    // A flavour no forge has is a usage error before anything is read (D8:
+    // it failed the docs phase with `command_failed`, exit 1).
+    if let Some(flavor) = args.flavor.as_deref().filter(|name| !name.is_empty())
+        && Flavor::from_name(flavor).is_none()
+    {
+        return Report::usage(
+            &command,
+            format!(
+                "Unknown docs flavor `{flavor}`: choose generic, github, gitlab or azure_devops"
+            ),
+            super::USAGE_INVALID_CHOICE,
+            "--flavor",
+            Some(flavor),
+            &FLAVORS,
+        );
+    }
+    let workspace = match workspace_in_step(&command, "docs", "docs", Vec::new(), cx) {
+        Ok(workspace) => workspace,
+        Err(report) => return *report,
+    };
+    let root = workspace.root().to_path_buf();
+    let mut run = DocsRun::default();
+    let phase = run_phase("docs", cx.cwd, &root, |changes| {
+        let raised = docs_phase(args, &workspace, cx, &mut run, changes);
+        with_logged(raised, &workspace)
+    });
+    let mut warnings: Vec<String> = nested_warning(&workspace).into_iter().collect();
+    warnings.append(&mut run.warnings);
+    if let Some(detail) = phase.error {
+        let mut report = phase_failed(&command, "docs", &detail, Vec::new(), vec![phase.step]);
+        report.warnings = warnings;
+        return report;
+    }
+    if let Some(message) = run.failure {
+        let mut step = phase.step;
+        step.status = StepStatus::Failed;
+        let mut report = Report::failed(&command, 1, Failure::new(COMMAND_FAILED, &message));
+        report.outcome.data = run.data;
+        report.steps = vec![step];
+        report.warnings = warnings;
+        return report;
+    }
+    let wrote = phase.step.count.is_some_and(|count| count > 0);
+    let mut report = generated(&command, run.data, vec![phase.step]);
+    if !wrote && let Some(message) = run.message {
+        report.outcome.message = message;
+    }
+    report.warnings = warnings;
+    report
+}
+
+/// The folder a relative docs output is under: the repository root, not the
+/// Tide workspace, which `OPENTIDE_TIDE_WORKSPACE` can place elsewhere (#931).
+/// Resolved as the workspace is, so the two compare when they are one folder.
+fn output_base(workspace: &Workspace) -> PathBuf {
+    OsFs.resolve(&workspace.roots().repo)
+}
+
+/// The work of the docs phase: the pages, the stale pages removed, the
+/// index; `run` gets the result's keys.
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
+fn docs_phase(
+    args: &DocsArgs,
+    workspace: &Workspace,
+    cx: &Context<'_>,
+    run: &mut DocsRun,
+    changes: &mut Changes,
+) -> Result<(), String> {
+    let resolved = &workspace.configuration().resolved;
+    let root = workspace.root();
+    let env = |name: &str| cx.env.get(name).map(str::to_owned);
+    let hints = FlavorHints::new(&env, opentide_compile::git::origin_url(root));
+    let mut settings = DocsSettings::resolve(
+        resolved,
+        &output_base(workspace),
+        args.output.as_deref(),
+        args.flavor.as_deref(),
+        &hints,
+    )
+    .map_err(|error| error.detail)?;
+    if settings.cve_details {
+        settings.cve_source = cve_source(resolved, cx)?;
+    }
+    // Documentation previews open pull requests: their inflight shards are
+    // overlaid on the index for the run (`inflight_preview`).
+    // A preview that does not hold up is left out with a warning, never
+    // failing the run: one pull request's typo must not stop everyone's docs.
+    let (overlaid, skipped) =
+        docs_inflight::overlay(workspace.index(), &root.join(".opentide/inflight"));
+    run.warnings
+        .extend(skipped.iter().map(|skipped| skipped.warning(root)));
+    let index = overlaid
+        .as_ref()
+        .unwrap_or_else(|| workspace.index().as_ref());
+    let catalog =
+        Catalog::build(index, Statuses::from_resolved(resolved)).map_err(|error| error.detail)?;
+    let vocabularies = Vocabularies::bundled();
+    // What deploy would do with each rule: the statuses, the enabled
+    // platforms, their tenants (never their credentials) and the state's ids.
+    let config = opentide_compile::Json::from_node(&resolved.tree);
+    let enabled = opentide_compile::plan::enabled_with(&config, &crate::plugins::plugin_ids());
+    let deployment = DeploymentFacts::read(
+        &config,
+        &enabled,
+        &OsFs,
+        root,
+        catalog.rules.iter().map(|record| record.uuid.as_str()),
+    );
+    let pages_of = Pages {
+        catalog: &catalog,
+        settings: &settings,
+        vocab: Vocab::new(&vocabularies),
+        deployment: &deployment,
+    };
+    let output_text = Json::str(settings.output.to_string_lossy().as_ref());
+    let flagged: Vec<Scope> = [
+        (Scope::Rules, args.rules),
+        (Scope::Threats, args.threats),
+        (Scope::Objectives, args.objectives),
+    ]
+    .into_iter()
+    .filter_map(|(scope, given)| given.then_some(scope))
+    .collect();
+    let scope = args
+        .scope
+        .or_else(|| flagged.first().map(|scope| DocsScope::Objects(*scope)));
+    if args.changed {
+        return changed_phase(workspace, &pages_of, output_text, run, changes);
+    }
+    match scope {
+        Some(DocsScope::Index) => {
+            publish(
+                changes,
+                &index_pages(&pages_of).map_err(|error| error.detail)?,
+                &[],
+            )?;
+            run.data = vec![("output".into(), output_text)];
+            run.message = Some("Index pages written".into());
+        }
+        Some(DocsScope::Objects(_)) if args.scope.is_none() && flagged.len() > 1 => {
+            let mut counts = Counts::default();
+            for scope in &flagged {
+                let (outputs, scoped) =
+                    pages(&pages_of, &[*scope], None).map_err(|error| error.detail)?;
+                publish(changes, &outputs, &stale_pages(&pages_of, &[*scope]))?;
+                counts.rules += scoped.rules;
+                counts.objectives += scoped.objectives;
+                counts.threats += scoped.threats;
+            }
+            let names: Vec<String> = flagged
+                .iter()
+                .map(|scope| scope.folder().to_owned())
+                .collect();
+            run.message = Some(format!(
+                "Documentation scopes {} completed",
+                names.join(", ")
+            ));
+            run.data = vec![
+                ("scopes".into(), strings_json(&names)),
+                ("counts".into(), counts_json(counts)),
+            ];
+        }
+        Some(DocsScope::Objects(scope)) => {
+            let (outputs, counts) =
+                pages(&pages_of, &[scope], None).map_err(|error| error.detail)?;
+            let stale = stale_pages(&pages_of, &[scope]);
+            publish(changes, &outputs, &stale)?;
+            run.message = Some(format!("Documentation scope {} completed", scope.folder()));
+            run.data = vec![
+                ("counts".into(), counts_json(counts)),
+                ("removed".into(), count_json(stale.len())),
+            ];
+        }
+        None => {
+            let (outputs, counts) =
+                pages(&pages_of, &Scope::ALL, None).map_err(|error| error.detail)?;
+            let stale = stale_pages(&pages_of, &Scope::ALL);
+            publish(changes, &outputs, &stale)?;
+            publish(
+                changes,
+                &index_pages(&pages_of).map_err(|error| error.detail)?,
+                &[],
+            )?;
+            run.message = Some("Full documentation pipeline completed".into());
+            run.data = vec![
+                ("counts".into(), counts_json(counts)),
+                ("removed".into(), count_json(stale.len())),
+                ("output".into(), output_text),
+            ];
+        }
+    }
+    Ok(())
+}
+
+/// `--changed`: the pages of the objects changed against the default branch,
+/// their referrers' and the index.
+fn changed_phase(
+    workspace: &Workspace,
+    pages_of: &Pages<'_, '_>,
+    output_text: Json,
+    run: &mut DocsRun,
+    record: &mut Changes,
+) -> Result<(), String> {
+    let folders = changed::folders(workspace.configuration());
+    let files = match opentide_compile::git::changed_in_folders(
+        workspace.root(),
+        &folders,
+        &changed::is_object_file,
+    ) {
+        Ok(files) => files,
+        Err(error) => {
+            let detail = error.message();
+            tracing::warn!(detail = detail.as_str(), "docs_changed_requires_git");
+            run.failure = Some(format!(
+                "--changed could not read the git baseline: {detail}"
+            ));
+            run.data = vec![
+                ("changed_paths".into(), Json::Array(Vec::new())),
+                ("changed_uuids".into(), Json::Array(Vec::new())),
+                ("counts".into(), counts_json(Counts::default())),
+                ("output".into(), output_text),
+            ];
+            return Ok(());
+        }
+    };
+    let changes = changed::changes(pages_of.catalog, &files);
+    if changes.paths.is_empty() {
+        run.message = Some("No changed object documentation detected".into());
+        run.data = vec![
+            ("changed_paths".into(), Json::Array(Vec::new())),
+            ("changed_uuids".into(), Json::Array(Vec::new())),
+            ("counts".into(), counts_json(Counts::default())),
+            ("output".into(), output_text),
+        ];
+        return Ok(());
+    }
+    let (outputs, counts) =
+        pages(pages_of, &Scope::ALL, Some(&changes.targets)).map_err(|error| error.detail)?;
+    let stale = stale_pages(pages_of, &Scope::ALL);
+    publish(record, &outputs, &stale)?;
+    publish(
+        record,
+        &index_pages(pages_of).map_err(|error| error.detail)?,
+        &[],
+    )?;
+    let mut scopes: Vec<String> = changes
+        .targets
+        .iter()
+        .filter_map(|uuid| pages_of.catalog.record(uuid))
+        .map(|record| match record.scope {
+            Scope::Rules => "rule".to_owned(),
+            Scope::Objectives => "objective".to_owned(),
+            Scope::Threats => "threat".to_owned(),
+        })
+        .collect();
+    scopes.sort();
+    scopes.dedup();
+    run.message = Some("Changed documentation pipeline completed".into());
+    run.data = vec![
+        ("counts".into(), counts_json(counts)),
+        ("removed".into(), count_json(stale.len())),
+        ("changed_paths".into(), strings_json(&changes.paths)),
+        ("changed_uuids".into(), strings_json(&changes.uuids)),
+        ("targets".into(), strings_json(&changes.targets)),
+        ("scopes".into(), strings_json(&scopes)),
+        ("output".into(), output_text),
+    ];
+    Ok(())
+}
+
+/// `generate explorer`'s options.
+#[derive(Debug, Clone, Default)]
+pub struct ExplorerOptions {
+    /// `--include-visibility`.
+    pub include_visibility: bool,
+    /// `--visibility-tlp`, as typed; `None` when not given.
+    pub visibility_tlp: Option<String>,
+}
+
+impl ExplorerOptions {
+    /// The options as typed; `tlp_typed` is whether `--visibility-tlp` came
+    /// from the command line (its default is `amber`, and a typed one needs
+    /// `--include-visibility`).
+    pub fn new(args: &crate::tree::GenerateExplorerArgs, tlp_typed: bool) -> Self {
+        Self {
+            include_visibility: args.include_visibility,
+            visibility_tlp: tlp_typed.then(|| args.visibility_tlp.clone()),
+        }
+    }
+}
+
+/// The visibility probe: one placeholder log source per system whose names
+/// declare datasets, so the engines name every dataset a query reads
+/// (`dataset_reads`).
+const PROBE: &str = "__opentide_visibility_probe__";
+/// The systems whose log source names declare datasets to the query checks.
+const DATASET_SYSTEMS: [&str; 4] = ["sentinel", "microsoft_defender", "splunk", "elastic"];
+/// A table outside the engine's catalog: a read only when its message names
+/// `visibility.toml`, as the language server's quick fix takes it.
+const UNKNOWN_TABLE_CODE: &str = "kql_unknown_table";
+
+/// The datasets each rule's queries read, as the query engines read them
+/// (`dataset_reads`): each rule file is analysed with a visibility that
+/// declares only the probe for every system, so the engines report every
+/// dataset a query reads as undeclared, and the name is the quoted one in the
+/// finding. The probe is used on this thread only: nothing is installed.
+fn dataset_reads(
+    index: &opentide_workspace::Index,
+    files: &opentide_workspace::Index,
+) -> Vec<DatasetRead> {
+    let mut probe = String::new();
+    for system in DATASET_SYSTEMS {
+        let _ = write!(
+            probe,
+            "[[logsources]]\nname = \"{PROBE}\"\ndescription = \"probe\"\nsystem = \"{system}\"\n\n"
+        );
+    }
+    // Checked with the probe's declarations on this thread only (#1142).
+    let datasets = opentide_analysis::Datasets::of_workspace(Some(&probe)).unwrap_or_default();
+    let host = opentide_analysis::MemoryWorkspace { files: Vec::new() };
+    let quoted = regex::Regex::new(r"'([^']+)'|`([^`]+)`").ok();
+    let mut reads: Vec<DatasetRead> = Vec::new();
+    for rule in index.family("rule") {
+        let Some(path) = files.file_paths.get(&rule.uuid) else {
+            continue;
+        };
+        let Some(text) = std::fs::read(path)
+            .ok()
+            .and_then(|bytes| crate::queries::decode(&bytes).ok())
+        else {
+            continue;
+        };
+        for report in datasets.scope(|| opentide_analysis::analyze_queries(&host, &text)) {
+            let path = &report.field_path;
+            let system = match path.as_slice() {
+                [first, second, ..] if first == "configurations" => second.clone(),
+                _ => String::new(),
+            };
+            for finding in &report.diagnostics {
+                let is_read = crate::queries::DECLARED_DATASET_CODES
+                    .contains(&finding.code.as_str())
+                    || (finding.code == UNKNOWN_TABLE_CODE
+                        && finding.message.contains("visibility.toml"));
+                if !is_read {
+                    continue;
+                }
+                let name = quoted
+                    .as_ref()
+                    .and_then(|quoted| quoted.captures(&finding.message))
+                    .and_then(|found| found.get(1).or_else(|| found.get(2)))
+                    .map(|found| found.as_str().to_owned())
+                    .unwrap_or_default();
+                if name.is_empty() || name == PROBE {
+                    continue;
+                }
+                let read = DatasetRead {
+                    rule: rule.uuid.clone(),
+                    system: system.clone(),
+                    name,
+                    field_path: path.join("."),
+                };
+                if !reads.contains(&read) {
+                    reads.push(read);
+                }
+            }
+        }
+    }
+    reads
+}
+
+/// The visibility report of the (overlaid) `index` (`load_visibility`):
+/// the declared log sources, read through their model, and the datasets the
+/// rules' files read.
+pub fn visibility_report(
+    workspace: &Workspace,
+    index: &opentide_workspace::Index,
+    root: &Path,
+) -> opentide_compile::json::Json {
+    let present = root
+        .join(crate::queries::VISIBILITY_CONFIGURATION)
+        .is_file();
+    let mut inputs = Inputs::default();
+    if present {
+        match workspace
+            .configuration()
+            .resolved
+            .get("visibility")
+            .map(visibility::declared)
+        {
+            Some(Ok(declared)) => inputs.declared = Some(declared),
+            Some(Err(problem)) => inputs.problem = Some(problem),
+            None => inputs.declared = Some(Vec::new()),
+        }
+    }
+    inputs.reads = dataset_reads(index, workspace.index());
+    visibility::report(index, &inputs)
+}
+
+/// The UTC time now as ISO 8601 with microseconds and a `+00:00` offset.
+fn now_iso() -> String {
+    jiff::Timestamp::now()
+        .to_zoned(jiff::tz::TimeZone::UTC)
+        .strftime("%Y-%m-%dT%H:%M:%S%.6f+00:00")
+        .to_string()
+}
+
+/// `opentide generate explorer`.
+pub fn explorer(options: &ExplorerOptions, cx: &Context<'_>) -> Report {
+    const COMMAND: &str = "generate explorer";
+    let tlp = match &options.visibility_tlp {
+        Some(given) if !options.include_visibility => {
+            let _ = given;
+            let mut failure = Failure::new(
+                super::USAGE_MISSING_OPTION,
+                "--visibility-tlp needs --include-visibility: it labels explorer.visibility.json, which only --include-visibility writes.",
+            );
+            failure.argument = Some("--visibility-tlp".into());
+            return Report::failed(COMMAND, crate::envelope::USAGE_EXIT_CODE, failure);
+        }
+        Some(given) => given.trim().to_lowercase(),
+        None => explorer::DEFAULT_TLP.to_owned(),
+    };
+    if !explorer::TLP_CHOICES.contains(&tlp.as_str()) {
+        let given = options.visibility_tlp.clone().unwrap_or_default();
+        return Report::usage(
+            COMMAND,
+            format!(
+                "Unknown TLP {}. Pass one of: {}.",
+                opentide_schema::configuration::repr::quote(&given),
+                explorer::TLP_CHOICES.join(", ")
+            ),
+            super::USAGE_INVALID_CHOICE,
+            "--visibility-tlp",
+            Some(&given),
+            &explorer::TLP_CHOICES,
+        );
+    }
+    let workspace = match workspace_in_step(COMMAND, "explorer", "explorer", Vec::new(), cx) {
+        Ok(workspace) => workspace,
+        Err(report) => return *report,
+    };
+    let root = workspace.root().to_path_buf();
+    let dir = Settings::new(workspace.configuration(), &root).dir;
+    // Like a phase of `generate`, the explorer fails on an object file the
+    // index could not load, after its own error if it has one (D1).
+    let mut warnings = Vec::new();
+    let phase = run_phase("explorer", cx.cwd, &root, |changes| {
+        let raised = explorer_phase(
+            changes,
+            &workspace,
+            &root,
+            &dir,
+            options,
+            &tlp,
+            &mut warnings,
+        );
+        with_logged(raised, &workspace)
+    });
+    let mut report = match phase.error {
+        Some(detail) => phase_failed(COMMAND, "explorer", &detail, Vec::new(), vec![phase.step]),
+        None => generated(
+            COMMAND,
+            vec![("phase".to_owned(), Json::str("explorer"))],
+            vec![phase.step],
+        ),
+    };
+    report.warnings = warnings;
+    report
+}
+
+/// The explorer's files under `dir`, and its visibility inventory when
+/// `options` ask for it.
+fn explorer_phase(
+    changes: &mut Changes,
+    workspace: &Workspace,
+    root: &Path,
+    dir: &Path,
+    options: &ExplorerOptions,
+    tlp: &str,
+    warnings: &mut Vec<String>,
+) -> Result<(), String> {
+    std::fs::create_dir_all(dir).map_err(|error| format!("{}: {error}", dir.display()))?;
+    // Open pull requests' objects, previewed (`inflight_preview`); one that
+    // does not hold up is left out with a warning.
+    let shards = inflight::load(&root.join(".opentide").join("inflight"));
+    let (index, skipped) = inflight::overlay(workspace.index(), &shards);
+    warnings.extend(skipped.iter().map(|skipped| skipped.warning(root)));
+    let generated_at = now_iso();
+    let outputs =
+        explorer::outputs(&index, dir, &generated_at).map_err(|PhaseError { detail }| detail)?;
+    write(changes, &outputs)?;
+    let visibility_path = dir.join(explorer::VISIBILITY);
+    if options.include_visibility {
+        let report = visibility_report(workspace, &index, root);
+        let document = explorer::visibility(report, &generated_at, tlp);
+        write(
+            changes,
+            &[Output::text(visibility_path, document.to_compact())],
+        )?;
+    } else if visibility_path.is_file() {
+        // Opt-in per run: an inventory an earlier run wrote is not published again.
+        changes
+            .remove(&visibility_path)
+            .map_err(|(path, error)| format!("{}: {error}", path.display()))?;
+    }
+    Ok(())
+}
+
+/// The object files the change set touches (`changed_object_yaml_paths`):
+/// `INFLIGHT_PATHS` when set, else, outside CI, the work tree against the
+/// default branch, and in CI the pull or merge request's diff (the work tree
+/// again when that cannot be read).
+fn changed_object_files(root: &Path, cx: &Context<'_>) -> Vec<PathBuf> {
+    if let Some(raw) = cx
+        .env
+        .get("INFLIGHT_PATHS")
+        .filter(|raw| !raw.trim().is_empty())
+    {
+        return raw
+            .trim()
+            .split(',')
+            .filter(|path| !path.trim().is_empty())
+            .map(|path| cx.cwd.join(path))
+            .collect();
+    }
+    let env = |name: &str| cx.env.get(name).map(str::to_owned);
+    if git::ci(&env) == git::Ci::Local {
+        let local = work_tree_changes(root);
+        if local.is_empty() {
+            tracing::warn!("inflight_no_local_git_diff_found");
+        }
+        return local;
+    }
+    match git::changed_paths(root, cx.cwd, &env, git::DiffSource::ChangeRequest) {
+        Ok(scope) => scope
+            .iter()
+            .filter(|path| inflight::is_object_yaml(path))
+            .map(|path| root.join(path))
+            .collect(),
+        Err(error) => {
+            tracing::warn!(detail = error.message().as_str(), "inflight_ci_diff_failed");
+            work_tree_changes(root)
+        }
+    }
+}
+
+/// The object files changed in the work tree against the default branch,
+/// untracked ones included: the object files of
+/// each `objects/<family>/` folder that differ from the default branch's
+/// baseline, sorted by path. Read with gix, as `generate docs --changed`
+/// reads it, so the `git` program is not needed (#1955).
+fn work_tree_changes(root: &Path) -> Vec<PathBuf> {
+    let Ok(entries) = std::fs::read_dir(root.join("objects")) else {
+        return Vec::new();
+    };
+    let mut folders: Vec<PathBuf> = entries
+        .filter_map(Result::ok)
+        .map(|entry| entry.path())
+        .filter(|path| path.is_dir())
+        .collect();
+    folders.sort();
+    // gix gives the checkout's paths in its own canonical form, which need
+    // not be `root`'s (a `\\?\` or 8.3 name on Windows, a symlink): each is
+    // placed in the workspace with both sides canonical, then named from
+    // `root` as the caller gave it.
+    let canonical = |path: &Path| std::fs::canonicalize(path).ok();
+    let Some(canonical_root) = canonical(root) else {
+        return Vec::new();
+    };
+    match git::changed_in_folders(root, &folders, &|_| true) {
+        Ok(files) => files
+            .into_iter()
+            .filter_map(|file| {
+                if !file.absolute.is_file() {
+                    return None;
+                }
+                let real = canonical(&file.absolute)?;
+                let within = real.strip_prefix(&canonical_root).ok()?;
+                inflight::is_object_yaml(&within.to_string_lossy()).then(|| root.join(within))
+            })
+            .collect(),
+        Err(error) => {
+            tracing::warn!(
+                detail = error.message().as_str(),
+                "inflight_no_git_baseline"
+            );
+            Vec::new()
+        }
+    }
+}
+
+/// `path` from the workspace with `/`, or as given when it is outside it.
+fn source_path(root: &Path, path: &Path) -> String {
+    let canonical =
+        |path: &Path| std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
+    let shown = canonical(path)
+        .strip_prefix(canonical(root))
+        .map_or_else(|_| path.to_path_buf(), Path::to_path_buf);
+    shown.to_string_lossy().replace('\\', "/")
+}
+
+/// `opentide generate inflight`: a preview shard for each object file the
+/// change set touches, under `.opentide/inflight/`.
+pub fn inflight_shards(cx: &Context<'_>) -> Report {
+    const COMMAND: &str = "generate inflight";
+    let workspace = match workspace_in_step(COMMAND, "inflight", "inflight", Vec::new(), cx) {
+        Ok(workspace) => workspace,
+        Err(report) => return *report,
+    };
+    let root = workspace.root().to_path_buf();
+    let dir = root.join(".opentide").join("inflight");
+    let phase = run_phase("inflight", cx.cwd, &root, |changes| {
+        std::fs::create_dir_all(&dir).map_err(|error| format!("{}: {error}", dir.display()))?;
+        let env = |name: &str| cx.env.get(name).map(str::to_owned);
+        let ci = git::ci(&env);
+        let event = cx
+            .env
+            .get("GITHUB_EVENT_PATH")
+            .filter(|path| !path.is_empty())
+            .and_then(|path| std::fs::read_to_string(path).ok());
+        let mut shards: indexmap::IndexMap<PathBuf, Output> = indexmap::IndexMap::new();
+        let mut invalid = Vec::new();
+        for path in changed_object_files(&root, cx) {
+            let text = std::fs::read(&path)
+                .map_err(|error| format!("{}: {error}", path.display()))
+                .and_then(|bytes| crate::queries::decode(&bytes))?;
+            let document = opentide_schema::node::load(&text)
+                .map_err(|error| format!("{}: {error}", path.display()))?;
+            let Some(body) = document
+                .root()
+                .filter(|root| matches!(root.value, opentide_schema::node::Value::Map(_)))
+            else {
+                tracing::warn!(path = %path.display(), "inflight_skip_non_mapping");
+                continue;
+            };
+            let Some(uuid) = inflight::object_uuid(body) else {
+                tracing::warn!(path = %path.display(), "inflight_skip_missing_uuid");
+                continue;
+            };
+            // A shard is checked as `generate docs` reads it: an object that
+            // fails its model fails this run, the pull request's own, and
+            // gets no shard to break the default branch's docs with.
+            let family = inflight::object_family(body).unwrap_or_default();
+            if let Err(error) =
+                opentide_compile::generate::docs::catalog::check_model(&family, &document)
+            {
+                tracing::error!(
+                    path = %path.display(),
+                    uuid = uuid.as_str(),
+                    error = error.as_str(),
+                    "inflight_object_invalid"
+                );
+                invalid.push(format!("{} ({uuid}): {error}", source_path(&root, &path)));
+                continue;
+            }
+            let now = now_iso();
+            let change =
+                inflight::change(&env, ci, &source_path(&root, &path), event.as_deref(), &now);
+            let shard = inflight::shard(body, &now, change);
+            let target = dir.join(format!("{uuid}.json"));
+            tracing::info!(uuid = uuid.as_str(), path = %target.display(), "inflight_shard_written");
+            shards.insert(
+                target.clone(),
+                Output::text(
+                    target,
+                    opentide_compile::generate::json_text::pretty(&shard, 2),
+                ),
+            );
+        }
+        if let Some(first) = invalid.first() {
+            return Err(match invalid.len() {
+                1 => format!("no shard written: {first}"),
+                count => format!(
+                    "no shard written: {count} object files do not validate, first: {first}"
+                ),
+            });
+        }
+        write(changes, &shards.into_values().collect::<Vec<_>>())
+    });
+    match phase.error {
+        Some(detail) => phase_failed(COMMAND, "inflight", &detail, Vec::new(), vec![phase.step]),
+        None => generated(
+            COMMAND,
+            vec![("phase".to_owned(), Json::str("inflight"))],
+            vec![phase.step],
+        ),
+    }
+}
+
+/// `opentide generate inflight prune`: removes the shards the default
+/// branch has caught up with.
+pub fn inflight_prune(cx: &Context<'_>) -> Report {
+    const COMMAND: &str = "generate inflight prune";
+    let workspace =
+        match workspace_in_step(COMMAND, "inflight prune", "inflight-prune", Vec::new(), cx) {
+            Ok(workspace) => workspace,
+            Err(report) => return *report,
+        };
+    let root = workspace.root().to_path_buf();
+    let dir = root.join(".opentide").join("inflight");
+    let phase = run_phase("inflight prune", cx.cwd, &root, |changes| {
+        for (uuid, path) in inflight::superseded(&dir, workspace.index()) {
+            changes
+                .remove(&path)
+                .map_err(|(path, error)| format!("{}: {error}", path.display()))?;
+            tracing::info!(uuid = uuid.as_str(), path = %path.display(), "inflight_shard_pruned");
+        }
+        Ok(())
+    });
+    match phase.error {
+        Some(detail) => phase_failed(
+            COMMAND,
+            "inflight-prune",
+            &detail,
+            Vec::new(),
+            vec![phase.step],
+        ),
+        None => generated(
+            COMMAND,
+            vec![("phase".to_owned(), Json::str("inflight-prune"))],
+            vec![phase.step],
+        ),
+    }
+}
+
+/// The phases `opentide generate` names as words (`generate schemas
+/// templates`), sorted as the usage error lists them.
+pub const NAMED_PHASES: [&str; 4] = ["schemas", "snippets", "templates", "vocabs"];
+
+/// What a run of named phases did: the steps, and the phase that failed
+/// with its detail.
+pub struct PhasesRun {
+    /// One step per phase that ran, in order.
+    pub steps: Vec<Step>,
+    /// The phase that failed and why; the phases after it did not run.
+    pub failed: Option<(String, String)>,
+}
+
+/// The sources of the `schemas` phase: the workspace's resolved
+/// configuration, the bundled vocabularies and its object vocabularies.
+pub fn schema_sources(workspace: &Workspace) -> opentide_schema::generate::schema::Sources {
+    let tree = workspace.configuration().resolved.tree.clone();
+    let mut vocabularies = Vocabularies::bundled();
+    for vocabulary in
+        opentide_workspace::vocabularies::object_vocabularies(workspace.index(), &tree)
+    {
+        vocabularies.insert(vocabulary);
+    }
+    opentide_schema::generate::schema::Sources {
+        config: std::sync::Arc::new(tree),
+        vocabularies: std::sync::Arc::new(vocabularies),
+    }
+}
+
+/// The files one of the phases this engine runs writes, under `root`.
+pub(crate) fn phase_outputs(
+    phase: &str,
+    workspace: &Workspace,
+    root: &Path,
+    version: &str,
+) -> Result<Vec<Output>, String> {
+    use opentide_schema::generate::catalog::{CATALOG_DIR, catalog_texts};
+    use opentide_schema::generate::workspace::{
+        router_artifact, schema_artifacts, snippets, templates,
+    };
+    let config = &workspace.configuration().resolved.tree;
+    let at = |path: &str| root.join(path);
+    match phase {
+        "templates" => Ok(templates(config)
+            .map_err(|error| error.to_string())?
+            .into_iter()
+            .map(|artifact| Output::text(at(&artifact.path), artifact.text))
+            .collect()),
+        "schemas" => {
+            let sources = schema_sources(workspace);
+            let mut outputs: Vec<Output> = schema_artifacts(&sources)
+                .into_iter()
+                .chain(std::iter::once(router_artifact(config)))
+                .map(|artifact| Output::text(at(&artifact.path), artifact.text))
+                .collect();
+            for (name, text) in catalog_texts(version, &sources) {
+                outputs.push(Output::text(at(CATALOG_DIR).join(name), text));
+            }
+            Ok(outputs)
+        }
+        "snippets" => {
+            // The snippets quote the templates as they are on disk.
+            let on_disk: Vec<_> = templates(config)
+                .map_err(|error| error.to_string())?
+                .into_iter()
+                .filter_map(|mut artifact| {
+                    artifact.text = std::fs::read_to_string(at(&artifact.path)).ok()?;
+                    Some(artifact)
+                })
+                .collect();
+            let snippet = snippets(config, &on_disk)?;
+            Ok(vec![Output::text(at(&snippet.path), snippet.text)])
+        }
+        // The object vocabularies are built from the index whenever a
+        // schema or a check needs them; the phase writes nothing
+        // (`object_vocab.run`).
+        "vocabs" => Ok(Vec::new()),
+        other => Err(format!("Unknown generation phase: {other}")),
+    }
+}
+
+/// Runs `phases` (each `schemas`, `templates`, `vocabs` or `snippets`) on `workspace`
+/// in order, each as a checklist step, until one fails. With `loaded`, a
+/// phase that reads the registry also fails on an object file the index
+/// could not load (`logged_errors`): `opentide generate` does, `opentide
+/// new` (which only fills in a missing template) does not.
+pub fn run_phases(
+    phases: &[String],
+    workspace: &Workspace,
+    cwd: &Path,
+    version: &str,
+    loaded: bool,
+) -> PhasesRun {
+    let root = workspace.root().to_path_buf();
+    let mut steps = Vec::new();
+    for phase in phases {
+        // The checklist names `vocabs` by what it builds.
+        let name = if phase == "vocabs" {
+            "vocabularies"
+        } else {
+            phase.as_str()
+        };
+        let ran = run_phase(name, cwd, &root, |changes| {
+            let raised = phase_outputs(phase, workspace, &root, version)
+                .and_then(|outputs| write(changes, &outputs));
+            if loaded && reads_registry(phase) {
+                with_logged(raised, workspace)
+            } else {
+                raised
+            }
+        });
+        steps.push(ran.step);
+        if let Some(detail) = ran.error {
+            return PhasesRun {
+                steps,
+                failed: Some((phase.clone(), detail)),
+            };
+        }
+    }
+    PhasesRun {
+        steps,
+        failed: None,
+    }
+}
+
+/// The full pipeline's phases, in the order they run: what
+/// a person reads first (the pages, the exports), then the framework's own
+/// files.
+pub const PIPELINE: [&str; 6] = [
+    "docs",
+    "exports",
+    "vocabs",
+    "templates",
+    "schemas",
+    "snippets",
+];
+
+/// `opentide generate` with no phase (`run_generate_all`): every phase of
+/// [`PIPELINE`] as one checklist step each, on the workspace opened once,
+/// until one fails; then the nested-file warning (`report_nested_object_files`).
+fn pipeline(cx: &Context<'_>, version: &str) -> Report {
+    let command = "generate";
+    let leading = || {
+        vec![(
+            "phases".to_owned(),
+            Json::Array(PIPELINE.iter().map(|phase| Json::str(*phase)).collect()),
+        )]
+    };
+    // The configuration is read inside the first phase.
+    let workspace = match workspace_in_step(command, "docs", "docs", Vec::new(), cx) {
+        Ok(workspace) => workspace,
+        Err(report) => return *report,
+    };
+    let root = workspace.root().to_path_buf();
+    let mut steps = Vec::new();
+    let mut run = DocsRun::default();
+    let docs = run_phase("docs", cx.cwd, &root, |changes| {
+        let raised = docs_phase(&DocsArgs::default(), &workspace, cx, &mut run, changes);
+        with_logged(raised, &workspace)
+    });
+    steps.push(docs.step);
+    let warnings = run.warnings;
+    if let Some(detail) = docs.error {
+        let mut report = phase_failed(command, "docs", &detail, Vec::new(), steps);
+        report.warnings = warnings;
+        return report;
+    }
+    let settings = Settings::new(workspace.configuration(), &root);
+    let vocabularies = Vocabularies::bundled();
+    let exports = run_phase("exports", cx.cwd, &root, |changes| {
+        let raised = exports_phase(changes, &Target::ALL, &workspace, &settings, &vocabularies);
+        with_logged(raised, &workspace)
+    });
+    steps.push(exports.step);
+    if let Some(detail) = exports.error {
+        return phase_failed(command, "exports", &detail, Vec::new(), steps);
+    }
+    let named: Vec<String> = PIPELINE[2..]
+        .iter()
+        .map(|phase| (*phase).to_owned())
+        .collect();
+    let run = run_phases(&named, &workspace, cx.cwd, version, true);
+    steps.extend(run.steps);
+    if let Some((phase, detail)) = run.failed {
+        return phase_failed(command, &phase, &detail, Vec::new(), steps);
+    }
+    let mut report = generated(command, leading(), steps);
+    report.warnings = warnings;
+    if let Some(detail) = nested_warning(&workspace) {
+        let files = workspace
+            .index()
+            .nested
+            .iter()
+            .map(|nested| {
+                let shown = nested.path.strip_prefix(&root).unwrap_or(&nested.path);
+                shown.to_string_lossy().replace('\\', "/")
+            })
+            .collect();
+        report
+            .after_steps
+            .push(super::AfterSteps::NestedObjectFiles { detail, files });
+    }
+    report
+}
+
+/// `opentide generate <phase>...` (`run_generate` with named phases): the
+/// `schemas`, `templates`, `vocabs` and `snippets` phases; with none, the full
+/// pipeline (`pipeline`). Each finished phase writes its
+/// `OPENTIDE_PROGRESS=json` event, out of the phases the run names.
+pub fn phases(names: &[String], cx: &Context<'_>, version: &str) -> Report {
+    let mut report = named_phases(names, cx, version);
+    report.step_events = Some(if names.is_empty() {
+        PIPELINE.len()
+    } else {
+        names.len()
+    });
+    report
+}
+
+fn named_phases(names: &[String], cx: &Context<'_>, version: &str) -> Report {
+    let command = "generate";
+    let unknown: Vec<&str> = names
+        .iter()
+        .map(String::as_str)
+        .filter(|name| !NAMED_PHASES.contains(name))
+        .collect();
+    if let Some(first) = unknown.first() {
+        return Report::usage(
+            command,
+            format!(
+                "Unknown generation phase {}. Pass one or more of: {}.",
+                unknown.join(", "),
+                NAMED_PHASES.join(", ")
+            ),
+            super::USAGE_INVALID_CHOICE,
+            "phase",
+            Some(first),
+            &NAMED_PHASES,
+        );
+    }
+    if names.is_empty() {
+        return pipeline(cx, version);
+    }
+    let workspace = match workspace(command, cx) {
+        Ok(workspace) => workspace,
+        Err(report) => return *report,
+    };
+    let run = run_phases(names, &workspace, cx.cwd, version, true);
+    if let Some((phase, detail)) = run.failed {
+        return phase_failed(command, &phase, &detail, Vec::new(), run.steps);
+    }
+    generated(
+        command,
+        vec![("phases".to_owned(), strings_json(names))],
+        run.steps,
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn typed(line: &str) -> crate::tree::GenerateCommand {
+        use clap::{CommandFactory as _, FromArgMatches as _};
+        let argv = std::iter::once("opentide").chain(line.split_whitespace());
+        let matches = crate::tree::Cli::command()
+            .try_get_matches_from(argv)
+            .unwrap();
+        match crate::tree::Cli::from_arg_matches(&matches)
+            .unwrap()
+            .command
+        {
+            Some(crate::tree::RootCommand::Generate(crate::tree::GenerateArgs {
+                command: Some(command),
+                ..
+            })) => command,
+            other => panic!("not a generate subcommand: {other:?}"),
+        }
+    }
+
+    fn docs_of(line: &str) -> DocsArgs {
+        match typed(line) {
+            crate::tree::GenerateCommand::Docs(docs) => DocsArgs::from(&docs),
+            other => panic!("not docs: {other:?}"),
+        }
+    }
+
+    fn target_of(line: &str) -> Option<Target> {
+        match typed(line) {
+            crate::tree::GenerateCommand::Exports(exports) => Option::<Target>::from(&exports),
+            other => panic!("not exports: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn generate_docs_options_map_from_the_group_or_the_subcommand() {
+        let group = docs_of("generate docs --rules --changed --output out --flavor gitlab");
+        assert_eq!(group.scope, None);
+        assert_eq!(group.output.as_deref(), Some("out"));
+        assert_eq!(group.flavor.as_deref(), Some("gitlab"));
+        assert!(group.rules && group.changed && !group.threats && !group.objectives);
+        let leaf = docs_of("generate docs threats --output t");
+        assert_eq!(leaf.scope, Some(DocsScope::Objects(Scope::Threats)));
+        assert_eq!(leaf.output.as_deref(), Some("t"));
+        assert_eq!(leaf.flavor, None);
+        let index = docs_of("generate docs index --flavor azure_devops");
+        assert_eq!(index.scope, Some(DocsScope::Index));
+        assert_eq!(index.flavor.as_deref(), Some("azure_devops"));
+        // The group's options are the group's alone, as they were.
+        let ignored = docs_of("generate docs --output out rules");
+        assert_eq!(ignored.scope, Some(DocsScope::Objects(Scope::Rules)));
+        assert_eq!(ignored.output, None);
+    }
+
+    #[test]
+    fn generate_exports_target_and_explorer_options_map_from_the_tree() {
+        assert_eq!(target_of("generate exports"), None);
+        assert_eq!(
+            target_of("generate exports navigator"),
+            Some(Target::Navigator)
+        );
+        assert_eq!(target_of("generate exports objects"), Some(Target::Objects));
+        assert_eq!(
+            target_of("generate exports revisions"),
+            Some(Target::Revisions)
+        );
+        let crate::tree::GenerateCommand::Explorer(explorer) =
+            typed("generate explorer --include-visibility")
+        else {
+            panic!("not explorer")
+        };
+        let given = ExplorerOptions::new(&explorer, true);
+        assert!(given.include_visibility);
+        assert_eq!(given.visibility_tlp.as_deref(), Some("amber"));
+        assert_eq!(ExplorerOptions::new(&explorer, false).visibility_tlp, None);
+    }
+
+    /// The work tree read with gix finds what the `git` program finds: a
+    /// changed, a new and an untracked object file on a branch, not a
+    /// deleted one or a file outside the object folders.
+    #[test]
+    fn the_work_tree_read_with_gix_finds_what_git_finds() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = std::fs::canonicalize(dir.path()).unwrap();
+        let git = |args: &[&str]| {
+            let status = std::process::Command::new("git")
+                .args(["-c", "user.name=t", "-c", "user.email=t@t"])
+                .args(args)
+                .current_dir(&root)
+                .status()
+                .unwrap();
+            assert!(status.success(), "git {args:?}");
+        };
+        let write = |path: &str, text: &str| {
+            let path = root.join(path);
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(path, text).unwrap();
+        };
+        git(&["init", "-q", "-b", "main"]);
+        write("objects/rules/kept.yaml", "a: 1\n");
+        write("objects/rules/changed.yaml", "a: 1\n");
+        write("objects/threats/gone.yaml", "a: 1\n");
+        git(&["add", "-A"]);
+        git(&["commit", "-qm", "base"]);
+        git(&["checkout", "-qb", "feature"]);
+        write("objects/rules/changed.yaml", "a: 2\n");
+        write("objects/objectives/committed.yaml", "a: 1\n");
+        std::fs::remove_file(root.join("objects/threats/gone.yaml")).unwrap();
+        git(&["add", "-A"]);
+        git(&["commit", "-qm", "work"]);
+        write("objects/rules/untracked.yaml", "a: 1\n");
+        write("notes/outside.yaml", "a: 1\n");
+        let read = work_tree_changes(&root);
+        let names = |paths: &[PathBuf]| {
+            let mut names: Vec<String> = paths
+                .iter()
+                .map(|path| {
+                    // The root is canonical (`\\?\C:\...` on Windows):
+                    // compare both canonical.
+                    std::fs::canonicalize(path)
+                        .unwrap()
+                        .strip_prefix(&root)
+                        .unwrap()
+                        .to_string_lossy()
+                        .replace('\\', "/")
+                })
+                .collect();
+            names.sort();
+            names
+        };
+        assert_eq!(
+            names(&read),
+            [
+                "objects/objectives/committed.yaml",
+                "objects/rules/changed.yaml",
+                "objects/rules/untracked.yaml"
+            ]
+        );
+    }
+
+    /// The gix reader names the checkout's files from the root it is given,
+    /// even when that root is not in canonical form (a symlink here; a
+    /// `\\?\` or 8.3 name on Windows): it once dropped every file then.
+    #[cfg(unix)]
+    #[test]
+    fn the_work_tree_read_takes_a_root_in_any_form() {
+        let dir = tempfile::tempdir().unwrap();
+        let real = dir.path().join("real");
+        std::fs::create_dir_all(real.join("objects/rules")).unwrap();
+        let git = |args: &[&str]| {
+            let status = std::process::Command::new("git")
+                .args(["-c", "user.name=t", "-c", "user.email=t@t"])
+                .args(args)
+                .current_dir(&real)
+                .status()
+                .unwrap();
+            assert!(status.success(), "git {args:?}");
+        };
+        git(&["init", "-q", "-b", "main"]);
+        std::fs::write(real.join("objects/rules/kept.yaml"), "a: 1\n").unwrap();
+        git(&["add", "-A"]);
+        git(&["commit", "-qm", "base"]);
+        std::fs::write(real.join("objects/rules/new.yaml"), "a: 1\n").unwrap();
+        let link = dir.path().join("link");
+        std::os::unix::fs::symlink(&real, &link).unwrap();
+        assert_eq!(
+            work_tree_changes(&link),
+            [link.join("objects/rules/new.yaml")]
+        );
+    }
+
+    #[test]
+    fn a_result_counts_its_steps() {
+        let mut step = Step::new("exports");
+        step.status = StepStatus::Ok;
+        step.count = Some(3);
+        step.seconds = 0.12345;
+        let report = generated("generate exports", vec![], vec![step]);
+        assert!(
+            report
+                .outcome
+                .message
+                .starts_with("Generated 3 files in 0.1s · exports")
+        );
+        assert_eq!(report.outcome.summary[0].1, Json::Int(3));
+        assert_eq!(report.outcome.summary[3].1, Json::Float(0.123));
+        let mut removed = Step::new("docs");
+        removed.status = StepStatus::Ok;
+        removed.count = Some(2);
+        removed.unit = "file removed".into();
+        let mut other = Step::new("x");
+        other.status = StepStatus::Ok;
+        other.count = Some(0);
+        let report = generated("generate", vec![], vec![removed, other]);
+        assert!(report.outcome.message.starts_with("Removed 2 files in "));
+        assert!(report.outcome.message.ends_with(" · 2 phases"));
+    }
+
+    #[test]
+    fn a_phase_that_only_removes_files_counts_them_as_removed() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().to_path_buf();
+        let folder = root.join("docs");
+        std::fs::create_dir_all(&folder).unwrap();
+        for name in ["a.md", "b.md"] {
+            std::fs::write(folder.join(name), "x").unwrap();
+        }
+        let phase = run_phase("docs", &root, &root, |changes| {
+            changes
+                .remove_all(&[folder.join("a.md"), folder.join("b.md")])
+                .map_err(|(_, error)| error.to_string())
+        });
+        assert_eq!(phase.error, None);
+        assert_eq!(phase.step.status, StepStatus::Ok);
+        assert_eq!(phase.step.count, Some(2));
+        assert_eq!(phase.step.unit, "file removed");
+        assert_eq!(phase.step.detail, "removed");
+        assert_eq!(phase.step.place.as_deref(), Some("docs/"));
+        let report = generated("generate", vec![], vec![phase.step]);
+        assert!(report.outcome.message.starts_with("Removed 2 files in "));
+
+        std::fs::write(folder.join("c.md"), "x").unwrap();
+        let phase = run_phase("docs", &root, &root, |changes| {
+            write(changes, &[Output::text(folder.join("d.md"), "y".into())])?;
+            changes
+                .remove(&folder.join("c.md"))
+                .map_err(|(_, error)| error.to_string())
+        });
+        assert_eq!(phase.step.count, Some(1));
+        assert_eq!(phase.step.unit, "file");
+    }
+
+    /// A phase counts the files it wrote, whatever else changes in the
+    /// workspace while it runs; a file written with its own content again
+    /// counts as written.
+    #[test]
+    fn a_phase_counts_what_it_wrote_not_what_changed_beside_it() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = std::fs::canonicalize(dir.path()).unwrap();
+        let out = root.join("exports");
+        std::fs::create_dir_all(&out).unwrap();
+        std::fs::write(out.join("same.json"), "{}\n").unwrap();
+        std::fs::write(root.join("rule.yaml"), "name: a\n").unwrap();
+        let phase = run_phase("exports", &root, &root, |changes| {
+            write(
+                changes,
+                &[
+                    Output::text(out.join("same.json"), "{}\n".into()),
+                    Output::text(out.join("new.json"), "[]\n".into()),
+                    Output::text(out.join("third.json"), "[]\n".into()),
+                ],
+            )?;
+            // An editor saves a rule, another tool drops a file, while the phase runs.
+            std::fs::write(root.join("rule.yaml"), "name: changed\n").unwrap();
+            std::fs::write(root.join("notes.txt"), "x").unwrap();
+            std::fs::write(out.join("other.json"), "x").unwrap();
+            Ok(())
+        });
+        assert_eq!(phase.error, None);
+        assert_eq!(phase.step.count, Some(3));
+        assert_eq!(phase.step.unit, "file");
+        assert_eq!(phase.step.place.as_deref(), Some("exports/"));
+        let report = generated("generate exports", vec![], vec![phase.step]);
+        assert!(report.outcome.message.starts_with("Generated 3 files in "));
+    }
+
+    #[test]
+    fn the_explorer_refuses_a_marking_it_cannot_use() {
+        let env = Env::from_pairs(std::iter::empty::<(String, String)>());
+        let cwd = std::env::temp_dir();
+        let cx = Context {
+            repo: None,
+            env: &env,
+            cwd: &cwd,
+            proxy: None,
+            version: "0.0.0",
+        };
+        let alone = explorer(
+            &ExplorerOptions {
+                include_visibility: false,
+                visibility_tlp: Some("red".into()),
+            },
+            &cx,
+        );
+        assert_eq!(alone.outcome.exit_code, 2);
+        let failure = alone.outcome.failure.unwrap();
+        assert_eq!(failure.code, "usage_missing_option");
+        assert_eq!(failure.argument.as_deref(), Some("--visibility-tlp"));
+        let unknown = explorer(
+            &ExplorerOptions {
+                include_visibility: true,
+                visibility_tlp: Some("redd".into()),
+            },
+            &cx,
+        );
+        assert_eq!(unknown.outcome.exit_code, 2);
+        assert_eq!(
+            unknown.outcome.message,
+            "Unknown TLP \"redd\". Pass one of: clear, green, amber, amber+strict, red."
+        );
+        let failure = unknown.outcome.failure.unwrap();
+        assert_eq!(failure.code, "usage_invalid_choice");
+        assert_eq!(failure.suggestion.as_deref(), Some("red"));
+    }
+
+    #[test]
+    fn a_failed_phase_leads_its_message_with_the_phase() {
+        let report = phase_failed(
+            "generate exports objects",
+            "exports",
+            "missing key `version` while rendering x",
+            vec![("target".into(), Json::str("objects"))],
+            vec![],
+        );
+        assert_eq!(report.outcome.exit_code, 1);
+        assert_eq!(
+            report.outcome.message,
+            "exports: missing key `version` while rendering x"
+        );
+        assert_eq!(report.outcome.data[0].0, "phase");
+        assert_eq!(report.outcome.data[1].0, "target");
+    }
+
+    /// A relative docs output is under the repository root, not under the
+    /// Tide workspace that `OPENTIDE_TIDE_WORKSPACE` places elsewhere (#931).
+    #[test]
+    fn docs_output_is_under_the_repository_root_not_the_tide_workspace() {
+        let dir = tempfile::tempdir().unwrap();
+        let outside = OsFs.resolve(dir.path());
+        let repo = outside.join("repo");
+        let tide = repo.join("detections");
+        std::fs::create_dir_all(tide.join("objects")).unwrap();
+        let env = Env::from_pairs([("OPENTIDE_TIDE_WORKSPACE", tide.to_string_lossy())]);
+        let cx = Context {
+            repo: None,
+            env: &env,
+            cwd: &repo,
+            proxy: None,
+            version: "0.0.0",
+        };
+        let report = docs(&DocsArgs::default(), &cx);
+        assert_eq!(report.outcome.exit_code, 0, "{:?}", report.outcome.message);
+        assert!(repo.join("docs/README.md").is_file());
+        assert!(!tide.join("docs").exists());
+        // The step counts the pages it wrote there.
+        let written = walk(&repo.join("docs"));
+        assert!(written > 1);
+        assert_eq!(report.steps[0].count, Some(written));
+        let output = DocsArgs {
+            output: Some("site".into()),
+            ..DocsArgs::default()
+        };
+        let report = docs(&output, &cx);
+        assert_eq!(report.outcome.exit_code, 0, "{:?}", report.outcome.message);
+        assert!(repo.join("site/README.md").is_file());
+        assert!(!tide.join("site").exists());
+        assert_eq!(report.steps[0].count, Some(walk(&repo.join("site"))));
+        // A relative output that leaves both roots is still resolved against
+        // the repository root, and the step counts the pages written there.
+        let sibling = DocsArgs {
+            output: Some("../site".into()),
+            ..DocsArgs::default()
+        };
+        let report = docs(&sibling, &cx);
+        assert_eq!(report.outcome.exit_code, 0, "{:?}", report.outcome.message);
+        assert!(outside.join("site/README.md").is_file());
+        let written = walk(&outside.join("site"));
+        assert!(written > 1);
+        assert_eq!(report.steps[0].count, Some(written));
+        // An absolute output is used as given.
+        let absolute = outside.join("abs");
+        let args = DocsArgs {
+            output: Some(absolute.to_string_lossy().into_owned()),
+            ..DocsArgs::default()
+        };
+        let report = docs(&args, &cx);
+        assert_eq!(report.outcome.exit_code, 0, "{:?}", report.outcome.message);
+        assert!(absolute.join("README.md").is_file());
+        let written = walk(&absolute);
+        assert!(written > 1);
+        assert_eq!(report.steps[0].count, Some(written));
+    }
+
+    #[test]
+    fn generate_outside_a_workspace_writes_nothing() {
+        // D17 (smoke test): `opentide generate` in a folder with no
+        // `.opentide/` or `objects/` wrote 20 files there and exited 0.
+        let dir = tempfile::tempdir().unwrap();
+        let stray = OsFs.resolve(dir.path());
+        let env = Env::default();
+        let cx = Context {
+            repo: None,
+            env: &env,
+            cwd: &stray,
+            proxy: None,
+            version: "0.0.0",
+        };
+        let reports = [
+            phases(&[], &cx, "0.0.0"),
+            phases(&["schemas".to_owned()], &cx, "0.0.0"),
+            docs(&DocsArgs::default(), &cx),
+            exports(None, &cx),
+        ];
+        for report in reports {
+            assert_eq!(report.outcome.exit_code, 1, "{}", report.outcome.message);
+            let failure = report.outcome.failure.as_ref().unwrap();
+            assert_eq!(failure.code, "workspace_not_found");
+            assert!(
+                report.outcome.message.starts_with("No workspace at "),
+                "{}",
+                report.outcome.message
+            );
+        }
+        assert_eq!(walk(&stray), 0, "nothing is written");
+        assert_eq!(std::fs::read_dir(&stray).unwrap().count(), 0);
+    }
+
+    #[test]
+    fn a_malformed_object_file_fails_the_first_phase_that_reads_the_registry() {
+        // D1 (smoke test): `generate` skipped a rule file that does not
+        // parse, said "Generated 63 files" and exited 0.
+        let dir = tempfile::tempdir().unwrap();
+        let root = OsFs.resolve(dir.path());
+        std::fs::create_dir_all(root.join("objects/rules")).unwrap();
+        std::fs::write(root.join("objects/rules/broken.yaml"), "name: [\n").unwrap();
+        let env = Env::default();
+        let cx = Context {
+            repo: None,
+            env: &env,
+            cwd: &root,
+            proxy: None,
+            version: "0.0.0",
+        };
+        let phase_of = |report: &Report| {
+            report
+                .outcome
+                .data
+                .iter()
+                .find(|(key, _)| key == "phase")
+                .map(|(_, value)| value.clone())
+        };
+        let all = phases(&[], &cx, "0.0.0");
+        assert_eq!(all.outcome.exit_code, 1, "{}", all.outcome.message);
+        assert!(
+            all.outcome.message.starts_with(
+                "docs: logged an error: malformed_object_yaml (path=objects/rules/broken.yaml, error="
+            ),
+            "{}",
+            all.outcome.message
+        );
+        assert_eq!(phase_of(&all), Some(Json::str("docs")));
+        let named: Vec<String> = ["schemas", "templates", "vocabs", "snippets"]
+            .iter()
+            .map(|name| (*name).to_owned())
+            .collect();
+        let editor = phases(&named, &cx, "0.0.0");
+        assert_eq!(editor.outcome.exit_code, 1, "{}", editor.outcome.message);
+        assert_eq!(phase_of(&editor), Some(Json::str("schemas")));
+        assert_eq!(editor.steps.len(), 1, "it stops at schemas");
+        for report in [docs(&DocsArgs::default(), &cx), exports(None, &cx)] {
+            assert_eq!(report.outcome.exit_code, 1, "{}", report.outcome.message);
+        }
+        // `generate explorer` reads the catalogue too (review round 2).
+        let explored = explorer(&ExplorerOptions::default(), &cx);
+        assert_eq!(
+            explored.outcome.exit_code, 1,
+            "{}",
+            explored.outcome.message
+        );
+        assert!(
+            explored
+                .outcome
+                .message
+                .starts_with("explorer: logged an error: malformed_object_yaml"),
+            "{}",
+            explored.outcome.message
+        );
+        let templates = phases(&["templates".to_owned()], &cx, "0.0.0");
+        assert_eq!(phase_of(&templates), Some(Json::str("templates")));
+        // A second broken file: counted, the first named.
+        std::fs::write(root.join("objects/rules/also.yaml"), "a: b: c\n").unwrap();
+        let two = phases(&["schemas".to_owned()], &cx, "0.0.0");
+        assert!(
+            two.outcome
+                .message
+                .starts_with("schemas: logged 2 errors, first: "),
+            "{}",
+            two.outcome.message
+        );
+    }
+
+    #[test]
+    fn a_phase_that_raises_also_reports_the_error_it_logged() {
+        // D1 (review): a malformed objective that a rule references failed
+        // `docs` on the dangling reference alone, and never named the file
+        // that broke it; `generate.md` promises both, joined with `;`.
+        let dir = tempfile::tempdir().unwrap();
+        let root = OsFs.resolve(dir.path());
+        std::fs::create_dir_all(root.join("objects/rules")).unwrap();
+        std::fs::create_dir_all(root.join("objects/objectives")).unwrap();
+        let corpus = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../tests/fixtures/tide_corpus/current/Objects");
+        let rule =
+            std::fs::read_to_string(corpus.join("Detection Rules/rule-0001-sentinel-kql.yaml"))
+                .unwrap();
+        std::fs::write(root.join("objects/rules/rule.yaml"), rule).unwrap();
+        // The objective the rule names, cut short so it does not parse.
+        std::fs::write(
+            root.join("objects/objectives/objective.yaml"),
+            "name: Credential access\nmetadata:\n  uuid: 00000000-0000-4000-8002-000000000001\n  tlp: [\n",
+        )
+        .unwrap();
+        let env = Env::default();
+        let cx = Context {
+            repo: None,
+            env: &env,
+            cwd: &root,
+            proxy: None,
+            version: "0.0.0",
+        };
+        for report in [docs(&DocsArgs::default(), &cx), phases(&[], &cx, "0.0.0")] {
+            let message = &report.outcome.message;
+            assert_eq!(report.outcome.exit_code, 1, "{message}");
+            let (raised, logged) = message.split_once("; ").unwrap_or_else(|| {
+                panic!("one error where two were due: {message}");
+            });
+            assert!(
+                raised.starts_with("docs: ") && raised.contains("does not exist"),
+                "{message}"
+            );
+            assert!(
+                logged.starts_with(
+                    "logged an error: malformed_object_yaml (path=objects/objectives/objective.yaml, "
+                ),
+                "{message}"
+            );
+        }
+    }
+
+    #[test]
+    fn an_unknown_docs_flavor_is_a_usage_error() {
+        // D8 (smoke test): `generate docs --flavor bogus` failed the phase,
+        // exit 1 `command_failed`, naming `azure-devops`.
+        let dir = tempfile::tempdir().unwrap();
+        let root = OsFs.resolve(dir.path());
+        std::fs::create_dir_all(root.join("objects")).unwrap();
+        let env = Env::default();
+        let cx = Context {
+            repo: None,
+            env: &env,
+            cwd: &root,
+            proxy: None,
+            version: "0.0.0",
+        };
+        let args = DocsArgs {
+            flavor: Some("gitlabb".into()),
+            ..DocsArgs::default()
+        };
+        let report = docs(&args, &cx);
+        assert_eq!(report.outcome.exit_code, 2);
+        let failure = report.outcome.failure.as_ref().unwrap();
+        assert_eq!(failure.code, "usage_invalid_choice");
+        assert_eq!(failure.argument.as_deref(), Some("--flavor"));
+        assert_eq!(failure.suggestion.as_deref(), Some("gitlab"));
+        assert!(report.outcome.message.contains("azure_devops"));
+        assert!(!root.join("docs").exists(), "nothing is written");
+        for name in ["azure-devops", "azure_devops", "github"] {
+            let args = DocsArgs {
+                flavor: Some(name.into()),
+                ..DocsArgs::default()
+            };
+            assert_eq!(docs(&args, &cx).outcome.exit_code, 0, "{name}");
+        }
+    }
+
+    /// The files under `dir`, at any depth.
+    fn walk(dir: &Path) -> usize {
+        walkdir::WalkDir::new(dir)
+            .min_depth(1)
+            .follow_links(true)
+            .into_iter()
+            .map(Result::unwrap)
+            .filter(|entry| !entry.file_type().is_dir())
+            .count()
+    }
+}

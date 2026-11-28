@@ -1,0 +1,1134 @@
+//! # opentide-node
+//!
+//! The napi-rs binding of the [`opentide`] facade, compiled into the npm
+//! package `@opentide/opentide` (UC-5.3, #838): the SDK (`Workspace` and its
+//! methods), the command line as a function (`main(argv)`, which the
+//! package's `opentide` bin calls in-process) and `runJson(argv)`.
+//!
+//! A thin wrapper (ADR 0005): each function converts its arguments, calls one
+//! facade function and converts the result. napi-derive writes the
+//! TypeScript declarations (`index.d.ts`) from the `#[napi]` items; the
+//! package's `npm run build` regenerates them and CI fails when the
+//! committed file differs.
+//!
+//! Documents keep the command line's JSON: the facade's types serialise in
+//! their field order and a [`opentide::Document`] is handed to `JSON.parse`
+//! as the CLI wrote it, so keys come in the order `opentide --json` prints
+//! them.
+
+use std::collections::HashMap;
+use std::io::Write as _;
+
+use napi::bindgen_prelude::{Function, JsObjectValue, JsValue, Null, Object, Unknown};
+use napi::{Env, JSON};
+use napi_derive::napi;
+use serde::Serialize;
+
+use opentide::lint::{LintCheck, LintFinding, LintReport, LintStatus, LintSummary, NextAction};
+use opentide::validate::{Check, QueriesMode, Report, Summary};
+
+mod tenants;
+
+pub use tenants::{
+    Canceller, Capabilities, ConnectOptions, Connection, DeployOutcome, LiveCheck, QueryColumn,
+    QueryOptions, QueryResult, TenantConfig, capabilities, platforms,
+};
+
+/// The version the command line reports (`opentide --version`): the npm
+/// package's, which the build passes as `OPENTIDE_BUILD_VERSION`.
+#[napi]
+pub const VERSION: &str = opentide::cli::VERSION;
+
+/// Runs `opentide` with `argv` (without the program name) in this process,
+/// on its environment, working directory and standard streams, and returns
+/// the exit code. The package's `opentide` bin exits with it.
+///
+/// Ctrl-C stops the run, which then returns 130 (`error: interrupted`); a
+/// second Ctrl-C ends the process at once, as the PyPI CLI does.
+///
+/// The promise resolves to the exit code; the run happens off Node's event
+/// loop, which keeps serving timers and I/O meanwhile.
+#[napi(catch_unwind, ts_return_type = "Promise<number>")]
+pub fn main(env: &Env, argv: Vec<String>) -> napi::Result<Object<'_>> {
+    blocking(
+        env,
+        move || {
+            let code = opentide::cli::main(&argv);
+            // Node exits without Rust's runtime: flush what the run left buffered.
+            let _ignored = std::io::stdout().flush();
+            Ok(code)
+        },
+        |_env, code| Ok(code),
+    )
+}
+
+/// Runs `opentide --json <argv>` in this process and returns its JSON
+/// document, keys in the command line's order: the envelope (`ok`,
+/// `command`, `result`, `failure`, ...) or, for `commands`, the command tree.
+/// A command that fails still returns its document, with `ok: false`.
+///
+/// The promise rejects with an `Error` whose `code` is `no_json_document`
+/// when the command wrote no document (`--version`). The command runs off
+/// Node's event loop.
+#[napi(catch_unwind, ts_return_type = "Promise<any>")]
+pub fn run_json(env: &Env, argv: Vec<String>) -> napi::Result<Object<'_>> {
+    blocking(
+        env,
+        move || json_document(argv),
+        |env, document| parse(env, &document),
+    )
+}
+
+/// A promise of `work`'s result: `work` runs on a blocking thread of the
+/// SDK's runtime, never on Node's event loop, and `settle` makes its
+/// JavaScript value on Node's thread. A failure rejects the promise with its
+/// code; a panic in `work` rejects it with `internal_error`, never ending
+/// the process.
+fn blocking<T, D>(
+    env: &Env,
+    work: impl FnOnce() -> Result<T, Failure> + Send + 'static,
+    settle: impl FnOnce(Env, T) -> napi::Result<D> + Send + 'static,
+) -> napi::Result<Object<'_>>
+where
+    T: Send + 'static,
+    D: napi::bindgen_prelude::ToNapiValue + 'static,
+{
+    type Settle<D> = Box<dyn FnOnce(Env) -> napi::Result<D> + Send>;
+    let (deferred, promise) = env.create_deferred::<D, Settle<D>>()?;
+    let finish = move |outcome: Result<T, Failure>| {
+        deferred.resolve(Box::new(move |env| match outcome {
+            Ok(value) => settle(env, value),
+            Err(failure) => Err(throw(env, failure)),
+        }));
+    };
+    match tenants::runtime() {
+        Ok(runtime) => {
+            runtime.spawn_blocking(move || {
+                let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(work))
+                    .unwrap_or_else(|panic| Err(Failure::panicked(panic.as_ref())));
+                finish(outcome);
+            });
+        }
+        Err(failure) => finish(Err(failure)),
+    }
+    Ok(promise)
+}
+
+/// [`run_json`]'s document as the command line wrote it.
+fn json_document(argv: Vec<String>) -> Result<String, Failure> {
+    Ok(opentide::cli::run_json(argv)?.as_str().to_owned())
+}
+
+/// How `Workspace.open` opens a workspace.
+#[napi(object)]
+#[derive(Debug, Clone, Default)]
+pub struct OpenOptions {
+    /// The folder paths in findings are shown from (default: the
+    /// workspace's own folder).
+    pub cwd: Option<String>,
+}
+
+/// What `Workspace.validate` runs: `opentide validate`'s options.
+#[napi(object)]
+#[derive(Debug, Clone, Default)]
+pub struct ValidateOptions {
+    /// `--check`: one check, else the default ones.
+    #[napi(
+        ts_type = "'id-uniqueness' | 'uuid-format' | 'schema' | 'cve' | 'sharing-config' | 'configuration' | 'queries'"
+    )]
+    pub check: Option<String>,
+    /// `--file`: object files, by path or by name.
+    pub files: Option<Vec<String>>,
+    /// `--uuid`: objects by UUID.
+    pub uuids: Option<Vec<String>>,
+    /// `--type`: object families (`rule`, `threat`, `objective`).
+    pub types: Option<Vec<String>>,
+    /// `--strict`: a warning fails the run too.
+    pub strict: Option<bool>,
+    /// `--queries`: a query the engine rejects as an error (the default), a
+    /// warning, or not checked.
+    #[napi(ts_type = "'error' | 'warn' | 'off'")]
+    pub queries: Option<String>,
+}
+
+/// What `Workspace.lint` runs: `opentide lint`'s options, without `--fix`
+/// and `--changed` (the command line's).
+#[napi(object)]
+#[derive(Debug, Clone, Default)]
+pub struct LintOptions {
+    /// `--check`; empty runs the checks `lint.toml` enables.
+    #[napi(
+        ts_type = "Array<'filenames' | 'metadata' | 'recommended' | 'placeholders' | 'queries'>"
+    )]
+    pub checks: Option<Vec<String>>,
+    /// `--strict`: any finding fails the run.
+    pub strict: Option<bool>,
+    /// `--file`: object files, by path or by name.
+    pub files: Option<Vec<String>>,
+}
+
+/// What `Workspace.deployPlan` plans: `opentide deploy --dry-run`'s options.
+// No `Debug`: its `environment` holds credentials.
+#[napi(object)]
+#[derive(Clone, Default)]
+pub struct DeployPlanOptions {
+    /// `--strategy` (repeatable); default `['RELEASE']`.
+    #[napi(ts_type = "Array<'PREVIEW' | 'RELEASE'>")]
+    pub strategies: Option<Vec<String>>,
+    /// `--uuid`: objects by UUID.
+    pub uuids: Option<Vec<String>>,
+    /// `--file`: object files.
+    pub files: Option<Vec<String>>,
+    /// `--platform`: one platform.
+    pub platform: Option<String>,
+    /// `--keep-deprecated` (`true`) or `--no-keep-deprecated` (`false`);
+    /// unset: the configuration's.
+    pub keep_deprecated: Option<bool>,
+    /// Where the tenants' `$NAME` credentials are looked up, to say which are
+    /// unset, as `Connection.open`'s `environment` names the one a connection
+    /// reads; unset: the process's.
+    pub environment: Option<std::collections::HashMap<String, String>>,
+}
+
+/// A Tide workspace: its configuration, resolved once, and every object file,
+/// read and parsed once into one index. Each method reads that index.
+#[napi]
+pub struct Workspace {
+    inner: std::sync::Arc<opentide::Workspace>,
+}
+
+#[napi]
+impl Workspace {
+    /// Opens the workspace at `path` on disk: a repository holding
+    /// `.opentide/` or `objects/`, or a folder inside one. The files are read
+    /// and indexed off Node's event loop; the promise resolves to the
+    /// workspace.
+    #[napi(catch_unwind, ts_return_type = "Promise<Workspace>")]
+    pub fn open(env: &Env, path: String, options: Option<OpenOptions>) -> napi::Result<Object<'_>> {
+        // The working directory is the caller's at the call, not whenever
+        // the work starts: `process.chdir` after `open` changes nothing.
+        let path = at_call(path);
+        let cwd = options.and_then(|options| options.cwd).map(at_call);
+        blocking(
+            env,
+            move || open_workspace(path, cwd),
+            |_env, workspace| Ok(workspace),
+        )
+    }
+
+    /// Opens a workspace held in memory, rooted at `root`: each key of
+    /// `files` is a path (relative to `root`, or absolute), each value its
+    /// text. Nothing is read from or written to the disk.
+    #[napi(catch_unwind, factory)]
+    pub fn from_files(
+        env: &Env,
+        root: String,
+        files: HashMap<String, String>,
+    ) -> napi::Result<Self> {
+        workspace_from_files(root, files).map_err(|e| throw(*env, e))
+    }
+
+    /// The workspace folder: the one that holds `.opentide/` and `objects/`.
+    #[napi(catch_unwind, getter)]
+    pub fn root(&self) -> String {
+        self.inner.root().to_string_lossy().into_owned()
+    }
+
+    /// Runs every check of `opentide validate`: `checks`, `report` and
+    /// `summary` as `validate --json` writes them, whether the run fails, and
+    /// its exit code.
+    #[napi(
+        catch_unwind,
+        ts_return_type = "{ checks: Record<string, { check: string; status: string }>; report: any; summary: any; failed: boolean; warned: boolean; exitCode: number }"
+    )]
+    pub fn validate<'env>(
+        &self,
+        env: &'env Env,
+        options: Option<ValidateOptions>,
+    ) -> napi::Result<Unknown<'env>> {
+        let validation = self.validation(options).map_err(|e| throw(*env, e))?;
+        env.to_js_value(&ValidationJs::of(&validation))
+    }
+
+    /// Runs `opentide lint` (its `lint.toml`, or the checks `options` names)
+    /// without fixing anything: `findings` and `summary` as `lint --json`
+    /// writes them, the status, the message and the exit code.
+    #[napi(
+        catch_unwind,
+        ts_return_type = "{ path: string; checks: string[]; findings: any[]; status: 'completed' | 'issues' | 'failed'; message: string; exitCode: number; failureCode: string | null; summary: any | null; outcome: string | null; unmatched: string[]; warnings: string[]; nextActions: Array<{ command: string; reason: string }> }"
+    )]
+    pub fn lint<'env>(
+        &self,
+        env: &'env Env,
+        options: Option<LintOptions>,
+    ) -> napi::Result<Unknown<'env>> {
+        let report = self.lint_report(options).map_err(|e| throw(*env, e))?;
+        env.to_js_value(&LintJs::of(&report))
+    }
+
+    /// What `opentide info` reports: the object counts, the files that did
+    /// not load and each platform with its tenants (the environment
+    /// variables each reads and whether each is set, never their values).
+    /// `environment` is where the variables are looked up, as
+    /// `Connection.open`'s names the one a connection reads; omitted: the
+    /// process's.
+    #[napi(catch_unwind, ts_return_type = "any")]
+    pub fn info<'env>(
+        &self,
+        env: &'env Env,
+        environment: Option<std::collections::HashMap<String, String>>,
+    ) -> napi::Result<Unknown<'env>> {
+        match environment {
+            Some(vars) => env.to_js_value(&self.inner.info_in(vars)),
+            None => env.to_js_value(&self.inner.info()),
+        }
+    }
+
+    /// The catalogue (`opentide info catalog`): every object with its
+    /// techniques and platforms, every edge, the signals and the ATT&CK
+    /// matrix.
+    #[napi(catch_unwind, ts_return_type = "any")]
+    pub fn catalog<'env>(&self, env: &'env Env) -> napi::Result<Unknown<'env>> {
+        env.to_js_value(&self.inner.catalog())
+    }
+
+    /// The detection rules: their rows of the catalogue (`uuid`, `type`,
+    /// `schema`, `name`, `path`, `techniques`, ...), in index order.
+    #[napi(catch_unwind, ts_return_type = "any[]")]
+    pub fn rules<'env>(&self, env: &'env Env) -> napi::Result<Unknown<'env>> {
+        env.to_js_value(&self.inner.rules())
+    }
+
+    /// The detection objectives: their rows of the catalogue.
+    #[napi(catch_unwind, ts_return_type = "any[]")]
+    pub fn objectives<'env>(&self, env: &'env Env) -> napi::Result<Unknown<'env>> {
+        env.to_js_value(&self.inner.objectives())
+    }
+
+    /// The threat vectors: their rows of the catalogue.
+    #[napi(catch_unwind, ts_return_type = "any[]")]
+    pub fn threats<'env>(&self, env: &'env Env) -> napi::Result<Unknown<'env>> {
+        env.to_js_value(&self.inner.threats())
+    }
+
+    /// The rules that cover the ATT&CK `technique` (`opentide info coverage
+    /// --technique`), their own techniques or inherited ones.
+    #[napi(
+        catch_unwind,
+        ts_return_type = "{ technique: string; rules: string[]; count: number; own: string[]; inherited: string[]; matched_techniques: string[] }"
+    )]
+    pub fn coverage<'env>(&self, env: &'env Env, technique: String) -> napi::Result<Unknown<'env>> {
+        env.to_js_value(&self.inner.coverage(&technique))
+    }
+
+    /// The deploy plan: what `opentide deploy --dry-run` would send, computed
+    /// locally. Nothing is sent and nothing is written. `document` is
+    /// `deploy --dry-run --json`'s `result`. The rules are compiled off
+    /// Node's event loop.
+    #[napi(
+        catch_unwind,
+        ts_return_type = "Promise<{ document: any; summary: any | null; ok: boolean }>"
+    )]
+    pub fn deploy_plan<'env>(
+        &self,
+        env: &'env Env,
+        options: Option<DeployPlanOptions>,
+    ) -> napi::Result<Object<'env>> {
+        let workspace = Self {
+            inner: std::sync::Arc::clone(&self.inner),
+        };
+        blocking(
+            env,
+            move || workspace.plan(options),
+            |env, plan| {
+                let mut object = Object::new(&env)?;
+                object.set_named_property("document", parse(env, &plan.document)?)?;
+                match &plan.summary {
+                    Some(summary) => {
+                        object.set_named_property("summary", parse(env, summary)?)?;
+                    }
+                    None => object.set_named_property("summary", Null)?,
+                }
+                object.set_named_property("ok", plan.ok)?;
+                Ok(object.to_unknown())
+            },
+        )
+    }
+
+    /// The tenants the workspace configures for `platform` (the
+    /// `[[tenants]]` of `.opentide/configurations/platforms/<platform>.toml`),
+    /// in file order; empty when it configures none. Open one with
+    /// `Connection.open`. Throws `usage_invalid_choice` for a `platform`
+    /// that is neither built in nor a loaded plugin's.
+    #[napi(catch_unwind)]
+    pub fn tenants(&self, env: &Env, platform: String) -> napi::Result<Vec<TenantConfig>> {
+        self.tenant_configs(&platform).map_err(|e| throw(*env, e))
+    }
+}
+
+/// What each `#[napi]` method computes, before its result becomes a
+/// JavaScript value: plain Rust, so the crate's own tests run it.
+impl Workspace {
+    /// The tenants of `platform`, once the facade knows the platform.
+    fn tenant_configs(&self, platform: &str) -> Result<Vec<TenantConfig>, Failure> {
+        Ok(self
+            .inner
+            .tenants(platform)?
+            .into_iter()
+            .map(TenantConfig::from)
+            .collect())
+    }
+
+    fn validation(
+        &self,
+        options: Option<ValidateOptions>,
+    ) -> Result<opentide::Validation, Failure> {
+        let options = validate_options(options.unwrap_or_default())?;
+        let validation = self.inner.validate(&options);
+        // An option the command line refuses (an unknown `types` entry):
+        // thrown with its usage code, as the other refused options are.
+        if let Some(refusal) = &validation.refused {
+            return Err(Failure::new(refusal.code, refusal.message.clone()));
+        }
+        Ok(validation)
+    }
+
+    fn lint_report(&self, options: Option<LintOptions>) -> Result<LintReport, Failure> {
+        let options = lint_options(options.unwrap_or_default())?;
+        Ok(self.inner.lint(&options))
+    }
+
+    fn plan(&self, options: Option<DeployPlanOptions>) -> Result<PlanText, Failure> {
+        let options = deploy_plan_options(options.unwrap_or_default())?;
+        let plan = self.inner.deploy_plan(&options)?;
+        Ok(PlanText {
+            document: plan.document().as_str().to_owned(),
+            summary: plan.summary().map(|summary| summary.as_str().to_owned()),
+            ok: plan.ok(),
+        })
+    }
+}
+
+/// `Workspace.open`'s workspace.
+fn open_workspace(
+    path: std::path::PathBuf,
+    cwd: Option<std::path::PathBuf>,
+) -> Result<Workspace, Failure> {
+    let mut open = opentide::Options::default();
+    if let Some(cwd) = cwd {
+        open = open.cwd(cwd);
+    }
+    Ok(Workspace {
+        inner: std::sync::Arc::new(opentide::Workspace::open(path, &open)?),
+    })
+}
+
+/// *path* made absolute against the process's working directory now; as
+/// given when it cannot be (the open then reports why).
+fn at_call(path: String) -> std::path::PathBuf {
+    std::path::absolute(&path).unwrap_or_else(|_| path.into())
+}
+
+/// `Workspace.fromFiles`'s workspace.
+fn workspace_from_files(
+    root: String,
+    files: HashMap<String, String>,
+) -> Result<Workspace, Failure> {
+    Ok(Workspace {
+        inner: std::sync::Arc::new(opentide::Workspace::from_files(root, files)?),
+    })
+}
+
+/// `Workspace.deployPlan`'s documents, as the command line writes them.
+struct PlanText {
+    document: String,
+    summary: Option<String>,
+    ok: bool,
+}
+
+/// `Workspace.validate`'s result, in this order.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ValidationJs<'a> {
+    checks: Checks<'a>,
+    report: &'a Report,
+    summary: &'a Summary,
+    failed: bool,
+    warned: bool,
+    exit_code: i32,
+}
+
+impl<'a> ValidationJs<'a> {
+    fn of(validation: &'a opentide::Validation) -> Self {
+        Self {
+            checks: Checks(&validation.checks),
+            report: &validation.report,
+            summary: &validation.summary,
+            failed: validation.failed,
+            warned: validation.warned,
+            exit_code: validation.exit_code(),
+        }
+    }
+}
+
+/// `checks` as `validate --json` writes it, in the order the checks ran:
+/// each check's name to its name and status. (`Validation::checks_json` is
+/// the same map in a `serde_json::Value`, whose keys come sorted.)
+struct Checks<'a>(&'a [(Check, &'static str)]);
+
+impl Serialize for Checks<'_> {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        use serde::ser::SerializeMap as _;
+        let mut map = serializer.serialize_map(Some(self.0.len()))?;
+        for (check, status) in self.0 {
+            map.serialize_entry(
+                check.name(),
+                &CheckStatus {
+                    check: check.name(),
+                    status,
+                },
+            )?;
+        }
+        map.end()
+    }
+}
+
+/// One entry of `checks`.
+#[derive(Serialize)]
+struct CheckStatus<'a> {
+    check: &'a str,
+    status: &'a str,
+}
+
+/// `Workspace.lint`'s result, in this order.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct LintJs<'a> {
+    path: String,
+    checks: Vec<&'static str>,
+    findings: &'a [LintFinding],
+    status: LintStatus,
+    message: &'a str,
+    exit_code: i32,
+    failure_code: Option<&'static str>,
+    summary: Option<&'a LintSummary>,
+    outcome: Option<&'a str>,
+    unmatched: &'a [String],
+    warnings: &'a [String],
+    next_actions: &'a [NextAction],
+}
+
+impl<'a> LintJs<'a> {
+    fn of(report: &'a LintReport) -> Self {
+        Self {
+            path: report.path.to_string_lossy().into_owned(),
+            checks: report.checks.iter().map(|check| check.name()).collect(),
+            findings: &report.findings,
+            status: report.status,
+            message: &report.message,
+            exit_code: report.exit_code,
+            failure_code: report.failure_code,
+            summary: report.summary.as_ref(),
+            outcome: report.outcome.as_deref(),
+            unmatched: &report.unmatched,
+            warnings: &report.warnings,
+            next_actions: &report.next_actions,
+        }
+    }
+}
+
+/// `text` (a JSON document) through `JSON.parse`, which keeps its key order.
+fn parse<'env>(env: Env, text: &str) -> napi::Result<Unknown<'env>> {
+    let json: JSON = env.get_global()?.get_named_property_unchecked("JSON")?;
+    let parse: Function<String, Unknown> = json.get_named_property_unchecked("parse")?;
+    parse.call(text.to_owned())
+}
+
+/// Why a call failed: a stable code (`configuration_invalid`, `io_error`,
+/// `no_json_document`, `usage_invalid_choice`, `tenant_refused`, ...), a
+/// message, and the vendor's own words when a tenant gave a reason. A failed
+/// deploy also says what it stops (`rule` or `tenant`), the HTTP status the
+/// tenant answered with, the fields that locate it, what it did before
+/// failing when the caller must keep it, and its further failures.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct Failure {
+    code: &'static str,
+    message: String,
+    detail: Option<String>,
+    scope: Option<&'static str>,
+    status: Option<u16>,
+    fields: Vec<(String, String)>,
+    after: Option<Box<After>>,
+}
+
+/// What a failed deploy did before failing, and the rule's further
+/// failures: boxed, as most failures have neither.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct After {
+    partial: Option<tenants::DeployOutcome>,
+    more: Vec<Failure>,
+}
+
+impl Failure {
+    fn new(code: &'static str, message: String) -> Self {
+        Self {
+            code,
+            message,
+            detail: None,
+            scope: None,
+            status: None,
+            fields: Vec::new(),
+            after: None,
+        }
+    }
+
+    /// A call that panicked: `internal_error`, with the panic's text.
+    fn panicked(payload: &(dyn std::any::Any + Send)) -> Self {
+        let text = payload
+            .downcast_ref::<&str>()
+            .map(|text| (*text).to_owned())
+            .or_else(|| payload.downcast_ref::<String>().cloned())
+            .unwrap_or_else(|| "a panic".to_owned());
+        Self::new(
+            "internal_error",
+            format!("opentide stopped unexpectedly: {text}"),
+        )
+    }
+
+    /// A choice the command line would refuse: `usage_invalid_choice`.
+    fn usage(message: String) -> Self {
+        Self::new("usage_invalid_choice", message)
+    }
+
+    /// A value the command line would refuse: `usage_invalid_value`.
+    fn invalid(message: String) -> Self {
+        Self::new("usage_invalid_value", message)
+    }
+}
+
+impl From<opentide::Error> for Failure {
+    fn from(error: opentide::Error) -> Self {
+        let mut failure = Self::new(error.code(), error.to_string());
+        match error {
+            opentide::Error::Connector { detail, .. } => failure.detail = detail,
+            opentide::Error::Deploy(failed) => {
+                let failed = *failed;
+                failure.detail = failed.detail;
+                failure.scope = Some(match failed.scope {
+                    opentide::FailureScope::Rule => "rule",
+                    _ => "tenant",
+                });
+                failure.status = failed.status;
+                failure.fields = failed.fields;
+                let more: Vec<Failure> = failed
+                    .more_failures
+                    .into_iter()
+                    .map(|further| Self {
+                        code: further.code,
+                        detail: further.field("detail").map(str::to_owned),
+                        message: further.message,
+                        scope: failure.scope,
+                        status: further.status,
+                        fields: further.fields,
+                        after: None,
+                    })
+                    .collect();
+                if failed.partial.is_some() || !more.is_empty() {
+                    failure.after = Some(Box::new(After {
+                        partial: failed.partial.map(|done| (*done).into()),
+                        more,
+                    }));
+                }
+            }
+            _ => {}
+        }
+        failure
+    }
+}
+
+/// `failure` as the JavaScript `Error` the call throws: its `message`, its
+/// `code` the failure's code, and its `detail` the vendor's words or `null`.
+/// A failed deploy's also has its `scope` (`'rule'` or `'tenant'`), the HTTP
+/// `status` (or `null`), its `fields`, an object in order, and its `partial`:
+/// what it did before failing when the caller must keep it, a
+/// `DeployOutcome` whose `remoteId` is an id to record (or `null`), and its
+/// `moreFailures`: the rule's further failures, in order, each an object with
+/// the same `code`, `message`, `detail`, `scope`, `status` and `fields`. Any
+/// other failure's `scope`, `status` and `partial` are `null` and its
+/// `fields` and `moreFailures` empty.
+fn throw(env: Env, failure: Failure) -> napi::Error {
+    let built = env
+        .create_error(napi::Error::new(
+            napi::Status::GenericFailure,
+            failure.message.clone(),
+        ))
+        .and_then(|mut object| {
+            describe(env, &mut object, &failure)?;
+            let after = failure.after.as_deref();
+            match after.and_then(|after| after.partial.as_ref()) {
+                Some(done) => object.set_named_property("partial", env.to_js_value(done)?)?,
+                None => object.set_named_property("partial", Null)?,
+            }
+            let mut more = env.create_array(0)?;
+            for further in after.map_or(&[][..], |after| after.more.as_slice()) {
+                let mut item = Object::new(&env)?;
+                item.set_named_property("message", further.message.as_str())?;
+                describe(env, &mut item, further)?;
+                more.insert(item)?;
+            }
+            object.set_named_property("moreFailures", more)?;
+            Ok(napi::Error::from(object.to_unknown()))
+        });
+    built.unwrap_or_else(|error| error)
+}
+
+/// Sets `failure`'s `code`, `detail`, `scope`, `status` and `fields` on
+/// `object`.
+fn describe(env: Env, object: &mut Object<'_>, failure: &Failure) -> napi::Result<()> {
+    object.set_named_property("code", failure.code)?;
+    match failure.detail.as_deref() {
+        Some(detail) => object.set_named_property("detail", detail)?,
+        None => object.set_named_property("detail", Null)?,
+    }
+    match failure.scope {
+        Some(scope) => object.set_named_property("scope", scope)?,
+        None => object.set_named_property("scope", Null)?,
+    }
+    match failure.status {
+        Some(status) => object.set_named_property("status", u32::from(status))?,
+        None => object.set_named_property("status", Null)?,
+    }
+    let mut fields = Object::new(&env)?;
+    for (key, value) in &failure.fields {
+        fields.set_named_property(key, value.as_str())?;
+    }
+    object.set_named_property("fields", fields)
+}
+
+fn validate_options(options: ValidateOptions) -> Result<opentide::ValidateOptions, Failure> {
+    let mut out = opentide::ValidateOptions::default()
+        .strict(options.strict.unwrap_or(false))
+        .queries(queries_mode(options.queries.as_deref())?);
+    if let Some(name) = options.check {
+        let check = Check::parse(&name)
+            .ok_or_else(|| Failure::usage(format!("check: unknown check `{name}`")))?;
+        out = out.check(check);
+    }
+    for file in options.files.unwrap_or_default() {
+        out = out.file(file);
+    }
+    for uuid in options.uuids.unwrap_or_default() {
+        out = out.uuid(uuid);
+    }
+    for family in options.types.unwrap_or_default() {
+        out = out.object_type(family);
+    }
+    Ok(out)
+}
+
+fn queries_mode(name: Option<&str>) -> Result<QueriesMode, Failure> {
+    match name {
+        None | Some("error") => Ok(QueriesMode::Error),
+        Some("warn") => Ok(QueriesMode::Warn),
+        Some("off") => Ok(QueriesMode::Off),
+        Some(other) => Err(Failure::usage(format!(
+            "queries: `{other}` is not error, warn or off"
+        ))),
+    }
+}
+
+fn lint_options(options: LintOptions) -> Result<opentide::LintOptions, Failure> {
+    let mut out = opentide::LintOptions::default().strict(options.strict.unwrap_or(false));
+    for name in options.checks.unwrap_or_default() {
+        let check = LintCheck::parse(&name)
+            .ok_or_else(|| Failure::usage(format!("checks: unknown check `{name}`")))?;
+        out = out.check(check);
+    }
+    for file in options.files.unwrap_or_default() {
+        out = out.file(file);
+    }
+    Ok(out)
+}
+
+fn deploy_plan_options(options: DeployPlanOptions) -> Result<opentide::DeployPlanOptions, Failure> {
+    let mut out = opentide::DeployPlanOptions::default();
+    let strategies = options
+        .strategies
+        .unwrap_or_else(|| vec!["RELEASE".to_owned()]);
+    for name in strategies {
+        let strategy = match name.as_str() {
+            "PREVIEW" => opentide::Strategy::Preview,
+            "RELEASE" => opentide::Strategy::Release,
+            other => {
+                return Err(Failure::usage(format!(
+                    "strategies: `{other}` is not PREVIEW or RELEASE"
+                )));
+            }
+        };
+        out = out.strategy(strategy);
+    }
+    for uuid in options.uuids.unwrap_or_default() {
+        out = out.uuid(uuid);
+    }
+    for file in options.files.unwrap_or_default() {
+        out = out.file(file);
+    }
+    if let Some(platform) = options.platform {
+        out = out.platform(platform);
+    }
+    out.keep_deprecated = options.keep_deprecated;
+    if let Some(vars) = options.environment {
+        out = out.environment(vars);
+    }
+    Ok(out)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_failed_deploy_keeps_what_it_did_before_failing() {
+        use opentide::connectors::{DeployError, DeployFailure, DeployOutcome, Operation};
+        let created = DeployOutcome::new(Some("43".into()), Operation::Create);
+        let failure = Failure::from(opentide::Error::from(
+            DeployError::rule(DeployFailure::new("sysdig_request_failed", "HTTP 409"))
+                .with_partial(created.clone()),
+        ));
+        let after = failure.after.unwrap();
+        assert_eq!(after.partial, Some(created.into()));
+        assert!(after.more.is_empty());
+        let usage = Failure::usage("no".into());
+        assert_eq!(usage.after, None);
+    }
+
+    #[test]
+    fn a_rule_that_failed_twice_keeps_both_failures() {
+        use opentide::connectors::{DeployError, DeployFailure};
+        let failure = Failure::from(opentide::Error::from(
+            DeployError::rule(DeployFailure::new("google_secops_text_failed", "HTTP 400"))
+                .with_more(vec![
+                    DeployFailure::new("google_secops_deployment_failed", "HTTP 500")
+                        .with_status(500)
+                        .with_field("detail", "down"),
+                ]),
+        ));
+        let more = failure.after.unwrap().more;
+        assert_eq!(more.len(), 1);
+        assert_eq!(more[0].code, "google_secops_deployment_failed");
+        assert_eq!(more[0].scope, Some("rule"));
+        assert_eq!(
+            (more[0].status, more[0].detail.as_deref()),
+            (Some(500), Some("down"))
+        );
+    }
+
+    #[test]
+    fn options_convert_as_the_command_line_parses_them() {
+        let options = validate_options(ValidateOptions {
+            check: Some("schema".into()),
+            files: Some(vec!["objects/rules/a.yaml".into()]),
+            uuids: Some(vec!["u".into()]),
+            types: Some(vec!["rule".into()]),
+            strict: Some(true),
+            queries: Some("off".into()),
+        })
+        .unwrap();
+        assert_eq!(options.check, Some(Check::Schema));
+        assert_eq!(options.files, ["objects/rules/a.yaml"]);
+        assert_eq!(options.uuids, ["u"]);
+        assert_eq!(options.types, ["rule"]);
+        assert!(options.strict);
+        assert_eq!(options.queries, QueriesMode::Off);
+        assert_eq!(
+            validate_options(ValidateOptions::default()).unwrap(),
+            opentide::ValidateOptions::default()
+        );
+
+        let lint = lint_options(LintOptions {
+            checks: Some(vec!["metadata".into()]),
+            strict: Some(true),
+            files: None,
+        })
+        .unwrap();
+        assert_eq!(lint.checks, [LintCheck::Metadata]);
+
+        let plan = deploy_plan_options(DeployPlanOptions {
+            strategies: None,
+            platform: Some("splunk".into()),
+            keep_deprecated: Some(false),
+            ..DeployPlanOptions::default()
+        })
+        .unwrap();
+        assert_eq!(plan.strategies, [opentide::Strategy::Release]);
+        assert_eq!(plan.platform.as_deref(), Some("splunk"));
+        assert_eq!(plan.keep_deprecated, Some(false));
+    }
+
+    #[test]
+    fn an_unknown_choice_is_a_usage_error() {
+        let check = ValidateOptions {
+            check: Some("nope".into()),
+            ..ValidateOptions::default()
+        };
+        let queries = ValidateOptions {
+            queries: Some("loud".into()),
+            ..ValidateOptions::default()
+        };
+        let lint = LintOptions {
+            checks: Some(vec!["nope".into()]),
+            ..LintOptions::default()
+        };
+        let plan = DeployPlanOptions {
+            strategies: Some(vec!["LATER".into()]),
+            ..DeployPlanOptions::default()
+        };
+        let errors = [
+            validate_options(check).unwrap_err(),
+            validate_options(queries).unwrap_err(),
+            lint_options(lint).unwrap_err(),
+            deploy_plan_options(plan).unwrap_err(),
+        ];
+        for error in errors {
+            assert_eq!(error.code, "usage_invalid_choice", "{error:?}");
+        }
+    }
+
+    #[test]
+    fn checks_keep_the_order_they_ran_in() {
+        let ran = [(Check::Schema, "passed"), (Check::Configuration, "failed")];
+        assert_eq!(
+            serde_json::to_string(&Checks(&ran)).unwrap(),
+            "{\"schema\":{\"check\":\"schema\",\"status\":\"passed\"},\
+             \"configuration\":{\"check\":\"configuration\",\"status\":\"failed\"}}"
+        );
+    }
+
+    #[test]
+    fn a_facade_error_keeps_its_code() {
+        let converted = Failure::from(opentide::Error::NoDocument {
+            exit_code: 0,
+            stderr: String::new(),
+        });
+        assert_eq!(converted.code, "no_json_document");
+        assert!(converted.message.contains("wrote no JSON document"));
+    }
+
+    const RULE: &str = "objects/rules/a.yaml";
+    const UUID: &str = "11111111-1111-4111-8111-111111111111";
+
+    fn workspace() -> Workspace {
+        let files = HashMap::from([(
+            RULE.to_owned(),
+            format!("name: A\nmetadata:\n  uuid: {UUID}\n  schema: rule::1.1\n"),
+        )]);
+        workspace_from_files("/ws".to_owned(), files).unwrap()
+    }
+
+    #[test]
+    fn a_workspace_in_memory_validates_lints_and_plans() {
+        let ws = workspace();
+        // As a path: on Windows the root reads `\ws`.
+        assert_eq!(
+            std::path::Path::new(&ws.root()),
+            std::path::Path::new("/ws")
+        );
+
+        let validation = ws
+            .validation(Some(ValidateOptions {
+                check: Some("id-uniqueness".into()),
+                queries: Some("off".into()),
+                ..ValidateOptions::default()
+            }))
+            .unwrap();
+        // The keys in `validate --json`'s order: read from the text, since a
+        // `serde_json::Value` sorts them.
+        let text = serde_json::to_string(&ValidationJs::of(&validation)).unwrap();
+        let at = |key: &str| text.find(&format!("\"{key}\":")).unwrap();
+        let order = [
+            "checks", "report", "summary", "failed", "warned", "exitCode",
+        ]
+        .map(at);
+        assert!(order.windows(2).all(|pair| pair[0] < pair[1]), "{text}");
+        let js: serde_json::Value = serde_json::from_str(&text).unwrap();
+        assert_eq!(js["exitCode"], validation.exit_code());
+        assert_eq!(js["failed"], validation.failed);
+
+        let report = ws.lint_report(None).unwrap();
+        let js = serde_json::to_value(LintJs::of(&report)).unwrap();
+        assert_eq!(js["exitCode"], report.exit_code);
+        assert_eq!(js["message"], report.message.as_str());
+        assert!(js["nextActions"].is_array());
+        assert!(js.get("failureCode").is_some());
+
+        assert!(serde_json::to_value(ws.inner.info()).unwrap().is_object());
+        assert!(
+            serde_json::to_value(ws.inner.catalog())
+                .unwrap()
+                .is_object()
+        );
+
+        let plan = ws
+            .plan(Some(DeployPlanOptions {
+                strategies: Some(vec!["PREVIEW".into(), "RELEASE".into()]),
+                ..DeployPlanOptions::default()
+            }))
+            .unwrap();
+        let document: serde_json::Value = serde_json::from_str(&plan.document).unwrap();
+        assert!(document.is_object(), "{document}");
+        if let Some(summary) = &plan.summary {
+            serde_json::from_str::<serde_json::Value>(summary).unwrap();
+        }
+        let _ = plan.ok;
+    }
+
+    #[test]
+    fn every_option_reaches_the_facade() {
+        let ws = workspace();
+        let lint = lint_options(LintOptions {
+            checks: Some(vec!["filenames".into(), "metadata".into()]),
+            strict: Some(false),
+            files: Some(vec![RULE.into()]),
+        })
+        .unwrap();
+        assert_eq!(lint.files, [RULE]);
+        assert_eq!(lint.checks, [LintCheck::Filenames, LintCheck::Metadata]);
+        let report = ws
+            .lint_report(Some(LintOptions {
+                files: Some(vec![RULE.into()]),
+                ..LintOptions::default()
+            }))
+            .unwrap();
+        assert_eq!(
+            serde_json::to_value(LintJs::of(&report)).unwrap()["exitCode"],
+            report.exit_code
+        );
+
+        let plan = deploy_plan_options(DeployPlanOptions {
+            strategies: Some(vec!["PREVIEW".into()]),
+            uuids: Some(vec![UUID.into()]),
+            files: Some(vec![RULE.into()]),
+            platform: Some("splunk".into()),
+            keep_deprecated: None,
+            environment: None,
+        })
+        .unwrap();
+        assert_eq!(plan.strategies, [opentide::Strategy::Preview]);
+        assert_eq!(plan.uuids, [UUID]);
+        assert_eq!(plan.files, [RULE]);
+        let planned = ws
+            .plan(Some(DeployPlanOptions {
+                strategies: Some(vec!["RELEASE".into()]),
+                uuids: Some(vec![UUID.into()]),
+                ..DeployPlanOptions::default()
+            }))
+            .unwrap();
+        let document: serde_json::Value = serde_json::from_str(&planned.document).unwrap();
+        assert!(document.is_object(), "{document}");
+
+        let validation = ws
+            .validation(Some(ValidateOptions {
+                files: Some(vec![RULE.into()]),
+                uuids: Some(vec![UUID.into()]),
+                types: Some(vec!["rule".into()]),
+                queries: Some("warn".into()),
+                ..ValidateOptions::default()
+            }))
+            .unwrap();
+        let js = serde_json::to_value(ValidationJs::of(&validation)).unwrap();
+        assert_eq!(js["warned"], validation.warned);
+        let coverage = serde_json::to_value(ws.inner.coverage("T1059")).unwrap();
+        assert_eq!(coverage["technique"], "T1059");
+    }
+
+    #[test]
+    fn a_bad_option_fails_before_the_workspace_runs() {
+        let ws = workspace();
+        let bad =
+            |code: Result<(), Failure>| assert_eq!(code.unwrap_err().code, "usage_invalid_choice");
+        bad(ws
+            .validation(Some(ValidateOptions {
+                queries: Some("loud".into()),
+                ..ValidateOptions::default()
+            }))
+            .map(drop));
+        bad(ws
+            .lint_report(Some(LintOptions {
+                checks: Some(vec!["nope".into()]),
+                ..LintOptions::default()
+            }))
+            .map(drop));
+        bad(ws
+            .plan(Some(DeployPlanOptions {
+                strategies: Some(vec!["LATER".into()]),
+                ..DeployPlanOptions::default()
+            }))
+            .map(drop));
+    }
+
+    /// `from` copied to `to`, folders and files.
+    fn copy_tree(from: &std::path::Path, to: &std::path::Path) {
+        std::fs::create_dir_all(to).unwrap();
+        for entry in std::fs::read_dir(from).unwrap() {
+            let entry = entry.unwrap();
+            let target = to.join(entry.file_name());
+            if entry.file_type().unwrap().is_dir() {
+                copy_tree(&entry.path(), &target);
+            } else {
+                std::fs::copy(entry.path(), &target).unwrap();
+            }
+        }
+    }
+
+    /// A run that plans carries the command line's counts (`summary`), which
+    /// the in-memory workspace above, with no platform, never reaches.
+    #[test]
+    fn a_plan_of_the_corpus_carries_its_summary() {
+        let source = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../tests/fixtures/tide_corpus/current");
+        let dir = tempfile::tempdir().unwrap();
+        copy_tree(
+            &source.join("Configurations"),
+            &dir.path().join(".opentide/configurations"),
+        );
+        for (family, legacy) in [
+            ("threats", "Objects/Threat Vectors"),
+            ("objectives", "Objects/Detection Objectives"),
+            ("rules", "Objects/Detection Rules"),
+        ] {
+            copy_tree(
+                &source.join(legacy),
+                &dir.path().join("objects").join(family),
+            );
+        }
+        let ws = open_workspace(dir.path().to_path_buf(), None).unwrap();
+        let plan = ws.plan(None).unwrap();
+        assert!(plan.ok, "{}", plan.document);
+        let summary: serde_json::Value =
+            serde_json::from_str(plan.summary.as_deref().unwrap()).unwrap();
+        assert!(summary.is_object(), "{summary}");
+    }
+
+    #[test]
+    fn a_workspace_whose_configuration_does_not_parse_fails_with_its_code() {
+        let dir = tempfile::tempdir().unwrap();
+        let configurations = dir.path().join(".opentide/configurations");
+        std::fs::create_dir_all(&configurations).unwrap();
+        std::fs::create_dir_all(dir.path().join("objects/rules")).unwrap();
+        std::fs::write(configurations.join("paths.toml"), "this is = = not toml").unwrap();
+        let failure = open_workspace(dir.path().to_path_buf(), Some(dir.path().to_path_buf()))
+            .err()
+            .unwrap();
+        assert_eq!(failure.code, "config_parse", "{failure:?}");
+        assert!(!failure.message.is_empty());
+    }
+
+    #[test]
+    fn run_json_returns_the_command_lines_document() {
+        let document = json_document(vec!["commands".into()]).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&document).unwrap();
+        assert!(parsed.is_object() || parsed.is_array(), "{parsed}");
+        let failure = json_document(vec!["--version".into()]).unwrap_err();
+        assert_eq!(failure.code, "no_json_document");
+    }
+}

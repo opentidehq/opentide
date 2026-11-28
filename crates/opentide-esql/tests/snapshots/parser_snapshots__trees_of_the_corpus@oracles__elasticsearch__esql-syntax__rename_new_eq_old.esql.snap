@@ -1,0 +1,34 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/oracles/elasticsearch/esql-syntax/rename_new_eq_old.esql
+---
+SOURCE_FILE@0..41
+  QUERY@0..40
+    FROM_COMMAND@0..11
+      FROM_KW@0..4 "FROM"
+      WHITESPACE@4..5 " "
+      INDEX_PATTERN@5..11
+        INDEX_NAME@5..11
+          SOURCE_TEXT@5..11 "logs-*"
+    WHITESPACE@11..12 " "
+    PIPE@12..13 "|"
+    WHITESPACE@13..14 " "
+    RENAME_COMMAND@14..40
+      RENAME_KW@14..20 "RENAME"
+      WHITESPACE@20..21 " "
+      RENAME_CLAUSE@21..40
+        NAME_PATTERN@21..25
+          ID_PATTERN@21..25
+            ID_PATTERN_TEXT@21..25 "name"
+        WHITESPACE@25..26 " "
+        EQ@26..27 "="
+        WHITESPACE@27..28 " "
+        NAME_PATTERN@28..40
+          ID_PATTERN@28..35
+            ID_PATTERN_TEXT@28..35 "process"
+          DOT@35..36 "."
+          ID_PATTERN@36..40
+            ID_PATTERN_TEXT@36..40 "name"
+  WHITESPACE@40..41 "\n"
+--- errors

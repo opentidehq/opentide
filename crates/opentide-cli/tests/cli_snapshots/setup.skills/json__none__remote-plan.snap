@@ -1,0 +1,50 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: setup.skills/json/none/remote-plan
+---
+args: opentide --json setup skills --generic --install sample-skill --plan
+exit: 0
+
+━━━ stdout · json, 1 lines
+{
+  "command": "setup skills",
+  "duration_ms": 0,
+  "exit_code": 0,
+  "failure": null,
+  "message": "Plan: 3 files to write (3 new, 0 changed) · nothing written",
+  "next_actions": [],
+  "ok": true,
+  "path": "<WS>",
+  "plan": true,
+  "schema_version": 1,
+  "status": "completed",
+  "steps": [
+    {
+      "files": [
+        {
+          "action": "create",
+          "path": ".agents/skills/sample-skill/SKILL.md"
+        },
+        {
+          "action": "create",
+          "path": ".agents/skills/sample-skill/references/notes.md"
+        },
+        {
+          "action": "create",
+          "path": "AGENTS.md"
+        }
+      ],
+      "step": "skills",
+      "warnings": []
+    }
+  ],
+  "summary": {
+    "create": 3,
+    "delete": 0,
+    "merge": 0,
+    "skip": 0,
+    "steps": 1
+  }
+}
+
+━━━ stderr · empty

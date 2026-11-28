@@ -1,0 +1,19 @@
+---
+source: crates/opentide-cql/tests/parser_trees.rs
+expression: debug_parse(source)
+---
+SOURCE_FILE@0..19
+  PIPELINE@0..19
+    FREE_TEXT@0..5
+      UNQUOTED_PATTERN@0..5
+        WORD@0..5 "ERROR"
+    WHITESPACE@5..6 " "
+    FUNCTION_CALL@6..19
+      FUNCTION_NAME@6..13
+        FUNCTION_NAME_TOKEN@6..13 "groupBy"
+      L_PAREN@13..14 "("
+      ARGUMENT_LIST@14..18
+        ARGUMENT@14..18
+          FIELD_NAME@14..18
+            WORD@14..18 "host"
+      R_PAREN@18..19 ")"

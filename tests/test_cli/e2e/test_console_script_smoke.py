@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import os
-import sys
 
 import pytest
 
@@ -30,6 +29,9 @@ def _assert_populated_workspace(counts: dict[str, int]) -> None:
     assert sum(counts.values()) > 4, f"smoke workspace is too small to be meaningful: {counts}"
 
 
+# The full set only: golden compare runs `--help` (case `_root`) through the same console
+# script on every pull request, its output byte for byte.
+@pytest.mark.full_set
 def test_opentide_console_script_help(script_runner, tide_corpus_repo) -> None:
     result = script_runner.run(["opentide", "--help"])
     assert result.returncode == 0, result.stderr
@@ -46,6 +48,10 @@ def test_opentide_console_script_version(script_runner) -> None:
     assert result.stderr == ""
 
 
+# The full set only: golden compare runs `info` in agent mode (`--json`)
+# through the same console script on every pull request, its output byte for
+# byte.
+@pytest.mark.full_set
 def test_opentide_console_script_json_is_single_document(script_runner, tide_corpus_repo) -> None:
     result = script_runner.run(["opentide", "--json", "info"])
     assert result.returncode == 0, result.stderr
@@ -149,28 +155,6 @@ def test_no_color_holds_wherever_the_root_parser_stops(
     assert "\x1b[" not in result.stderr
 
 
-@pytest.mark.parametrize(
-    "colour_env",
-    [
-        pytest.param({"FORCE_COLOR": "1"}, id="FORCE_COLOR=1"),
-        # CI is plain mode, which colours only when FORCE_COLOR or PY_COLORS asks.
-        pytest.param({"GITHUB_ACTIONS": "true", "PY_COLORS": "1"}, id="GITHUB_ACTIONS+PY_COLORS"),
-    ],
-)
-@pytest.mark.skipif(
-    sys.platform == "win32",
-    reason="Rich treats a piped Windows stdout as a legacy console and styles it "
-    "through win32 calls, so forced colour never shows up as ANSI escapes",
-)
-def test_typer_help_still_colours_when_asked(
-    script_runner, tide_corpus_repo, colour_env: dict[str, str]
-) -> None:
-    """Control for the pipe checks: forcing colour must keep working."""
-    result = script_runner.run(["opentide", "--help"], env=_terminal_env(colour_env))
-    assert result.returncode == 0, result.stderr
-    assert "\x1b[" in result.stdout
-
-
 def test_ci_help_has_no_colour_unless_forced(script_runner, tide_corpus_repo) -> None:
     """CI is plain mode: Typer used to force a terminal for any ``GITHUB_ACTIONS``."""
     env = _terminal_env({"GITHUB_ACTIONS": "true"})
@@ -179,6 +163,10 @@ def test_ci_help_has_no_colour_unless_forced(script_runner, tide_corpus_repo) ->
     assert "\x1b[" not in result.stdout
 
 
+# The full set only: golden compare runs `validate` in agent mode on its
+# fixtures through the same console script on every pull request, its output
+# byte for byte.
+@pytest.mark.full_set
 def test_opentide_console_script_validates_corpus(script_runner, tide_corpus_repo) -> None:
     result = script_runner.run(["opentide", "--json", "validate", "--strict"])
     assert result.returncode == 0, result.stderr

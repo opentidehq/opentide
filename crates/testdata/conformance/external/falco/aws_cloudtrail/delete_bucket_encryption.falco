@@ -1,0 +1,1 @@
+ct.name="DeleteBucketEncryption" and not ct.error exists

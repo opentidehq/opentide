@@ -1,0 +1,2 @@
+// prod:graph_match_operator invalid
+DeviceNetworkEvents | make-graph DeviceName --> RemoteIP | graph-match (a)-[e*1..]->(b) project a

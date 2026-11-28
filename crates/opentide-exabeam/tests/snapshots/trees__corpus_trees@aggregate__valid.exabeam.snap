@@ -1,0 +1,69 @@
+---
+source: crates/opentide-exabeam/tests/trees.rs
+expression: "debug_parse(&body.join(\"\\n\"))"
+input_file: crates/testdata/corpus/exabeam/aggregate__valid.exabeam
+---
+source_file@0..94
+  statement@0..94
+    select_clause@0..69
+      keyword@0..6
+        letters@0..6 "SELECT"
+      whitespace@6..7 " "
+      column@7..20
+        aggregate@7..15
+          identifier@7..12
+            letters@7..12 "COUNT"
+          (@12..13 "("
+          *@13..14 "*"
+          )@14..15 ")"
+        whitespace@15..16 " "
+        keyword@16..18
+          letters@16..18 "AS"
+        whitespace@18..19 " "
+        alias@19..20
+          identifier@19..20
+            letters@19..20 "n"
+      ,@20..21 ","
+      whitespace@21..22 " "
+      column@22..32
+        aggregate@22..32
+          identifier@22..25
+            letters@22..25 "MAX"
+          (@25..26 "("
+          field_name@26..31
+            identifier@26..31
+              letters@26..31 "bytes"
+          )@31..32 ")"
+      ,@32..33 ","
+      whitespace@33..34 " "
+      column@34..69
+        aggregate@34..61
+          identifier@34..45
+            letters@34..45 "RGX_EXTRACT"
+          (@45..46 "("
+          field_name@46..50
+            identifier@46..50
+              letters@46..50 "user"
+          ,@50..51 ","
+          whitespace@51..52 " "
+          string@52..60 "\"(\\\\w+)\""
+          )@60..61 ")"
+        whitespace@61..62 " "
+        keyword@62..64
+          letters@62..64 "AS"
+        whitespace@64..65 " "
+        alias@65..69
+          identifier@65..69
+            letters@65..69 "name"
+    whitespace@69..70 " "
+    where_clause@70..94
+      keyword@70..75
+        letters@70..75 "WHERE"
+      whitespace@75..76 " "
+      filter@76..94
+        field_term@76..94
+          field_name@76..82
+            identifier@76..82
+              letters@76..82 "vendor"
+          :@82..83 ":"
+          string@83..94 "\"Microsoft\""

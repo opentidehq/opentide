@@ -181,22 +181,21 @@ The validator catches these, but designing against them keeps your graph healthy
 - **Orphan rule** — a rule whose `detection_model` points at no existing objective (or omits it when your policy requires one). It deploys, but nobody can say what threat it addresses.
 - **Dangling reference** — an `objective.threats` UUID that no threat file defines. Usually a typo or a deleted object.
 - **Duplicate UUID** — two objects sharing a UUID. Uniqueness is enforced; regenerate UUIDs, never hand-copy them.
-- **Circular chain** — objectives that reference each other in a loop. Keep the graph a DAG: threat ← objective ← rule.
+- **Circular chain** — a threat whose `chaining` links to itself, which `validate` refuses. A link holds `vector`, `relation` and an optional `description`: `validate` refuses a key one or two letters away from `vector` or `relation` (`vectr`) and suggests the right one, and warns about a link missing `vector` or `relation` and about any other key, which opentide does not read. Keep the references a DAG: threat ← objective ← rule.
 - **Coverage island** — a threat that no objective covers. Valid, but it is a visible gap in your coverage report — often intentional, sometimes a to-do.
 
 ## Typed Python access
 
-The same objects are available programmatically through the [registry](../../sdk/registry.md):
+The same objects are available programmatically through a [`Workspace`](../../sdk/workspace.md), each as its row of the catalogue (UUID, name, path, techniques, platforms):
 
 ```python
-from opentide import Opentide
+from opentide import Workspace
 
-Opentide.initialise()
-rule = Opentide.Rules["00000000-0000-4000-8003-000000000001"]
-objective = Opentide.Objectives["00000000-0000-4000-8002-000000000001"]
-threat = Opentide.Threats["00000000-0000-4000-8001-000000000001"]
-
-obj = Opentide.lookup("00000000-0000-4000-8002-000000000001")  # cross-type lookup
+ws = Workspace.open(".")
+rules = {row["uuid"]: row for row in ws.rules()}
+rule = rules["00000000-0000-4000-8003-000000000001"]
+objectives = ws.objectives()
+threats = ws.threats()
 ```
 
 Rules loaded through the registry expose delegation methods: `validate()`, `validate_query(platform)`, `deploy()`, and `document()`. See [SDK models](../../sdk/models.md).

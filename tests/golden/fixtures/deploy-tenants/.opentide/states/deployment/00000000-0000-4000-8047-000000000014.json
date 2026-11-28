@@ -1,0 +1,9 @@
+{
+  "object_uuid": "00000000-0000-4000-8047-000000000014",
+  "platforms": {
+    "sentinel_one": {
+      "lab": "1800000000000000014"
+    }
+  },
+  "schema": "deployment.state::1.0"
+}

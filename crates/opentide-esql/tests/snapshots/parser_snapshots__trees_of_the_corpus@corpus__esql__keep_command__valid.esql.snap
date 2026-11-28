@@ -1,0 +1,45 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/corpus/esql/keep_command__valid.esql
+---
+SOURCE_FILE@0..94
+  COMMENT@0..26 "// prod:keep_command valid"
+  WHITESPACE@26..27 "\n"
+  QUERY@27..93
+    FROM_COMMAND@27..51
+      FROM_KW@27..31 "FROM"
+      WHITESPACE@31..32 " "
+      INDEX_PATTERN@32..38
+        INDEX_NAME@32..38
+          SOURCE_TEXT@32..38 "logs-*"
+      WHITESPACE@38..39 " "
+      METADATA@39..51
+        METADATA_KW@39..47 "METADATA"
+        WHITESPACE@47..48 " "
+        METADATA_FIELD@48..51
+          SOURCE_TEXT@48..51 "_id"
+    WHITESPACE@51..52 "\n"
+    PIPE@52..53 "|"
+    WHITESPACE@53..54 " "
+    KEEP_COMMAND@54..93
+      KEEP_KW@54..58 "KEEP"
+      WHITESPACE@58..59 " "
+      NAME_PATTERN@59..69
+        ID_PATTERN@59..69
+          ID_PATTERN_TEXT@59..69 "@timestamp"
+      COMMA@69..70 ","
+      WHITESPACE@70..71 " "
+      NAME_PATTERN@71..77
+        ID_PATTERN@71..75
+          ID_PATTERN_TEXT@71..75 "host"
+        DOT@75..76 "."
+        ID_PATTERN@76..77
+          ID_PATTERN_TEXT@76..77 "*"
+      COMMA@77..78 ","
+      WHITESPACE@78..79 " "
+      NAME_PATTERN@79..93
+        QUOTED_IDENTIFIER@79..93
+          QUOTED_IDENT@79..93 "`process.name`"
+  WHITESPACE@93..94 "\n"
+--- errors

@@ -1,0 +1,2475 @@
+---
+source: crates/opentide-analysis/tests/yara_baseline.rs
+expression: out
+---
+== conformance/external/yara/reversinglabs/ByteCode.MSIL.Backdoor.AgentRacoon.broken.yara
+fold 70..531
+fold 537..7582
+fold 577..2028
+fold 2060..3253
+fold 3273..4310
+fold 4339..5853
+fold 5881..6318
+fold 6341..7582
+fold 7588..7887
+== conformance/external/yara/reversinglabs/ByteCode.MSIL.Backdoor.AgentRacoon.yara
+fold 0..7889
+fold 70..531
+fold 537..7582
+fold 577..2028
+fold 2060..3253
+fold 3273..4310
+fold 4339..5853
+fold 5881..6318
+fold 6341..7582
+fold 7588..7887
+symbol rule ByteCode_MSIL_Backdoor_AgentRacoon 0:5-0:39
+symbol string $unpack_response_p1 19:8-19:27
+symbol string $unpack_response_p2 37:8-37:27
+symbol string $upload 53:8-53:15
+symbol string $perform_request 67:8-67:24
+symbol string $get_txt_record 86:8-86:23
+symbol string $main_loop 94:8-94:18
+== conformance/external/yara/reversinglabs/ByteCode.MSIL.Backdoor.AsyncRAT.broken.yara
+fold 0..9065
+fold 68..520
+fold 526..8466
+fold 567..2095
+fold 2116..3024
+fold 3055..4602
+fold 4633..6369
+fold 6390..7104
+fold 7129..7659
+fold 7686..8466
+fold 8472..9063
+symbol rule ByteCode_MSIL_Backdoor_AsyncRAT 0:5-0:36
+symbol string $read_server_data_v1 19:8-19:28
+symbol string $send_v1 38:8-38:16
+symbol string $read_packet_v1_p1 51:8-51:26
+symbol string $read_packet_v1_p2 70:8-70:26
+symbol string $send_v2 91:8-91:16
+symbol string $open_url_v2 102:8-102:20
+symbol string $monitoring_v2 111:8-111:22
+== conformance/external/yara/reversinglabs/ByteCode.MSIL.Backdoor.AsyncRAT.yara
+fold 0..9042
+fold 68..520
+fold 526..8466
+fold 567..2095
+fold 2116..3024
+fold 3055..4602
+fold 4633..6369
+fold 6390..7104
+fold 7129..7659
+fold 7686..8466
+fold 8472..9040
+symbol rule ByteCode_MSIL_Backdoor_AsyncRAT 0:5-0:36
+symbol string $read_server_data_v1 19:8-19:28
+symbol string $send_v1 38:8-38:16
+symbol string $read_packet_v1_p1 51:8-51:26
+symbol string $read_packet_v1_p2 70:8-70:26
+symbol string $send_v2 91:8-91:16
+symbol string $open_url_v2 102:8-102:20
+symbol string $monitoring_v2 111:8-111:22
+== conformance/external/yara/reversinglabs/ByteCode.MSIL.Backdoor.LimeRAT.broken.yara
+fold 67..516
+fold 522..4577
+fold 565..900
+fold 926..1486
+fold 1510..2118
+fold 2156..3511
+fold 3549..4577
+== conformance/external/yara/reversinglabs/ByteCode.MSIL.Backdoor.LimeRAT.yara
+fold 0..4851
+fold 67..516
+fold 522..4577
+fold 565..900
+fold 926..1486
+fold 1510..2118
+fold 2156..3511
+fold 3549..4577
+fold 4583..4849
+symbol rule ByteCode_MSIL_Backdoor_LimeRAT 0:5-0:35
+symbol string $persistence_mechanism 19:8-19:30
+symbol string $crypto_miner 26:8-26:21
+symbol string $downloader 35:8-35:19
+symbol string $network_communication_p1 45:8-45:33
+symbol string $network_communication_p2 62:8-62:33
+== conformance/external/yara/reversinglabs/ByteCode.MSIL.Backdoor.OrcusRAT.broken.yara
+fold 0..8558
+fold 68..520
+fold 526..8105
+fold 567..1623
+fold 1672..3113
+fold 3162..4997
+fold 5026..5376
+fold 5403..6952
+fold 6984..8105
+fold 8111..8556
+symbol rule ByteCode_MSIL_Backdoor_OrcusRAT 0:5-0:36
+symbol string $get_tcp_connections 19:8-19:28
+symbol string $get_operating_system_information_p1 33:8-33:44
+symbol string $get_operating_system_information_p2 51:8-51:44
+symbol string $take_screenshot 73:8-73:24
+symbol string $get_passwords 80:8-80:22
+symbol string $process_key_action 99:8-99:27
+== conformance/external/yara/reversinglabs/ByteCode.MSIL.Backdoor.OrcusRAT.yara
+fold 0..8536
+fold 68..520
+fold 526..8105
+fold 567..1623
+fold 1672..3113
+fold 3162..4997
+fold 5026..5376
+fold 5403..6952
+fold 6984..8105
+fold 8111..8534
+symbol rule ByteCode_MSIL_Backdoor_OrcusRAT 0:5-0:36
+symbol string $get_tcp_connections 19:8-19:28
+symbol string $get_operating_system_information_p1 33:8-33:44
+symbol string $get_operating_system_information_p2 51:8-51:44
+symbol string $take_screenshot 73:8-73:24
+symbol string $get_passwords 80:8-80:22
+symbol string $process_key_action 99:8-99:27
+== conformance/external/yara/reversinglabs/ByteCode.MSIL.Backdoor.ResolverRAT.broken.yara
+fold 71..532
+fold 538..5274
+fold 579..1640
+fold 1676..2549
+fold 2579..3811
+fold 3847..5274
+fold 5280..5549
+== conformance/external/yara/reversinglabs/ByteCode.MSIL.Backdoor.ResolverRAT.yara
+fold 0..5551
+fold 71..532
+fold 538..5274
+fold 579..1640
+fold 1676..2549
+fold 2579..3811
+fold 3847..5274
+fold 5280..5549
+symbol rule ByteCode_MSIL_Backdoor_ResolverRAT 0:5-0:39
+symbol string $run_visual_executor 19:8-19:28
+symbol string $execute_mixed_executor 33:8-33:31
+symbol string $write_connection 45:8-45:25
+symbol string $read_sorter_enumerator 61:8-61:31
+== conformance/external/yara/reversinglabs/ByteCode.MSIL.Infostealer.GomorrahStealer.broken.yara
+fold 0..6696
+fold 78..557
+fold 563..6335
+fold 610..1521
+fold 1554..3192
+fold 3221..3997
+fold 4036..5448
+fold 5481..6335
+fold 6341..6694
+symbol rule ByteCode_MSIL_Infostealer_GomorrahStealer 0:5-0:46
+symbol string $get_browser_autofill_data 19:8-19:34
+symbol string $get_browser_cookies 32:8-32:28
+symbol string $take_screenshot 52:8-52:24
+symbol string $get_antivirus_information 63:8-63:34
+symbol string $get_browser_history 81:8-81:28
+== conformance/external/yara/reversinglabs/ByteCode.MSIL.Infostealer.GomorrahStealer.yara
+fold 0..6674
+fold 78..557
+fold 563..6335
+fold 610..1521
+fold 1554..3192
+fold 3221..3997
+fold 4036..5448
+fold 5481..6335
+fold 6341..6672
+symbol rule ByteCode_MSIL_Infostealer_GomorrahStealer 0:5-0:46
+symbol string $get_browser_autofill_data 19:8-19:34
+symbol string $get_browser_cookies 32:8-32:28
+symbol string $take_screenshot 52:8-52:24
+symbol string $get_antivirus_information 63:8-63:34
+symbol string $get_browser_history 81:8-81:28
+== conformance/external/yara/reversinglabs/ByteCode.MSIL.Ransomware.Apis.broken.yara
+fold 0..4232
+fold 66..510
+fold 516..4018
+fold 548..2038
+fold 2065..3336
+fold 3359..4018
+fold 4024..4230
+symbol rule ByteCode_MSIL_Ransomware_Apis 0:5-0:34
+symbol string $find_files 19:8-19:19
+symbol string $encrypt_files 37:8-37:22
+symbol string $setup_env 53:8-53:18
+== conformance/external/yara/reversinglabs/ByteCode.MSIL.Ransomware.Apis.yara
+fold 0..4210
+fold 66..510
+fold 516..4018
+fold 548..2038
+fold 2065..3336
+fold 3359..4018
+fold 4024..4208
+symbol rule ByteCode_MSIL_Ransomware_Apis 0:5-0:34
+symbol string $find_files 19:8-19:19
+symbol string $encrypt_files 37:8-37:22
+symbol string $setup_env 53:8-53:18
+== conformance/external/yara/reversinglabs/ByteCode.MSIL.Ransomware.ChupaCabra.broken.yara
+fold 72..534
+fold 540..4953
+fold 578..1354
+fold 1384..2895
+fold 2922..3221
+fold 3248..4138
+fold 4168..4953
+fold 4959..5174
+== conformance/external/yara/reversinglabs/ByteCode.MSIL.Ransomware.ChupaCabra.yara
+fold 0..5176
+fold 72..534
+fold 540..4953
+fold 578..1354
+fold 1384..2895
+fold 2922..3221
+fold 3248..4138
+fold 4168..4953
+fold 4959..5174
+symbol rule ByteCode_MSIL_Ransomware_ChupaCabra 0:5-0:40
+symbol string $encrypt_files_p1 19:8-19:25
+symbol string $encrypt_files_p2 30:8-30:25
+symbol string $find_files_p1 49:8-49:22
+symbol string $find_files_p2 55:8-55:22
+symbol string $drop_ransom_note 67:8-67:25
+== conformance/external/yara/reversinglabs/ByteCode.MSIL.Ransomware.Cring.broken.yara
+fold 0..3590
+fold 67..514
+fold 520..3410
+fold 555..927
+fold 954..2396
+fold 2423..3410
+fold 3416..3588
+symbol rule ByteCode_MSIL_Ransomware_Cring 0:5-0:35
+symbol string $find_files_p1 19:8-19:22
+symbol string $find_files_p2 26:8-26:22
+symbol string $encrypt_files 44:8-44:22
+== conformance/external/yara/reversinglabs/ByteCode.MSIL.Ransomware.Cring.yara
+fold 0..3567
+fold 67..514
+fold 520..3410
+fold 555..927
+fold 954..2396
+fold 2423..3410
+fold 3416..3565
+symbol rule ByteCode_MSIL_Ransomware_Cring 0:5-0:35
+symbol string $find_files_p1 19:8-19:22
+symbol string $find_files_p2 26:8-26:22
+symbol string $encrypt_files 44:8-44:22
+== conformance/external/yara/reversinglabs/ByteCode.MSIL.Ransomware.Dusk.broken.yara
+fold 66..510
+fold 516..3459
+fold 554..802
+fold 832..1515
+fold 1547..2095
+fold 2119..3459
+== conformance/external/yara/reversinglabs/ByteCode.MSIL.Ransomware.Dusk.yara
+fold 0..3672
+fold 66..510
+fold 516..3459
+fold 554..802
+fold 832..1515
+fold 1547..2095
+fold 2119..3459
+fold 3465..3670
+symbol rule ByteCode_MSIL_Ransomware_Dusk 0:5-0:34
+symbol string $encrypt_files_p1 19:8-19:25
+symbol string $encrypt_files_p2 25:8-25:25
+symbol string $dusk_delete_itself 35:8-35:27
+symbol string $find_files 44:8-44:19
+== conformance/external/yara/reversinglabs/ByteCode.MSIL.Ransomware.EAF.broken.yara
+fold 0..4948
+fold 65..506
+fold 512..4703
+fold 550..1197
+fold 1227..2762
+fold 2789..3805
+fold 3832..4230
+fold 4260..4703
+fold 4709..4946
+symbol rule ByteCode_MSIL_Ransomware_EAF 0:5-0:33
+symbol string $encrypt_files_p1 19:8-19:25
+symbol string $encrypt_files_p2 29:8-29:25
+symbol string $find_files_p1 48:8-48:22
+symbol string $find_files_p2 62:8-62:22
+symbol string $destroy_exe_file 69:8-69:25
+== conformance/external/yara/reversinglabs/ByteCode.MSIL.Ransomware.EAF.yara
+fold 0..4926
+fold 65..506
+fold 512..4703
+fold 550..1197
+fold 1227..2762
+fold 2789..3805
+fold 3832..4230
+fold 4260..4703
+fold 4709..4924
+symbol rule ByteCode_MSIL_Ransomware_EAF 0:5-0:33
+symbol string $encrypt_files_p1 19:8-19:25
+symbol string $encrypt_files_p2 29:8-29:25
+symbol string $find_files_p1 48:8-48:22
+symbol string $find_files_p2 62:8-62:22
+symbol string $destroy_exe_file 69:8-69:25
+== conformance/external/yara/reversinglabs/Linux.Rootkit.Pumakit.broken.yara
+fold 58..505
+fold 511..11007
+fold 562..2373
+fold 2416..3627
+fold 3653..5572
+fold 5598..6488
+fold 6514..8061
+fold 8087..9562
+fold 9589..11007
+fold 11013..11241
+== conformance/external/yara/reversinglabs/Linux.Rootkit.Pumakit.yara
+fold 0..11243
+fold 58..505
+fold 511..11007
+fold 562..2373
+fold 2416..3627
+fold 3653..5572
+fold 5598..6488
+fold 6514..8061
+fold 8087..9562
+fold 9589..11007
+fold 11013..11241
+symbol rule Linux_Rootkit_Pumakit 0:5-0:26
+symbol string $hooking_syscalls_mechanism_p1 19:8-19:38
+symbol string $hooking_syscalls_mechanism_p2 41:8-41:38
+symbol string $hook_rmdir_1 57:8-57:21
+symbol string $hook_rmdir_2 80:8-80:21
+symbol string $hook_rmdir_3 93:8-93:21
+symbol string $hook_rmdir_4 112:8-112:21
+symbol string $hook_gdents64 131:8-131:22
+== conformance/external/yara/reversinglabs/Linux.Trojan.AcidRain.broken.yara
+fold 0..3444
+fold 58..506
+fold 512..3177
+fold 560..2383
+fold 2426..2665
+fold 2704..3177
+fold 3183..3442
+symbol rule Linux_Trojan_AcidRain 0:5-0:26
+symbol string $destroy_files_using_ioctls 19:8-19:35
+symbol string $destroy_files_using_overwrite 41:8-41:38
+symbol string $redundant_reboot_attempts 47:8-47:34
+== conformance/external/yara/reversinglabs/Linux.Trojan.AcidRain.yara
+fold 0..3421
+fold 58..506
+fold 512..3177
+fold 560..2383
+fold 2426..2665
+fold 2704..3177
+fold 3183..3419
+symbol rule Linux_Trojan_AcidRain 0:5-0:26
+symbol string $destroy_files_using_ioctls 19:8-19:35
+symbol string $destroy_files_using_overwrite 41:8-41:38
+symbol string $redundant_reboot_attempts 47:8-47:34
+== conformance/external/yara/reversinglabs/Linux.Trojan.BiBiWiper.broken.yara
+fold 59..510
+fold 516..4664
+fold 554..2089
+fold 2119..3282
+fold 3312..4664
+== conformance/external/yara/reversinglabs/Linux.Trojan.BiBiWiper.yara
+fold 0..4777
+fold 59..510
+fold 516..4664
+fold 554..2089
+fold 2119..3282
+fold 3312..4664
+fold 4670..4775
+symbol rule Linux_Trojan_BiBiWiper 0:5-0:27
+symbol string $destroy_files_p1 19:8-19:25
+symbol string $destroy_files_p2 38:8-38:25
+symbol string $destroy_files_p3 53:8-53:25
+== conformance/external/yara/reversinglabs/Linux.Virus.Vit.broken.yara
+fold 14..1299
+fold 66..497
+fold 503..1173
+fold 538..1143
+fold 1179..1297
+symbol rule Linux_Virus_Vit 2:5-2:20
+symbol string $vit_entry_point 21:6-21:22
+symbol string $vit_str 31:6-31:14
+== conformance/external/yara/reversinglabs/Linux.Virus.Vit.yara
+fold 14..1276
+fold 66..497
+fold 503..1173
+fold 538..1143
+fold 1179..1274
+symbol rule Linux_Virus_Vit 2:5-2:20
+symbol string $vit_entry_point 21:6-21:22
+symbol string $vit_str 31:6-31:14
+== conformance/external/yara/reversinglabs/Win32.Downloader.dlMarlboro.broken.yara
+fold 0..5347
+fold 64..526
+fold 532..5222
+fold 564..1245
+fold 1273..3126
+fold 3154..5222
+fold 5228..5345
+symbol rule Win32_Downloader_dlMarlboro 0:5-0:32
+symbol string $ping_apnic 19:8-19:19
+symbol string $download_bin_1 29:8-29:23
+symbol string $download_bin_2 51:8-51:23
+== conformance/external/yara/reversinglabs/Win32.Downloader.dlMarlboro.yara
+fold 0..5324
+fold 64..526
+fold 532..5222
+fold 564..1245
+fold 1273..3126
+fold 3154..5222
+fold 5228..5322
+symbol rule Win32_Downloader_dlMarlboro 0:5-0:32
+symbol string $ping_apnic 19:8-19:19
+symbol string $download_bin_1 29:8-29:23
+symbol string $download_bin_2 51:8-51:23
+== conformance/external/yara/reversinglabs/Win32.Exploit.CVE20200601.broken.yara
+fold 75..540
+fold 546..9561
+fold 586..636
+fold 666..1052
+fold 1082..1468
+fold 1498..1884
+fold 1914..2300
+fold 2330..2716
+fold 2746..3132
+fold 3162..3548
+fold 3578..3964
+fold 3994..4380
+fold 4411..4797
+fold 4828..5214
+fold 5245..5631
+fold 5662..6048
+fold 6079..6465
+fold 6496..6882
+fold 6913..7299
+fold 7330..7716
+fold 7747..8133
+fold 8164..8430
+fold 8461..8847
+fold 8878..9264
+fold 9295..9561
+== conformance/external/yara/reversinglabs/Win32.Exploit.CVE20200601.yara
+fold 13..9790
+fold 75..540
+fold 546..9561
+fold 586..636
+fold 666..1052
+fold 1082..1468
+fold 1498..1884
+fold 1914..2300
+fold 2330..2716
+fold 2746..3132
+fold 3162..3548
+fold 3578..3964
+fold 3994..4380
+fold 4411..4797
+fold 4828..5214
+fold 5245..5631
+fold 5662..6048
+fold 6079..6465
+fold 6496..6882
+fold 6913..7299
+fold 7330..7716
+fold 7747..8133
+fold 8164..8430
+fold 8461..8847
+fold 8878..9264
+fold 9295..9561
+fold 9567..9788
+symbol rule Win32_Exploit_CVE20200601 2:5-2:30
+symbol string $oid_prime_explicit 21:8-21:27
+symbol string $ecc_public_key_1 25:8-25:25
+symbol string $ecc_public_key_2 35:8-35:25
+symbol string $ecc_public_key_3 45:8-45:25
+symbol string $ecc_public_key_4 55:8-55:25
+symbol string $ecc_public_key_5 65:8-65:25
+symbol string $ecc_public_key_6 75:8-75:25
+symbol string $ecc_public_key_7 85:8-85:25
+symbol string $ecc_public_key_8 95:8-95:25
+symbol string $ecc_public_key_9 105:8-105:25
+symbol string $ecc_public_key_10 115:8-115:26
+symbol string $ecc_public_key_11 125:8-125:26
+symbol string $ecc_public_key_12 135:8-135:26
+symbol string $ecc_public_key_13 145:8-145:26
+symbol string $ecc_public_key_14 155:8-155:26
+symbol string $ecc_public_key_15 165:8-165:26
+symbol string $ecc_public_key_16 175:8-175:26
+symbol string $ecc_public_key_17 185:8-185:26
+symbol string $ecc_public_key_18 195:8-195:26
+symbol string $ecc_public_key_19 205:8-205:26
+symbol string $ecc_public_key_20 213:8-213:26
+symbol string $ecc_public_key_21 223:8-223:26
+symbol string $ecc_public_key_22 233:8-233:26
+== conformance/external/yara/reversinglabs/Win32.Infostealer.MultigrainPOS.broken.yara
+fold 68..541
+fold 547..4536
+fold 591..1138
+fold 1173..1371
+fold 1405..1949
+fold 1985..2402
+fold 2437..3311
+fold 3346..3508
+fold 3545..4137
+fold 4173..4536
+fold 4542..4833
+== conformance/external/yara/reversinglabs/Win32.Infostealer.MultigrainPOS.yara
+fold 0..4835
+fold 68..541
+fold 547..4536
+fold 591..1138
+fold 1173..1371
+fold 1405..1949
+fold 1985..2402
+fold 2437..3311
+fold 3346..3508
+fold 3545..4137
+fold 4173..4536
+fold 4542..4833
+symbol rule Win32_Infostealer_MultigrainPOS 0:5-0:36
+symbol string $data_exfiltration_v10_1 18:8-18:32
+symbol string $memory_scraping_v10_1 27:8-27:30
+symbol string $process_search_v10_1 32:8-32:29
+symbol string $service_creation_v10_1 41:8-41:31
+symbol string $process_search_v11_1 50:8-50:29
+symbol string $memory_scraping_v11_1 62:8-62:30
+symbol string $data_exfiltration_v11_1 67:8-67:32
+symbol string $service_creation_v11_1 76:8-76:31
+== conformance/external/yara/reversinglabs/Win32.Infostealer.ProjectHookPOS.broken.yara
+fold 0..5859
+fold 69..545
+fold 551..5633
+fold 581..1632
+fold 1661..2254
+fold 2284..2908
+fold 2939..3704
+fold 3731..4354
+fold 4381..4801
+fold 4828..5633
+fold 5639..5856
+symbol rule Win32_Infostealer_ProjectHookPOS 0:5-0:37
+symbol string $calc_luhn 18:8-18:18
+symbol string $track_1_reverse 32:8-32:24
+symbol string $check_validity_1 41:8-41:25
+symbol string $encode_and_send_1 51:8-51:26
+symbol string $form_create_1 62:8-62:22
+symbol string $form_create_2 72:8-72:22
+symbol string $form_create_3 80:8-80:22
+== conformance/external/yara/reversinglabs/Win32.Infostealer.ProjectHookPOS.yara
+fold 0..5836
+fold 69..545
+fold 551..5633
+fold 581..1632
+fold 1661..2254
+fold 2284..2908
+fold 2939..3704
+fold 3731..4354
+fold 4381..4801
+fold 4828..5633
+fold 5639..5833
+symbol rule Win32_Infostealer_ProjectHookPOS 0:5-0:37
+symbol string $calc_luhn 18:8-18:18
+symbol string $track_1_reverse 32:8-32:24
+symbol string $check_validity_1 41:8-41:25
+symbol string $encode_and_send_1 51:8-51:26
+symbol string $form_create_1 62:8-62:22
+symbol string $form_create_2 72:8-72:22
+symbol string $form_create_3 80:8-80:22
+== conformance/external/yara/reversinglabs/Win32.PUA.Domaiq.broken.yara
+fold 53..518
+fold 524..8874
+fold 615..1084
+fold 1112..1650
+fold 1681..1885
+fold 1913..1984
+fold 2019..2706
+fold 2746..4351
+fold 4382..5511
+fold 5542..5992
+fold 6022..7039
+fold 7072..7440
+fold 7471..8085
+fold 8109..8405
+fold 8429..8525
+fold 8549..8703
+fold 8732..8874
+== conformance/external/yara/reversinglabs/Win32.PUA.Domaiq.yara
+fold 0..9433
+fold 53..518
+fold 524..8874
+fold 615..1084
+fold 1112..1650
+fold 1681..1885
+fold 1913..1984
+fold 2019..2706
+fold 2746..4351
+fold 4382..5511
+fold 5542..5992
+fold 6022..7039
+fold 7072..7440
+fold 7471..8085
+fold 8109..8405
+fold 8429..8525
+fold 8549..8703
+fold 8732..8874
+fold 8880..9431
+symbol rule Win32_PUA_Domaiq 0:5-0:21
+symbol string $payload 18:8-18:16
+symbol string $NSIS_CheckIntegrity 20:8-20:28
+symbol string $NSIS_ErrorPart 28:8-28:23
+symbol string $UPX_Decompression 37:8-37:26
+symbol string $UPX_Encrypting 42:8-42:23
+symbol string $dumping_functionv2014 46:8-46:30
+symbol string $dumping_functionMidVersion 56:8-56:35
+symbol string $dumping_functionE 76:8-76:26
+symbol string $dumping_functionP 91:8-91:26
+symbol string $dumping_functionB 99:8-99:26
+symbol string $dumping_function111 113:8-113:28
+symbol string $dumping_function2 120:8-120:26
+symbol string $lib_loader 130:8-130:19
+symbol string $exception1 136:8-136:19
+symbol string $exception2 140:8-140:19
+symbol string $exceptionallock 145:8-145:24
+== conformance/external/yara/reversinglabs/Win32.Trojan.BiBiWiper.broken.yara
+fold 0..6828
+fold 59..510
+fold 516..6627
+fold 561..2396
+fold 2433..4355
+fold 4385..5449
+fold 5479..6627
+fold 6633..6826
+symbol rule Win32_Trojan_BiBiWiper 0:5-0:27
+symbol string $delete_shadow_copies_p1 19:8-19:32
+symbol string $delete_shadow_copies_p2 41:8-41:32
+symbol string $destroy_files_p1 64:8-64:25
+symbol string $destroy_files_p2 78:8-78:25
+== conformance/external/yara/reversinglabs/Win32.Trojan.BiBiWiper.yara
+fold 0..6806
+fold 59..510
+fold 516..6627
+fold 561..2396
+fold 2433..4355
+fold 4385..5449
+fold 5479..6627
+fold 6633..6804
+symbol rule Win32_Trojan_BiBiWiper 0:5-0:27
+symbol string $delete_shadow_copies_p1 19:8-19:32
+symbol string $delete_shadow_copies_p2 41:8-41:32
+symbol string $destroy_files_p1 64:8-64:25
+symbol string $destroy_files_p2 78:8-78:25
+== conformance/external/yara/reversinglabs/Win32.Trojan.CaddyWiper.broken.yara
+fold 60..514
+fold 520..5322
+fold 567..1091
+fold 1121..1663
+fold 1703..3150
+fold 3193..4260
+fold 4303..5322
+fold 5328..5556
+== conformance/external/yara/reversinglabs/Win32.Trojan.CaddyWiper.yara
+fold 0..5558
+fold 60..514
+fold 520..5322
+fold 567..1091
+fold 1121..1663
+fold 1703..3150
+fold 3193..4260
+fold 4303..5322
+fold 5328..5556
+symbol rule Win32_Trojan_CaddyWiper 0:5-0:28
+symbol string $destroy_if_not_controller 19:8-19:34
+symbol string $erase_drive_data 28:8-28:25
+symbol string $erase_drives_recursively_1 37:8-37:35
+symbol string $erase_drives_recursively_2_p1 55:8-55:38
+symbol string $erase_drives_recursively_2_p2 69:8-69:38
+== conformance/external/yara/reversinglabs/Win32.Virus.Awfull.broken.yara
+fold 68..508
+fold 514..948
+fold 546..948
+== conformance/external/yara/reversinglabs/Win32.Virus.Awfull.yara
+fold 13..1048
+fold 68..508
+fold 514..948
+fold 546..948
+fold 962..1046
+symbol rule Win32_Virus_Awfull 2:5-2:23
+symbol string $awfull_body 20:8-20:20
+== conformance/external/yara/reversinglabs/Win32.Virus.Cmay.broken.yara
+fold 13..4166
+fold 67..501
+fold 507..4001
+fold 539..2515
+fold 2540..4001
+fold 4020..4164
+symbol rule Win32_Virus_Cmay 2:5-2:21
+symbol string $cmay_body_1 20:8-20:20
+symbol string $cmay_body_2 47:8-47:20
+== conformance/external/yara/reversinglabs/Win32.Virus.Cmay.yara
+fold 13..4144
+fold 67..501
+fold 507..4001
+fold 539..2515
+fold 2540..4001
+fold 4020..4142
+symbol rule Win32_Virus_Cmay 2:5-2:21
+symbol string $cmay_body_1 20:8-20:20
+symbol string $cmay_body_2 47:8-47:20
+== conformance/external/yara/reversinglabs/Win32.Virus.DeadCode.broken.yara
+fold 70..516
+fold 522..3373
+fold 556..662
+fold 699..734
+fold 763..1044
+fold 1073..1186
+fold 1215..2872
+fold 2901..3373
+fold 3384..3714
+== conformance/external/yara/reversinglabs/Win32.Virus.DeadCode.yara
+fold 13..3716
+fold 70..516
+fold 522..3373
+fold 556..662
+fold 699..734
+fold 763..1044
+fold 1073..1186
+fold 1215..2872
+fold 2901..3373
+fold 3384..3714
+symbol rule Win32_Virus_DeadCode 2:5-2:25
+symbol string $deadcode_ep_1 20:8-20:22
+symbol string $deadcode_marker 25:8-25:24
+symbol string $deadcode_ep_2 29:8-29:22
+symbol string $deadcode_ep_3 36:8-36:22
+symbol string $deadcode_body_1 41:8-41:24
+symbol string $deadcode_body_2 61:8-61:24
+== conformance/external/yara/signature-base/apt_aa19_024a.broken.yar
+fold 52..478
+fold 482..838
+fold 842..914
+== conformance/external/yara/signature-base/apt_aa19_024a.yar
+fold 1..916
+fold 52..478
+fold 482..838
+fold 842..914
+symbol rule APT_MAL_DNS_Hijacking_Campaign_AA19_024A 1:5-1:45
+symbol string $s2 11:6-11:9
+symbol string $s3 12:6-12:9
+symbol string $s4 13:6-13:9
+symbol string $s5 14:6-14:9
+symbol string $s6 15:6-15:9
+== conformance/external/yara/signature-base/apt_agent_btz.broken.yar
+fold 0..168
+fold 265..1077
+fold 297..843
+fold 847..947
+fold 951..1075
+fold 1079..2360
+fold 1111..1631
+fold 1635..2226
+fold 1656..2184
+fold 2230..2358
+fold 2362..3172
+fold 2388..2883
+fold 2887..2976
+fold 2980..3170
+fold 3174..4675
+fold 3210..3521
+fold 3525..4402
+fold 4406..4673
+symbol rule Agent_BTZ_Proxy_DLL_1 12:5-12:26
+symbol string $s1 23:6-23:9
+symbol rule Agent_BTZ_Proxy_DLL_2 28:5-28:26
+symbol string $s1 39:6-39:9
+symbol string $s2 48:6-48:9
+symbol rule Agent_BTZ_Aug17 53:5-53:20
+symbol string $s1 64:6-64:9
+symbol string $s2 65:6-65:9
+symbol rule APT_Turla_Agent_BTZ_Gen_1 74:5-74:30
+symbol string $x1 84:6-84:9
+symbol string $s1 86:6-86:9
+symbol string $s2 87:6-87:9
+symbol string $s3 88:6-88:9
+symbol string $s4 89:6-89:9
+symbol string $s5 90:6-90:9
+symbol string $s6 91:6-91:9
+symbol string $s7 92:6-92:9
+symbol string $s8 93:6-93:9
+symbol string $s9 94:6-94:9
+symbol string $s10 95:6-95:10
+symbol string $s11 96:6-96:10
+symbol string $s12 97:6-97:10
+symbol string $s13 98:6-98:10
+== conformance/external/yara/signature-base/apt_agent_btz.yar
+fold 0..168
+fold 265..1054
+fold 297..843
+fold 847..947
+fold 951..1052
+fold 1056..2337
+fold 1088..1608
+fold 1612..2203
+fold 1633..2161
+fold 2207..2335
+fold 2339..3149
+fold 2365..2860
+fold 2864..2953
+fold 2957..3147
+fold 3151..4652
+fold 3187..3498
+fold 3502..4379
+fold 4383..4650
+symbol rule Agent_BTZ_Proxy_DLL_1 12:5-12:26
+symbol string $s1 23:6-23:9
+symbol rule Agent_BTZ_Proxy_DLL_2 28:5-28:26
+symbol string $s1 39:6-39:9
+symbol string $s2 48:6-48:9
+symbol rule Agent_BTZ_Aug17 53:5-53:20
+symbol string $s1 64:6-64:9
+symbol string $s2 65:6-65:9
+symbol rule APT_Turla_Agent_BTZ_Gen_1 74:5-74:30
+symbol string $x1 84:6-84:9
+symbol string $s1 86:6-86:9
+symbol string $s2 87:6-87:9
+symbol string $s3 88:6-88:9
+symbol string $s4 89:6-89:9
+symbol string $s5 90:6-90:9
+symbol string $s6 91:6-91:9
+symbol string $s7 92:6-92:9
+symbol string $s8 93:6-93:9
+symbol string $s9 94:6-94:9
+symbol string $s10 95:6-95:10
+symbol string $s11 96:6-96:10
+symbol string $s12 97:6-97:10
+symbol string $s13 98:6-98:10
+== conformance/external/yara/signature-base/bkdr_xz_util_cve_2024_3094.broken.yar
+fold 1..2132
+fold 52..455
+fold 459..634
+fold 2034..2130
+fold 2134..2633
+fold 2189..2547
+fold 2551..2607
+fold 2611..2631
+fold 2635..3254
+fold 2679..3027
+fold 3031..3060
+fold 3064..3216
+symbol rule BKDR_XZUtil_KillSwitch_CVE_2024_3094_Mar24_1 47:5-47:49
+symbol string $x1 56:6-56:9
+symbol rule SUSP_OBFUSC_SH_Indicators_Mar24_1 61:5-61:38
+symbol string $s1 70:6-70:9
+== conformance/external/yara/signature-base/bkdr_xz_util_cve_2024_3094.yar
+fold 1..666
+fold 52..455
+fold 459..634
+fold 638..664
+fold 668..2133
+fold 719..1512
+fold 1516..2031
+fold 2035..2131
+fold 2135..2634
+fold 2190..2548
+fold 2552..2608
+fold 2612..2632
+fold 2636..3255
+fold 2680..3028
+fold 3032..3061
+fold 3065..3217
+symbol rule BKDR_XZUtil_Script_CVE_2024_3094_Mar24_1 1:5-1:45
+symbol string $x1 11:6-11:9
+symbol string $x2 12:6-12:9
+symbol string $x3 13:6-13:9
+symbol rule BKDR_XZUtil_Binary_CVE_2024_3094_Mar24_1 18:5-18:45
+symbol string $op1 33:6-33:10
+symbol string $op2 34:6-34:10
+symbol string $op3 35:6-35:10
+symbol string $xc1 38:6-38:10
+symbol rule BKDR_XZUtil_KillSwitch_CVE_2024_3094_Mar24_1 47:5-47:49
+symbol string $x1 56:6-56:9
+symbol rule SUSP_OBFUSC_SH_Indicators_Mar24_1 61:5-61:38
+symbol string $s1 70:6-70:9
+== conformance/external/yara/signature-base/crime_academic_data_centers_camp_may20.broken.yar
+fold 0..759
+fold 47..433
+fold 437..647
+fold 459..546
+fold 560..647
+fold 651..757
+fold 761..1484
+fold 808..1194
+fold 1198..1400
+fold 1220..1335
+fold 1404..1482
+symbol rule APT_LNX_Academic_Camp_May20_Eraser_1 0:5-0:41
+symbol string $sc2 9:6-9:10
+symbol string $sc3 11:6-11:10
+symbol rule APT_LNX_Academic_Camp_May20_Loader_1 19:5-19:41
+symbol string $sc1 28:6-28:10
+symbol string $sc2 30:6-30:10
+== conformance/external/yara/signature-base/crime_academic_data_centers_camp_may20.yar
+fold 0..737
+fold 47..433
+fold 437..647
+fold 459..546
+fold 560..647
+fold 651..735
+fold 739..1462
+fold 786..1172
+fold 1176..1378
+fold 1198..1313
+fold 1382..1460
+symbol rule APT_LNX_Academic_Camp_May20_Eraser_1 0:5-0:41
+symbol string $sc2 9:6-9:10
+symbol string $sc3 11:6-11:10
+symbol rule APT_LNX_Academic_Camp_May20_Loader_1 19:5-19:41
+symbol string $sc1 28:6-28:10
+symbol string $sc2 30:6-30:10
+== conformance/external/yara/signature-base/crime_andromeda_jun17.broken.yar
+fold 1..221
+fold 339..1128
+fold 1132..1602
+fold 1606..1696
+== conformance/external/yara/signature-base/crime_andromeda_jun17.yar
+fold 1..221
+fold 305..1698
+fold 339..1128
+fold 1132..1602
+fold 1606..1696
+symbol rule Andromeda_MalBot_Jun_1A 11:5-11:28
+symbol string $x1 25:6-25:9
+symbol string $x2 26:6-26:9
+symbol string $x3 27:6-27:9
+symbol string $x4 28:6-28:9
+symbol string $x5 29:6-29:9
+symbol string $x6 30:6-30:9
+symbol string $x7 31:6-31:9
+symbol string $s1 33:6-33:9
+symbol string $s2 34:6-34:9
+== conformance/external/yara/signature-base/expl_adselfservice_cve_2021_40539.broken.yar
+fold 1..638
+fold 68..412
+fold 416..563
+fold 567..636
+fold 640..1243
+fold 709..1053
+fold 1057..1191
+fold 1195..1241
+symbol rule LOG_EXPL_ADSelfService_CVE_2021_40539_ADSLOG_Sep21 1:5-1:55
+symbol string $x1 10:6-10:9
+symbol rule LOG_EXPL_ADSelfService_CVE_2021_40539_WebLog_Sep21_1 15:5-15:57
+symbol string $x1 24:6-24:9
+symbol string $x2 25:6-25:9
+== conformance/external/yara/signature-base/expl_adselfservice_cve_2021_40539.yar
+fold 1..615
+fold 68..412
+fold 416..563
+fold 567..613
+fold 617..1220
+fold 686..1030
+fold 1034..1168
+fold 1172..1218
+symbol rule LOG_EXPL_ADSelfService_CVE_2021_40539_ADSLOG_Sep21 1:5-1:55
+symbol string $x1 10:6-10:9
+symbol rule LOG_EXPL_ADSelfService_CVE_2021_40539_WebLog_Sep21_1 15:5-15:57
+symbol string $x1 24:6-24:9
+symbol string $x2 25:6-25:9
+== conformance/external/yara/signature-base/expl_cleo_dec24.broken.yar
+fold 1..2107
+fold 64..462
+fold 466..725
+fold 2028..2105
+fold 2109..3312
+fold 2170..2565
+fold 2569..3198
+fold 3233..3310
+fold 3314..4056
+fold 3368..3750
+fold 3754..3962
+fold 3966..4054
+fold 4059..5410
+fold 4120..4580
+fold 4584..5326
+fold 5330..5408
+fold 5412..6617
+fold 5473..5852
+fold 5856..6502
+fold 6537..6615
+fold 6619..7543
+fold 6682..7088
+fold 7092..7511
+fold 7515..7541
+fold 7545..8271
+fold 7586..7983
+fold 7987..8181
+fold 8185..8269
+fold 8273..9179
+fold 8330..8844
+fold 8848..9076
+fold 9080..9177
+fold 9181..10003
+fold 9236..9727
+fold 9731..9915
+fold 9919..10001
+fold 10005..10687
+fold 10060..10411
+fold 10415..10590
+fold 10594..10685
+symbol rule SUSP_EXPL_Cleo_Exploitation_Log_Indicators_Dec24_2 53:5-53:55
+symbol string $sa1 62:6-62:10
+symbol string $sa2 63:6-63:10
+symbol string $sa3 64:6-64:10
+symbol string $sa4 65:6-65:10
+symbol string $sb1 67:6-67:10
+symbol string $sb2 68:6-68:10
+symbol string $sb3 69:6-69:10
+symbol string $sb4 70:6-70:10
+symbol string $sb5 71:6-71:10
+symbol string $sb6 72:6-72:10
+symbol string $sb7 73:6-73:10
+symbol string $sb8 74:6-74:10
+symbol string $sb9 75:6-75:10
+symbol string $sb10 76:6-76:11
+symbol string $sb11 77:6-77:11
+symbol string $sb12 78:6-78:11
+symbol string $sb13 79:6-79:11
+symbol string $sb14 80:6-80:11
+symbol string $sb15 81:6-81:11
+symbol string $sb16 82:6-82:11
+symbol rule EXPL_Cleo_Exploitation_XML_Indicators_Dec24 90:5-90:48
+symbol string $x1 99:6-99:9
+symbol string $s1 101:6-101:9
+symbol string $a1 102:6-102:9
+symbol rule SUSP_EXPL_Cleo_Exploitation_XML_Indicators_Dec24_1 111:5-111:55
+symbol string $sa1 121:6-121:10
+symbol string $sa2 122:6-122:10
+symbol string $sa3 123:6-123:10
+symbol string $sa4 124:6-124:10
+symbol string $sb1 126:6-126:10
+symbol string $sb2 127:6-127:10
+symbol string $sb3 128:6-128:10
+symbol string $sb4 129:6-129:10
+symbol string $sb5 130:6-130:10
+symbol string $sb6 131:6-131:10
+symbol string $sb7 132:6-132:10
+symbol string $sb8 133:6-133:10
+symbol string $sb9 134:6-134:10
+symbol string $sb10 135:6-135:11
+symbol string $sb11 136:6-136:11
+symbol string $sb12 137:6-137:11
+symbol string $sb13 138:6-138:11
+symbol string $sb14 139:6-139:11
+symbol string $sb15 140:6-140:11
+symbol rule SUSP_EXPL_Cleo_Exploitation_XML_Indicators_Dec24_2 147:5-147:55
+symbol string $sa1 156:6-156:10
+symbol string $sa2 157:6-157:10
+symbol string $sa3 158:6-158:10
+symbol string $sa4 159:6-159:10
+symbol string $sb1 161:6-161:10
+symbol string $sb2 162:6-162:10
+symbol string $sb3 163:6-163:10
+symbol string $sb4 164:6-164:10
+symbol string $sb5 165:6-165:10
+symbol string $sb6 166:6-166:10
+symbol string $sb7 167:6-167:10
+symbol string $sb8 168:6-168:10
+symbol string $sb9 169:6-169:10
+symbol string $sb10 170:6-170:11
+symbol string $sb11 171:6-171:11
+symbol string $sb12 172:6-172:11
+symbol string $sb13 173:6-173:11
+symbol string $sb14 174:6-174:11
+symbol string $sb15 175:6-175:11
+symbol string $sb16 176:6-176:11
+symbol rule EXPL_Cleo_Exploitation_PS1_Indicators_Dec24 184:5-184:48
+symbol string $xe1 193:6-193:10
+symbol string $xe2 194:6-194:10
+symbol string $xe3 195:6-195:10
+symbol string $x1 197:6-197:9
+symbol string $x2 198:6-198:9
+symbol rule SUSP_EXPL_JAR_Indicators_Dec24 203:5-203:35
+symbol string $s1 212:6-212:9
+symbol string $s2 213:6-213:9
+symbol string $s3 214:6-214:9
+symbol string $s4 215:6-215:9
+symbol string $s5 216:6-216:9
+symbol rule EXPL_Cleo_Exploitation_JAVA_Payloads_Dec24_1_1 223:5-223:51
+symbol string $a1 233:6-233:9
+symbol string $x1 235:6-235:9
+symbol string $x2 236:6-236:9
+symbol string $x3 237:6-237:9
+symbol string $x4 238:6-238:9
+symbol rule EXPL_Cleo_Exploitation_JAVA_Payloads_Dec24_2 246:5-246:49
+symbol string $s1 256:6-256:9
+symbol string $s2 257:6-257:9
+symbol string $s3 258:6-258:9
+symbol string $s4 259:6-259:9
+symbol rule EXPL_Cleo_Exploitation_JAVA_Payloads_Dec24_3 266:5-266:49
+symbol string $a1 275:6-275:9
+symbol string $s1 277:6-277:9
+symbol string $s2 278:6-278:9
+symbol string $s3 279:6-279:9
+symbol string $s4 280:6-280:9
+== conformance/external/yara/signature-base/expl_cleo_dec24.yar
+fold 1..757
+fold 64..462
+fold 466..725
+fold 729..755
+fold 759..2108
+fold 820..1296
+fold 1300..2025
+fold 2029..2106
+fold 2110..3313
+fold 2171..2566
+fold 2570..3199
+fold 3234..3311
+fold 3315..4057
+fold 3369..3751
+fold 3755..3963
+fold 3967..4055
+fold 4060..5411
+fold 4121..4581
+fold 4585..5327
+fold 5331..5409
+fold 5413..6618
+fold 5474..5853
+fold 5857..6503
+fold 6538..6616
+fold 6620..7544
+fold 6683..7089
+fold 7093..7512
+fold 7516..7542
+fold 7546..8272
+fold 7587..7984
+fold 7988..8182
+fold 8186..8270
+fold 8274..9180
+fold 8331..8845
+fold 8849..9077
+fold 9081..9178
+fold 9182..10004
+fold 9237..9728
+fold 9732..9916
+fold 9920..10002
+fold 10006..10688
+fold 10061..10412
+fold 10416..10591
+fold 10595..10686
+symbol rule EXPL_Cleo_Exploitation_Log_Indicators_Dec24 1:5-1:48
+symbol string $x1 10:6-10:9
+symbol string $x2 11:6-11:9
+symbol string $x3 12:6-12:9
+symbol rule SUSP_EXPL_Cleo_Exploitation_Log_Indicators_Dec24_1 17:5-17:55
+symbol string $sa1 27:6-27:10
+symbol string $sa2 28:6-28:10
+symbol string $sa3 29:6-29:10
+symbol string $sa4 30:6-30:10
+symbol string $sb1 32:6-32:10
+symbol string $sb2 33:6-33:10
+symbol string $sb3 34:6-34:10
+symbol string $sb4 35:6-35:10
+symbol string $sb5 36:6-36:10
+symbol string $sb6 37:6-37:10
+symbol string $sb7 38:6-38:10
+symbol string $sb8 39:6-39:10
+symbol string $sb9 40:6-40:10
+symbol string $sb10 41:6-41:11
+symbol string $sb11 42:6-42:11
+symbol string $sb12 43:6-43:11
+symbol string $sb13 44:6-44:11
+symbol string $sb14 45:6-45:11
+symbol string $sb15 46:6-46:11
+symbol rule SUSP_EXPL_Cleo_Exploitation_Log_Indicators_Dec24_2 53:5-53:55
+symbol string $sa1 62:6-62:10
+symbol string $sa2 63:6-63:10
+symbol string $sa3 64:6-64:10
+symbol string $sa4 65:6-65:10
+symbol string $sb1 67:6-67:10
+symbol string $sb2 68:6-68:10
+symbol string $sb3 69:6-69:10
+symbol string $sb4 70:6-70:10
+symbol string $sb5 71:6-71:10
+symbol string $sb6 72:6-72:10
+symbol string $sb7 73:6-73:10
+symbol string $sb8 74:6-74:10
+symbol string $sb9 75:6-75:10
+symbol string $sb10 76:6-76:11
+symbol string $sb11 77:6-77:11
+symbol string $sb12 78:6-78:11
+symbol string $sb13 79:6-79:11
+symbol string $sb14 80:6-80:11
+symbol string $sb15 81:6-81:11
+symbol string $sb16 82:6-82:11
+symbol rule EXPL_Cleo_Exploitation_XML_Indicators_Dec24 90:5-90:48
+symbol string $x1 99:6-99:9
+symbol string $s1 101:6-101:9
+symbol string $a1 102:6-102:9
+symbol rule SUSP_EXPL_Cleo_Exploitation_XML_Indicators_Dec24_1 111:5-111:55
+symbol string $sa1 121:6-121:10
+symbol string $sa2 122:6-122:10
+symbol string $sa3 123:6-123:10
+symbol string $sa4 124:6-124:10
+symbol string $sb1 126:6-126:10
+symbol string $sb2 127:6-127:10
+symbol string $sb3 128:6-128:10
+symbol string $sb4 129:6-129:10
+symbol string $sb5 130:6-130:10
+symbol string $sb6 131:6-131:10
+symbol string $sb7 132:6-132:10
+symbol string $sb8 133:6-133:10
+symbol string $sb9 134:6-134:10
+symbol string $sb10 135:6-135:11
+symbol string $sb11 136:6-136:11
+symbol string $sb12 137:6-137:11
+symbol string $sb13 138:6-138:11
+symbol string $sb14 139:6-139:11
+symbol string $sb15 140:6-140:11
+symbol rule SUSP_EXPL_Cleo_Exploitation_XML_Indicators_Dec24_2 147:5-147:55
+symbol string $sa1 156:6-156:10
+symbol string $sa2 157:6-157:10
+symbol string $sa3 158:6-158:10
+symbol string $sa4 159:6-159:10
+symbol string $sb1 161:6-161:10
+symbol string $sb2 162:6-162:10
+symbol string $sb3 163:6-163:10
+symbol string $sb4 164:6-164:10
+symbol string $sb5 165:6-165:10
+symbol string $sb6 166:6-166:10
+symbol string $sb7 167:6-167:10
+symbol string $sb8 168:6-168:10
+symbol string $sb9 169:6-169:10
+symbol string $sb10 170:6-170:11
+symbol string $sb11 171:6-171:11
+symbol string $sb12 172:6-172:11
+symbol string $sb13 173:6-173:11
+symbol string $sb14 174:6-174:11
+symbol string $sb15 175:6-175:11
+symbol string $sb16 176:6-176:11
+symbol rule EXPL_Cleo_Exploitation_PS1_Indicators_Dec24 184:5-184:48
+symbol string $xe1 193:6-193:10
+symbol string $xe2 194:6-194:10
+symbol string $xe3 195:6-195:10
+symbol string $x1 197:6-197:9
+symbol string $x2 198:6-198:9
+symbol rule SUSP_EXPL_JAR_Indicators_Dec24 203:5-203:35
+symbol string $s1 212:6-212:9
+symbol string $s2 213:6-213:9
+symbol string $s3 214:6-214:9
+symbol string $s4 215:6-215:9
+symbol string $s5 216:6-216:9
+symbol rule EXPL_Cleo_Exploitation_JAVA_Payloads_Dec24_1_1 223:5-223:51
+symbol string $a1 233:6-233:9
+symbol string $x1 235:6-235:9
+symbol string $x2 236:6-236:9
+symbol string $x3 237:6-237:9
+symbol string $x4 238:6-238:9
+symbol rule EXPL_Cleo_Exploitation_JAVA_Payloads_Dec24_2 246:5-246:49
+symbol string $s1 256:6-256:9
+symbol string $s2 257:6-257:9
+symbol string $s3 258:6-258:9
+symbol string $s4 259:6-259:9
+symbol rule EXPL_Cleo_Exploitation_JAVA_Payloads_Dec24_3 266:5-266:49
+symbol string $a1 275:6-275:9
+symbol string $s1 277:6-277:9
+symbol string $s2 278:6-278:9
+symbol string $s3 279:6-279:9
+symbol string $s4 280:6-280:9
+== conformance/external/yara/signature-base/exploit_cve_2014_4076.broken.yar
+fold 1..818
+fold 37..472
+fold 476..719
+fold 723..816
+symbol rule CVE_2014_4076_Exploitcode 1:5-1:30
+symbol string $x1 11:6-11:9
+symbol string $x2 12:6-12:9
+symbol string $x3 13:6-13:9
+symbol string $x4 14:6-14:9
+== conformance/external/yara/signature-base/exploit_cve_2014_4076.yar
+fold 1..796
+fold 37..472
+fold 476..719
+fold 723..794
+symbol rule CVE_2014_4076_Exploitcode 1:5-1:30
+symbol string $x1 11:6-11:9
+symbol string $x2 12:6-12:9
+symbol string $x3 13:6-13:9
+symbol string $x4 14:6-14:9
+== conformance/external/yara/signature-base/gen_Excel4Macro_Sharpshooter.broken.yar
+fold 0..1112
+fold 34..708
+fold 712..992
+fold 996..1110
+fold 1151..1450
+fold 1455..2744
+fold 2966..3077
+symbol rule MAL_Sharpshooter_Excel4 0:5-0:28
+symbol string $header_docf 13:6-13:18
+symbol string $s1 14:6-14:9
+symbol string $f1 15:6-15:9
+symbol string $f2 16:6-16:9
+symbol string $f3 17:6-17:9
+symbol string $concat 18:6-18:13
+== conformance/external/yara/signature-base/gen_Excel4Macro_Sharpshooter.yar
+fold 0..1112
+fold 34..708
+fold 712..992
+fold 996..1110
+fold 1114..3079
+fold 1151..1450
+fold 1455..2744
+fold 2966..3077
+symbol rule MAL_Sharpshooter_Excel4 0:5-0:28
+symbol string $header_docf 13:6-13:18
+symbol string $s1 14:6-14:9
+symbol string $f1 15:6-15:9
+symbol string $f2 16:6-16:9
+symbol string $f3 17:6-17:9
+symbol string $concat 18:6-18:13
+symbol rule SUSP_Excel4Macro_AutoOpen 26:5-26:30
+symbol string $header_docf 36:8-36:20
+symbol string $s1 37:8-37:11
+symbol string $Auto_Open 53:8-53:18
+symbol string $Auto_Close 54:8-54:19
+symbol string $Auto_Open1 55:8-55:19
+symbol string $Auto_Close1 56:8-56:20
+== conformance/external/yara/signature-base/general_officemacros.broken.yar
+fold 1..941
+fold 31..672
+fold 674..747
+fold 749..939
+fold 943..2144
+fold 967..1779
+fold 1781..1998
+fold 2053..2142
+fold 2146..2726
+fold 2168..2521
+fold 2525..2664
+fold 2668..2724
+symbol rule Office_AutoOpen_Macro 1:5-1:26
+symbol string $s1 17:2-17:5
+symbol string $s2 18:2-18:5
+symbol rule Office_as_MHTML 27:5-27:20
+symbol string $s1 41:2-41:5
+symbol string $s2 42:2-42:5
+symbol string $x1 44:2-44:5
+symbol string $x2 45:2-45:5
+symbol rule Docm_in_PDF 51:5-51:16
+symbol string $a1 60:6-60:9
+symbol string $a2 61:6-61:9
+symbol string $a3 62:6-62:9
+== conformance/external/yara/signature-base/general_officemacros.yar
+fold 1..918
+fold 31..672
+fold 674..747
+fold 749..916
+fold 920..2121
+fold 944..1756
+fold 1758..1975
+fold 2030..2119
+fold 2123..2703
+fold 2145..2498
+fold 2502..2641
+fold 2645..2701
+symbol rule Office_AutoOpen_Macro 1:5-1:26
+symbol string $s1 17:2-17:5
+symbol string $s2 18:2-18:5
+symbol rule Office_as_MHTML 27:5-27:20
+symbol string $s1 41:2-41:5
+symbol string $s2 42:2-42:5
+symbol string $x1 44:2-44:5
+symbol string $x2 45:2-45:5
+symbol rule Docm_in_PDF 51:5-51:16
+symbol string $a1 60:6-60:9
+symbol string $a2 61:6-61:9
+symbol string $a3 62:6-62:9
+== conformance/external/yara/signature-base/generic_cryptors.broken.yar
+fold 27..864
+fold 866..897
+== conformance/external/yara/signature-base/generic_cryptors.yar
+fold 1..942
+fold 27..864
+fold 866..897
+fold 900..940
+symbol rule DarkEYEv3_Cryptor 1:5-1:22
+symbol string $s0 20:2-20:5
+== conformance/external/yara/signature-base/hktl_badsuccessor_helper_may25.broken.yar
+fold 1..882
+fold 48..557
+fold 561..808
+fold 812..880
+symbol rule HKTL_EXPL_WIN_PS1_BadSuccessor_May25 1:5-1:41
+symbol string $x1 10:6-10:9
+symbol string $x2 11:6-11:9
+symbol string $x3 12:6-12:9
+== conformance/external/yara/signature-base/hktl_badsuccessor_helper_may25.yar
+fold 1..860
+fold 48..557
+fold 561..808
+fold 812..858
+symbol rule HKTL_EXPL_WIN_PS1_BadSuccessor_May25 1:5-1:41
+symbol string $x1 10:6-10:9
+symbol string $x2 11:6-11:9
+symbol string $x3 12:6-12:9
+== conformance/external/yara/signature-base/htkl_blue_hammer_tool.broken.yar
+fold 32..1180
+fold 1184..1536
+fold 1540..1702
+== conformance/external/yara/signature-base/htkl_blue_hammer_tool.yar
+fold 0..1704
+fold 32..1180
+fold 1184..1536
+fold 1540..1702
+symbol rule HKTL_BlueHammer_Apr26 0:5-0:26
+symbol string $x1 17:6-17:9
+symbol string $x2 18:6-18:9
+symbol string $s1 20:6-20:9
+symbol string $s2 21:6-21:9
+symbol string $s3 22:6-22:9
+symbol string $op1 24:6-24:10
+== conformance/external/yara/signature-base/log_teamviewer_keyboard_layouts.broken.yar
+fold 1..944
+fold 58..523
+fold 527..867
+fold 871..942
+fold 946..1727
+fold 1003..1468
+fold 1472..1694
+fold 1698..1725
+symbol rule LOG_TeamViewer_Connect_Chinese_Keyboard_Layout 1:5-1:51
+symbol string $x1 13:6-13:9
+symbol string $x2 14:6-14:9
+symbol string $fp1 16:6-16:10
+symbol string $fp2 17:6-17:10
+symbol rule LOG_TeamViewer_Connect_Russian_Keyboard_Layout 22:5-22:51
+symbol string $x1 34:6-34:9
+symbol string $fp1 36:6-36:10
+== conformance/external/yara/signature-base/log_teamviewer_keyboard_layouts.yar
+fold 1..921
+fold 58..523
+fold 527..867
+fold 871..919
+fold 923..1704
+fold 980..1445
+fold 1449..1671
+fold 1675..1702
+symbol rule LOG_TeamViewer_Connect_Chinese_Keyboard_Layout 1:5-1:51
+symbol string $x1 13:6-13:9
+symbol string $x2 14:6-14:9
+symbol string $fp1 16:6-16:10
+symbol string $fp2 17:6-17:10
+symbol rule LOG_TeamViewer_Connect_Russian_Keyboard_Layout 22:5-22:51
+symbol string $x1 34:6-34:9
+symbol string $fp1 36:6-36:10
+== conformance/external/yara/signature-base/lotusblossom_notepad_exploitation.broken.yar
+fold 0..1598
+fold 40..530
+fold 534..699
+fold 1570..1596
+fold 1600..2658
+fold 1639..2112
+fold 2116..2581
+fold 2585..2656
+fold 2660..4220
+fold 2707..3159
+fold 3163..4129
+fold 4133..4218
+fold 4222..4762
+fold 4271..4660
+fold 4664..4712
+fold 4716..4760
+symbol rule MAL_Chrysalis_Backdoor_Feb26 32:5-32:33
+symbol string $opa1 42:6-42:11
+symbol string $opa2 43:6-43:11
+symbol string $opb1 45:6-45:11
+symbol rule MAL_CobaltStrike_Beacon_Loader_Feb26 52:5-52:41
+symbol string $opa1 63:6-63:11
+symbol string $opa2 64:6-64:11
+symbol string $opb1 66:6-66:11
+symbol string $opb2 67:6-67:11
+symbol rule MAL_POC_Microsoft_Warbird_Loader_Feb26 74:5-74:43
+symbol string $op 84:6-84:9
+== conformance/external/yara/signature-base/lotusblossom_notepad_exploitation.yar
+fold 0..757
+fold 40..530
+fold 534..699
+fold 703..755
+fold 759..1599
+fold 806..1302
+fold 1306..1567
+fold 1571..1597
+fold 1601..2659
+fold 1640..2113
+fold 2117..2582
+fold 2586..2657
+fold 2661..4221
+fold 2708..3160
+fold 3164..4130
+fold 4134..4219
+fold 4223..4763
+fold 4272..4661
+fold 4665..4713
+fold 4717..4761
+symbol rule MAL_Chrysalis_DllLoader_Feb26 0:5-0:34
+symbol string $op1 10:6-10:10
+symbol string $op2 11:6-11:10
+symbol rule MAL_Chrysalis_Shellcode_Loader_Feb26 16:5-16:41
+symbol string $op1 26:6-26:10
+symbol string $op2 27:6-27:10
+symbol rule MAL_Chrysalis_Backdoor_Feb26 32:5-32:33
+symbol string $opa1 42:6-42:11
+symbol string $opa2 43:6-43:11
+symbol string $opb1 45:6-45:11
+symbol rule MAL_CobaltStrike_Beacon_Loader_Feb26 52:5-52:41
+symbol string $opa1 63:6-63:11
+symbol string $opa2 64:6-64:11
+symbol string $opb1 66:6-66:11
+symbol string $opb2 67:6-67:11
+symbol rule MAL_POC_Microsoft_Warbird_Loader_Feb26 74:5-74:43
+symbol string $op 84:6-84:9
+== conformance/external/yara/signature-base/mal_avemaria_rat.broken.yar
+fold 1..617
+fold 34..363
+fold 367..515
+fold 519..615
+symbol rule MAL_AveMaria_RAT_Jul19 1:5-1:27
+symbol string $a1 10:6-10:9
+symbol string $s1 11:6-11:9
+symbol string $s2 12:6-12:9
+== conformance/external/yara/signature-base/mal_avemaria_rat.yar
+fold 1..595
+fold 34..363
+fold 367..515
+fold 519..593
+symbol rule MAL_AveMaria_RAT_Jul19 1:5-1:27
+symbol string $a1 10:6-10:9
+symbol string $s1 11:6-11:9
+symbol string $s2 12:6-12:9
+== conformance/external/yara/signature-base/pua_cryptocoin_miner.broken.yar
+fold 1..557
+fold 46..379
+fold 383..503
+fold 507..555
+fold 559..1113
+fold 611..990
+fold 994..1061
+fold 1065..1111
+fold 1115..1870
+fold 1149..1465
+fold 1469..1816
+fold 1820..1868
+fold 1938..2232
+fold 2236..2873
+fold 2582..2669
+fold 2877..2925
+symbol rule CoinMiner_Strings 1:5-1:22
+symbol string $sa1 12:6-12:10
+symbol string $sa2 13:6-13:10
+symbol string $sb1 14:6-14:10
+symbol rule CoinHive_Javascript_MoneroMiner 19:5-19:36
+symbol string $s2 29:6-29:9
+symbol rule PUA_CryptoMiner_Jan19_1 34:5-34:28
+symbol string $s1 44:6-44:9
+symbol string $s2 45:6-45:9
+symbol string $s3 46:6-46:9
+symbol string $s4 47:6-47:9
+symbol string $s5 48:6-48:9
+== conformance/external/yara/signature-base/pua_cryptocoin_miner.yar
+fold 1..557
+fold 46..379
+fold 383..503
+fold 507..555
+fold 559..1113
+fold 611..990
+fold 994..1061
+fold 1065..1111
+fold 1115..1870
+fold 1149..1465
+fold 1469..1816
+fold 1820..1868
+fold 1872..2927
+fold 1938..2232
+fold 2236..2873
+fold 2582..2669
+fold 2877..2925
+symbol rule CoinMiner_Strings 1:5-1:22
+symbol string $sa1 12:6-12:10
+symbol string $sa2 13:6-13:10
+symbol string $sb1 14:6-14:10
+symbol rule CoinHive_Javascript_MoneroMiner 19:5-19:36
+symbol string $s2 29:6-29:9
+symbol rule PUA_CryptoMiner_Jan19_1 34:5-34:28
+symbol string $s1 44:6-44:9
+symbol string $s2 45:6-45:9
+symbol string $s3 46:6-46:9
+symbol string $s4 47:6-47:9
+symbol string $s5 48:6-48:9
+symbol rule PUA_Crypto_Mining_CommandLine_Indicators_Oct21 53:5-53:51
+symbol string $s01 62:6-62:10
+symbol string $s02 63:6-63:10
+symbol string $s03 64:6-64:10
+symbol string $s04 65:6-65:10
+symbol string $s05 66:6-66:10
+symbol string $s06 67:6-67:10
+symbol string $se1 70:6-70:10
+symbol string $se2 71:6-71:10
+symbol string $se3 72:6-72:10
+symbol string $se4 79:6-79:10
+symbol string $se5 80:6-80:10
+symbol string $se6 81:6-81:10
+symbol string $se7 82:6-82:10
+symbol string $se8 83:6-83:10
+symbol string $se9 84:6-84:10
+== conformance/external/yara/signature-base/pup_lightftp.broken.yar
+fold 1..818
+fold 30..467
+fold 469..724
+fold 726..816
+fold 820..1506
+fold 844..1228
+fold 1230..1435
+fold 1437..1504
+symbol rule LightFTP_fftp_x86_64 1:5-1:25
+symbol string $s1 13:2-13:5
+symbol string $s2 14:2-14:5
+symbol string $s3 15:2-15:5
+symbol string $s4 16:2-16:5
+symbol string $s5 17:2-17:5
+symbol rule LightFTP_Config 22:5-22:20
+symbol string $s2 32:2-32:5
+symbol string $s6 33:2-33:5
+symbol string $s8 34:2-34:5
+symbol string $s9 35:2-35:5
+symbol string $s10 36:2-36:6
+symbol string $s11 37:2-37:6
+== conformance/external/yara/signature-base/pup_lightftp.yar
+fold 1..795
+fold 30..467
+fold 469..724
+fold 726..793
+fold 797..1483
+fold 821..1205
+fold 1207..1412
+fold 1414..1481
+symbol rule LightFTP_fftp_x86_64 1:5-1:25
+symbol string $s1 13:2-13:5
+symbol string $s2 14:2-14:5
+symbol string $s3 15:2-15:5
+symbol string $s4 16:2-16:5
+symbol string $s5 17:2-17:5
+symbol rule LightFTP_Config 22:5-22:20
+symbol string $s2 32:2-32:5
+symbol string $s6 33:2-33:5
+symbol string $s8 34:2-34:5
+symbol string $s9 35:2-35:5
+symbol string $s10 36:2-36:6
+symbol string $s11 37:2-37:6
+== conformance/external/yara/signature-base/react_pocs_indicators_dec25.broken.yar
+fold 0..1294
+fold 53..428
+fold 432..669
+fold 1215..1292
+fold 1296..1907
+fold 1353..1701
+fold 1705..1822
+fold 1826..1905
+fold 1909..2576
+fold 1981..2391
+fold 2395..2542
+fold 2546..2574
+fold 2578..3228
+fold 2646..3098
+fold 3102..3194
+fold 3198..3226
+fold 3230..3975
+fold 3263..3716
+fold 3720..3892
+fold 3896..3973
+fold 3977..4785
+fold 4032..4485
+fold 4489..4725
+fold 4729..4783
+fold 4787..6044
+fold 4838..5314
+fold 5318..5877
+fold 5881..6042
+symbol rule EXPL_RCE_React_Server_CVE_2025_55182_POC_Dec25 40:5-40:51
+symbol string $s1 49:6-49:9
+symbol string $s2 50:6-50:9
+symbol rule EXPL_RCE_React_Server_Next_JS_CVE_2025_66478_Tracebacks_Dec25 57:5-57:66
+symbol string $s1 66:6-66:9
+symbol string $s2 67:6-67:9
+symbol string $s3 68:6-68:9
+symbol rule EXPL_RCE_React_Server_Next_JS_CVE_2025_66478_Errors_Dec25 73:5-73:62
+symbol string $s1 82:6-82:9
+symbol string $s2 83:6-83:9
+symbol rule EXPL_SUSP_JS_POC_Dec25 88:5-88:27
+symbol string $xr1 98:6-98:10
+symbol rule EXPL_SUSP_JS_POC_RSC_Detector_Payloads_Dec25 105:5-105:49
+symbol string $s1 114:6-114:9
+symbol string $s2 115:6-115:9
+symbol string $f1 118:6-118:9
+symbol rule EXPL_SUSP_JS_Exploitation_Payloads_Dec25 124:5-124:45
+symbol string $a1 133:6-133:9
+symbol string $x1 135:6-135:9
+symbol string $sa1 137:6-137:10
+symbol string $sa2 138:6-138:10
+symbol string $sa3 139:6-139:10
+symbol string $sb01 141:6-141:11
+symbol string $sb02 142:6-142:11
+symbol string $sb03 143:6-143:11
+symbol string $sb04 144:6-144:11
+symbol string $sb05 145:6-145:11
+symbol string $sb06 146:6-146:11
+symbol string $sb07 147:6-147:11
+symbol string $sb08 148:6-148:11
+symbol string $sb09 149:6-149:11
+symbol string $sb10 150:6-150:11
+symbol string $sc1 152:6-152:10
+symbol string $sc2 153:6-153:10
+== conformance/external/yara/signature-base/react_pocs_indicators_dec25.yar
+fold 0..724
+fold 53..428
+fold 432..669
+fold 673..722
+fold 726..1295
+fold 771..1076
+fold 1080..1212
+fold 1216..1293
+fold 1297..1908
+fold 1354..1702
+fold 1706..1823
+fold 1827..1906
+fold 1910..2577
+fold 1982..2392
+fold 2396..2543
+fold 2547..2575
+fold 2579..3229
+fold 2647..3099
+fold 3103..3195
+fold 3199..3227
+fold 3231..3976
+fold 3264..3717
+fold 3721..3893
+fold 3897..3974
+fold 3978..4786
+fold 4033..4486
+fold 4490..4726
+fold 4730..4784
+fold 4788..6045
+fold 4839..5315
+fold 5319..5878
+fold 5882..6043
+symbol rule EXPL_React_Server_CVE_2025_55182_POC_Dec25 0:5-0:47
+symbol string $xs1 9:6-9:10
+symbol string $s1 11:6-11:9
+symbol string $s2 12:6-12:9
+symbol string $s3 13:6-13:9
+symbol string $s4 14:6-14:9
+symbol string $s5 15:6-15:9
+symbol rule SUSP_WEBSHELL_LOG_Signatures_Dec25 21:5-21:39
+symbol string $xa1 30:6-30:10
+symbol string $xa2 31:6-31:10
+symbol string $xa3 32:6-32:10
+symbol string $xa4 33:6-33:10
+symbol rule EXPL_RCE_React_Server_CVE_2025_55182_POC_Dec25 40:5-40:51
+symbol string $s1 49:6-49:9
+symbol string $s2 50:6-50:9
+symbol rule EXPL_RCE_React_Server_Next_JS_CVE_2025_66478_Tracebacks_Dec25 57:5-57:66
+symbol string $s1 66:6-66:9
+symbol string $s2 67:6-67:9
+symbol string $s3 68:6-68:9
+symbol rule EXPL_RCE_React_Server_Next_JS_CVE_2025_66478_Errors_Dec25 73:5-73:62
+symbol string $s1 82:6-82:9
+symbol string $s2 83:6-83:9
+symbol rule EXPL_SUSP_JS_POC_Dec25 88:5-88:27
+symbol string $xr1 98:6-98:10
+symbol rule EXPL_SUSP_JS_POC_RSC_Detector_Payloads_Dec25 105:5-105:49
+symbol string $s1 114:6-114:9
+symbol string $s2 115:6-115:9
+symbol string $f1 118:6-118:9
+symbol rule EXPL_SUSP_JS_Exploitation_Payloads_Dec25 124:5-124:45
+symbol string $a1 133:6-133:9
+symbol string $x1 135:6-135:9
+symbol string $sa1 137:6-137:10
+symbol string $sa2 138:6-138:10
+symbol string $sa3 139:6-139:10
+symbol string $sb01 141:6-141:11
+symbol string $sb02 142:6-142:11
+symbol string $sb03 143:6-143:11
+symbol string $sb04 144:6-144:11
+symbol string $sb05 145:6-145:11
+symbol string $sb06 146:6-146:11
+symbol string $sb07 147:6-147:11
+symbol string $sb08 148:6-148:11
+symbol string $sb09 149:6-149:11
+symbol string $sb10 150:6-150:11
+symbol string $sc1 152:6-152:10
+symbol string $sc2 153:6-153:10
+== conformance/external/yara/signature-base/seaspy_backdoor_jan25.broken.yar
+fold 0..1348
+fold 37..958
+fold 962..1208
+fold 1235..1346
+fold 1350..2787
+fold 1397..2448
+fold 2452..2655
+fold 2703..2785
+symbol rule SUSP_LNX_ByteEncoder_Jan25 0:5-0:31
+symbol string $op1 15:6-15:10
+symbol string $op2 16:6-16:10
+symbol rule SUSP_LNX_StackString_Technique_Jan25 23:5-23:41
+symbol string $op1 39:6-39:10
+== conformance/external/yara/signature-base/seaspy_backdoor_jan25.yar
+fold 0..1326
+fold 37..958
+fold 962..1208
+fold 1235..1324
+fold 1328..2765
+fold 1375..2426
+fold 2430..2633
+fold 2681..2763
+symbol rule SUSP_LNX_ByteEncoder_Jan25 0:5-0:31
+symbol string $op1 15:6-15:10
+symbol string $op2 16:6-16:10
+symbol rule SUSP_LNX_StackString_Technique_Jan25 23:5-23:41
+symbol string $op1 39:6-39:10
+== conformance/external/yara/signature-base/susp_aur_packages.broken.yar
+fold 0..1223
+fold 54..761
+fold 765..1147
+fold 1151..1221
+fold 1225..1942
+fold 1278..1716
+fold 1720..1883
+fold 1887..1940
+fold 1944..2996
+fold 1987..2607
+fold 2611..2889
+fold 2893..2994
+fold 3038..3466
+fold 3470..3576
+fold 3580..3633
+symbol rule SUSP_LNX_ARCH_PKGBUILD_NPM_Dependency_Jun26 0:5-0:48
+symbol string $sa1 14:6-14:10
+symbol string $sb1 17:6-17:10
+symbol string $sb2 19:6-19:10
+symbol rule SUSP_LNX_ARCH_SRCINFO_NPM_Dependency_Jun26 26:5-26:47
+symbol string $s1 36:6-36:9
+symbol string $s2 38:6-38:9
+symbol rule SUSP_LNX_ARCH_Install_Hook_Jun26 44:5-44:37
+symbol string $sa1 56:6-56:10
+symbol string $sa2 57:6-57:10
+symbol string $sa3 58:6-58:10
+symbol string $sa4 59:6-59:10
+symbol string $sa5 60:6-60:10
+symbol string $sa6 61:6-61:10
+symbol string $sb1 63:6-63:10
+symbol string $sb2 64:6-64:10
+symbol string $fp1 66:6-66:10
+== conformance/external/yara/signature-base/susp_aur_packages.yar
+fold 0..1223
+fold 54..761
+fold 765..1147
+fold 1151..1221
+fold 1225..1942
+fold 1278..1716
+fold 1720..1883
+fold 1887..1940
+fold 1944..2996
+fold 1987..2607
+fold 2611..2889
+fold 2893..2994
+fold 2998..3635
+fold 3038..3466
+fold 3470..3576
+fold 3580..3633
+symbol rule SUSP_LNX_ARCH_PKGBUILD_NPM_Dependency_Jun26 0:5-0:48
+symbol string $sa1 14:6-14:10
+symbol string $sb1 17:6-17:10
+symbol string $sb2 19:6-19:10
+symbol rule SUSP_LNX_ARCH_SRCINFO_NPM_Dependency_Jun26 26:5-26:47
+symbol string $s1 36:6-36:9
+symbol string $s2 38:6-38:9
+symbol rule SUSP_LNX_ARCH_Install_Hook_Jun26 44:5-44:37
+symbol string $sa1 56:6-56:10
+symbol string $sa2 57:6-57:10
+symbol string $sa3 58:6-58:10
+symbol string $sa4 59:6-59:10
+symbol string $sa5 60:6-60:10
+symbol string $sa6 61:6-61:10
+symbol string $sb1 63:6-63:10
+symbol string $sb2 64:6-64:10
+symbol string $fp1 66:6-66:10
+symbol rule SUSP_LNX_ARCH_ALPM_Hook_Jun26 74:5-74:34
+symbol string $s1 84:6-84:9
+symbol string $s2 85:6-85:9
+symbol string $s3 86:6-86:9
+symbol string $s4 87:6-87:9
+== conformance/external/yara/signature-base/threat_compromised_daemon_tools_lite_may26.broken.yar
+fold 0..1385
+fold 42..628
+fold 632..1210
+fold 1214..1383
+fold 1387..2499
+fold 1437..2149
+fold 2153..2419
+fold 2423..2497
+fold 2501..3469
+fold 2530..3029
+fold 3033..3435
+fold 3439..3467
+fold 3471..4475
+fold 3513..3992
+fold 3996..4342
+fold 4346..4473
+symbol rule MAL_Information_Collector_May26 0:5-0:36
+symbol string $x1 10:6-10:9
+symbol string $s1 12:6-12:9
+symbol string $s2 13:6-13:9
+symbol string $s3 14:6-14:9
+symbol string $op1 16:6-16:10
+symbol string $op2 17:6-17:10
+symbol rule MAL_DAEMON_Tools_Lite_Compromised_May26 28:5-28:44
+symbol string $sa1 40:6-40:10
+symbol string $sa2 41:6-41:10
+symbol string $sa3 42:6-42:10
+symbol string $re 44:6-44:9
+symbol rule MAL_Backdoor_May26 51:5-51:23
+symbol string $op1 61:6-61:10
+symbol string $op2 62:6-62:10
+symbol rule MAL_Minimalistic_Backdoor_May26 67:5-67:36
+symbol string $x1 77:6-77:9
+symbol string $x2 78:6-78:9
+symbol string $s1 80:6-80:9
+symbol string $s2 81:6-81:9
+symbol string $s3 82:6-82:9
+symbol string $s4 83:6-83:9
+== conformance/external/yara/signature-base/threat_compromised_daemon_tools_lite_may26.yar
+fold 0..1362
+fold 42..628
+fold 632..1210
+fold 1214..1360
+fold 1364..2476
+fold 1414..2126
+fold 2130..2396
+fold 2400..2474
+fold 2478..3446
+fold 2507..3006
+fold 3010..3412
+fold 3416..3444
+fold 3448..4452
+fold 3490..3969
+fold 3973..4319
+fold 4323..4450
+symbol rule MAL_Information_Collector_May26 0:5-0:36
+symbol string $x1 10:6-10:9
+symbol string $s1 12:6-12:9
+symbol string $s2 13:6-13:9
+symbol string $s3 14:6-14:9
+symbol string $op1 16:6-16:10
+symbol string $op2 17:6-17:10
+symbol rule MAL_DAEMON_Tools_Lite_Compromised_May26 28:5-28:44
+symbol string $sa1 40:6-40:10
+symbol string $sa2 41:6-41:10
+symbol string $sa3 42:6-42:10
+symbol string $re 44:6-44:9
+symbol rule MAL_Backdoor_May26 51:5-51:23
+symbol string $op1 61:6-61:10
+symbol string $op2 62:6-62:10
+symbol rule MAL_Minimalistic_Backdoor_May26 67:5-67:36
+symbol string $x1 77:6-77:9
+symbol string $x2 78:6-78:9
+symbol string $s1 80:6-80:9
+symbol string $s2 81:6-81:9
+symbol string $s3 82:6-82:9
+symbol string $s4 83:6-83:9
+== conformance/external/yara/signature-base/vul_backdoor_antitheftweb.broken.yar
+fold 1..1167
+fold 49..316
+fold 320..430
+fold 1125..1165
+== conformance/external/yara/signature-base/vul_backdoor_antitheftweb.yar
+fold 1..476
+fold 49..316
+fold 320..430
+fold 434..474
+fold 478..1168
+fold 526..1036
+fold 1040..1122
+fold 1126..1166
+symbol rule VULN_PHP_Hack_Backdoored_Phpass_May21 1:5-1:42
+symbol string $x1 10:6-10:9
+symbol rule VULN_Python_Hack_Backdoored_Ctx_May21 15:5-15:42
+symbol string $x1 27:6-27:9
+== conformance/external/yara/signature-base/vuln_erlang_otp_ssh_cve_2025_32433.broken.yar
+fold 0..751
+fold 51..394
+fold 398..612
+fold 616..749
+symbol rule VULN_Erlang_OTP_SSH_CVE_2025_32433_Apr25 0:5-0:45
+symbol string $a1 9:6-9:9
+symbol string $s1 11:6-11:9
+symbol string $fix1 13:6-13:11
+symbol string $fix2 14:6-14:11
+symbol string $fix3 15:6-15:11
+symbol string $fix4 16:6-16:11
+== conformance/external/yara/signature-base/vuln_erlang_otp_ssh_cve_2025_32433.yar
+fold 0..729
+fold 51..394
+fold 398..612
+fold 616..727
+symbol rule VULN_Erlang_OTP_SSH_CVE_2025_32433_Apr25 0:5-0:45
+symbol string $a1 9:6-9:9
+symbol string $s1 11:6-11:9
+symbol string $fix1 13:6-13:11
+symbol string $fix2 14:6-14:11
+symbol string $fix3 15:6-15:11
+symbol string $fix4 16:6-16:11
+== conformance/external/yara/signature-base/webshell_regeorg.broken.yar
+fold 36..315
+fold 320..623
+fold 628..675
+== conformance/external/yara/signature-base/webshell_regeorg.yar
+fold 0..677
+fold 36..315
+fold 320..623
+fold 628..675
+symbol rule REGEORG_Tuneller_generic 0:5-0:29
+symbol string $s1 9:8-9:11
+symbol string $s2 10:8-10:11
+symbol string $s3 11:8-11:11
+symbol string $s4 12:8-12:11
+symbol string $s5 13:8-13:11
+symbol string $s6 14:8-14:11
+symbol string $s7 15:8-15:11
+symbol string $s8 16:8-16:11
+== corpus/yara/and_expression__invalid.yar
+fold 0..69
+fold 11..34
+fold 37..67
+== corpus/yara/and_expression__valid.yar
+fold 0..73
+fold 11..34
+fold 37..71
+symbol rule r 0:5-0:6
+symbol string $a 2:4-2:6
+== corpus/yara/arithmetic_expression__invalid.yar
+fold 0..47
+fold 11..45
+== corpus/yara/arithmetic_expression__valid.yar
+fold 0..91
+fold 11..89
+symbol rule r 0:5-0:6
+== corpus/yara/base64_modifier__invalid.yar
+fold 0..65
+fold 11..34
+fold 46..63
+== corpus/yara/base64_modifier__valid.yar
+fold 0..167
+fold 11..136
+fold 139..165
+symbol rule r 0:5-0:6
+symbol string $a 2:4-2:6
+symbol string $b 3:4-3:6
+== corpus/yara/call_expression__invalid.yar
+fold 0..46
+fold 11..44
+== corpus/yara/call_expression__valid.yar
+fold 15..98
+fold 26..96
+symbol rule r 2:5-2:6
+== corpus/yara/comment__invalid.yar
+symbol rule r 0:5-0:6
+== corpus/yara/comment__valid.yar
+fold 0..32
+fold 11..30
+fold 49..71
+symbol rule r 0:5-0:6
+== corpus/yara/comparison__invalid.yar
+fold 0..44
+fold 11..42
+== corpus/yara/comparison__valid.yar
+fold 0..142
+fold 11..140
+symbol rule r 0:5-0:6
+== corpus/yara/condition_section__invalid.yar
+fold 0..23
+fold 11..22
+== corpus/yara/condition_section__valid.yar
+fold 0..42
+fold 11..40
+symbol rule r 0:5-0:6
+== corpus/yara/entrypoint__invalid.yar
+fold 0..41
+fold 11..39
+== corpus/yara/entrypoint__valid.yar
+fold 0..47
+fold 11..45
+symbol rule r 0:5-0:6
+== corpus/yara/filesize__invalid.yar
+fold 0..38
+fold 11..36
+== corpus/yara/filesize__valid.yar
+fold 0..43
+fold 11..41
+symbol rule r 0:5-0:6
+== corpus/yara/float__invalid.yar
+fold 0..34
+fold 11..32
+== corpus/yara/float__valid.yar
+fold 0..38
+fold 11..36
+symbol rule r 0:5-0:6
+== corpus/yara/for_expression__invalid.yar
+fold 0..90
+fold 11..34
+fold 37..88
+== corpus/yara/for_expression__valid.yar
+fold 13..193
+fold 24..47
+fold 50..191
+symbol rule r 2:5-2:6
+symbol string $a 4:4-4:6
+== corpus/yara/hex_alternative__invalid.yar
+fold 0..70
+fold 51..68
+== corpus/yara/hex_alternative__valid.yar
+fold 0..80
+fold 11..58
+fold 61..78
+symbol rule r 0:5-0:6
+symbol string $h 2:4-2:6
+== corpus/yara/hex_jump__invalid.yar
+fold 0..64
+fold 45..62
+== corpus/yara/hex_jump__valid.yar
+fold 0..97
+fold 11..66
+fold 69..95
+symbol rule r 0:5-0:6
+symbol string $h 2:4-2:6
+== corpus/yara/hex_not__invalid.yar
+fold 0..59
+fold 40..57
+== corpus/yara/hex_not__valid.yar
+fold 0..65
+fold 11..43
+fold 46..63
+symbol rule r 0:5-0:6
+symbol string $h 2:4-2:6
+== corpus/yara/hex_string__invalid.yar
+fold 0..54
+fold 35..52
+== corpus/yara/hex_string__valid.yar
+fold 0..66
+fold 11..44
+fold 47..64
+symbol rule r 0:5-0:6
+symbol string $h 2:4-2:6
+== corpus/yara/import__invalid.yar
+fold 10..42
+fold 21..40
+symbol rule r 1:5-1:6
+== corpus/yara/import__valid.yar
+fold 13..52
+fold 24..50
+symbol rule r 2:5-2:6
+== corpus/yara/include__invalid.yar
+fold 18..50
+fold 29..48
+symbol rule r 1:5-1:6
+== corpus/yara/include__valid.yar
+fold 21..53
+fold 32..51
+symbol rule r 2:5-2:6
+== corpus/yara/index_expression__invalid.yar
+fold 13..70
+fold 24..68
+== corpus/yara/index_expression__valid.yar
+fold 13..71
+fold 24..69
+symbol rule r 2:5-2:6
+== corpus/yara/indexed_string__invalid.yar
+fold 0..63
+fold 11..34
+fold 37..61
+== corpus/yara/indexed_string__valid.yar
+fold 0..79
+fold 11..34
+fold 37..77
+symbol rule r 0:5-0:6
+symbol string $a 2:4-2:6
+== corpus/yara/integer_enumeration__invalid.yar
+fold 0..68
+fold 11..66
+== corpus/yara/integer_enumeration__valid.yar
+fold 0..70
+fold 11..68
+symbol rule r 0:5-0:6
+== corpus/yara/member_expression__invalid.yar
+fold 13..48
+fold 24..46
+== corpus/yara/member_expression__valid.yar
+fold 13..66
+fold 24..64
+symbol rule r 2:5-2:6
+== corpus/yara/meta_definition__invalid.yar
+fold 0..53
+fold 32..51
+== corpus/yara/meta_definition__valid.yar
+fold 0..96
+fold 11..72
+fold 75..94
+symbol rule r 0:5-0:6
+== corpus/yara/meta_section__invalid.yar
+fold 0..40
+fold 19..38
+== corpus/yara/meta_section__valid.yar
+fold 0..57
+fold 11..33
+fold 36..55
+symbol rule r 0:5-0:6
+== corpus/yara/negative_integer__invalid.yar
+fold 0..58
+fold 37..56
+== corpus/yara/negative_integer__valid.yar
+fold 0..57
+fold 11..33
+fold 36..55
+symbol rule r 0:5-0:6
+== corpus/yara/not_expression__invalid.yar
+fold 0..60
+fold 11..34
+fold 37..58
+== corpus/yara/not_expression__valid.yar
+fold 0..78
+fold 11..34
+fold 37..76
+symbol rule r 0:5-0:6
+symbol string $a 2:4-2:6
+== corpus/yara/of_expression__invalid.yar
+fold 0..60
+fold 11..34
+fold 37..58
+== corpus/yara/of_expression__valid.yar
+fold 0..145
+fold 11..46
+fold 49..143
+symbol rule r 0:5-0:6
+symbol string $a 2:4-2:6
+symbol string $b1 3:4-3:7
+== corpus/yara/or_expression__invalid.yar
+fold 0..59
+fold 11..34
+fold 37..57
+== corpus/yara/or_expression__valid.yar
+fold 0..72
+fold 11..34
+fold 37..70
+symbol rule r 0:5-0:6
+symbol string $a 2:4-2:6
+== corpus/yara/parenthesized_expression__invalid.yar
+fold 0..65
+fold 11..34
+fold 37..63
+== corpus/yara/parenthesized_expression__valid.yar
+fold 0..79
+fold 11..34
+fold 37..77
+symbol rule r 0:5-0:6
+symbol string $a 2:4-2:6
+== corpus/yara/parenthesized_primary__invalid.yar
+fold 0..46
+fold 11..44
+== corpus/yara/parenthesized_primary__valid.yar
+fold 0..51
+fold 11..49
+symbol rule r 0:5-0:6
+== corpus/yara/percent_quantifier__invalid.yar
+fold 0..63
+fold 11..34
+fold 37..61
+== corpus/yara/percent_quantifier__valid.yar
+fold 0..65
+fold 11..34
+fold 37..63
+symbol rule r 0:5-0:6
+symbol string $a 2:4-2:6
+== corpus/yara/range__invalid.yar
+fold 0..72
+fold 11..34
+fold 37..70
+== corpus/yara/range__valid.yar
+fold 0..73
+fold 11..34
+fold 37..71
+symbol rule r 0:5-0:6
+symbol string $a 2:4-2:6
+== corpus/yara/regexp__invalid.yar
+fold 0..55
+fold 36..53
+== corpus/yara/regexp__valid.yar
+fold 0..75
+fold 11..53
+fold 56..73
+symbol rule r 0:5-0:6
+symbol string $r 2:4-2:6
+== corpus/yara/rule__invalid.yar
+== corpus/yara/rule__valid.yar
+fold 0..32
+fold 11..30
+symbol rule r 0:5-0:6
+== corpus/yara/rule_modifier__invalid.yar
+fold 7..39
+fold 18..37
+symbol rule r 0:12-0:13
+== corpus/yara/rule_modifier__valid.yar
+fold 0..47
+fold 26..45
+symbol rule r 0:20-0:21
+== corpus/yara/rule_set__invalid.yar
+fold 40..83
+fold 51..81
+symbol rule base1 0:13-0:18
+== corpus/yara/rule_set__valid.yar
+fold 79..128
+fold 90..126
+symbol rule base1 0:13-0:18
+symbol rule base2 1:13-1:18
+symbol rule r 3:5-3:6
+== corpus/yara/rule_wildcard__invalid.yar
+fold 40..78
+fold 51..76
+symbol rule base1 0:13-0:18
+== corpus/yara/rule_wildcard__valid.yar
+fold 40..82
+fold 51..80
+symbol rule base1 0:13-0:18
+== corpus/yara/string_count__invalid.yar
+fold 0..61
+fold 11..34
+fold 37..59
+== corpus/yara/string_count__valid.yar
+fold 0..60
+fold 11..34
+fold 37..58
+symbol rule r 0:5-0:6
+symbol string $a 2:4-2:6
+== corpus/yara/string_count_in_range__invalid.yar
+fold 0..70
+fold 11..34
+fold 37..68
+== corpus/yara/string_count_in_range__valid.yar
+fold 0..73
+fold 11..34
+fold 37..71
+symbol rule r 0:5-0:6
+symbol string $a 2:4-2:6
+== corpus/yara/string_definition__invalid.yar
+fold 0..54
+fold 35..52
+== corpus/yara/string_definition__valid.yar
+fold 0..80
+fold 11..49
+fold 52..78
+symbol rule r 0:5-0:6
+symbol string $a 2:4-2:6
+symbol string $ 3:4-3:5
+== corpus/yara/string_length__invalid.yar
+fold 0..62
+fold 11..34
+fold 37..60
+== corpus/yara/string_length__valid.yar
+fold 0..60
+fold 11..34
+fold 37..58
+symbol rule r 0:5-0:6
+symbol string $a 2:4-2:6
+== corpus/yara/string_match__invalid.yar
+fold 0..59
+fold 11..34
+fold 37..57
+== corpus/yara/string_match__valid.yar
+fold 0..84
+fold 11..34
+fold 37..82
+symbol rule r 0:5-0:6
+symbol string $a 2:4-2:6
+== corpus/yara/string_modifier__invalid.yar
+fold 0..62
+fold 11..39
+fold 43..60
+== corpus/yara/string_modifier__valid.yar
+fold 0..91
+fold 11..69
+fold 72..89
+symbol rule r 0:5-0:6
+symbol string $a 2:4-2:6
+== corpus/yara/string_offset__invalid.yar
+fold 0..62
+fold 11..34
+fold 37..60
+== corpus/yara/string_offset__valid.yar
+fold 0..60
+fold 11..34
+fold 37..58
+symbol rule r 0:5-0:6
+symbol string $a 2:4-2:6
+== corpus/yara/string_set__invalid.yar
+fold 0..66
+fold 11..34
+fold 37..64
+== corpus/yara/string_set__valid.yar
+fold 0..82
+fold 11..46
+fold 49..80
+symbol rule r 0:5-0:6
+symbol string $a 2:4-2:6
+symbol string $b1 3:4-3:7
+== corpus/yara/string_wildcard__invalid.yar
+fold 0..65
+fold 11..33
+fold 36..63
+== corpus/yara/string_wildcard__valid.yar
+fold 0..65
+fold 11..33
+fold 36..63
+symbol rule r 0:5-0:6
+symbol string $a1 2:4-2:7
+== corpus/yara/strings_section__invalid.yar
+fold 0..43
+fold 22..41
+== corpus/yara/strings_section__valid.yar
+fold 0..56
+fold 11..34
+fold 37..54
+symbol rule r 0:5-0:6
+symbol string $a 2:4-2:6
+== corpus/yara/tags__invalid.yar
+fold 0..34
+fold 13..32
+== corpus/yara/tags__valid.yar
+fold 0..45
+fold 24..43
+symbol rule r 0:5-0:6
+== corpus/yara/unary_expression__invalid.yar
+fold 0..33
+fold 11..31
+== corpus/yara/unary_expression__valid.yar
+fold 0..35
+fold 11..33
+symbol rule r 0:5-0:6
+== corpus/yara/xor_modifier__invalid.yar
+fold 0..64
+fold 11..34
+fold 45..62
+== corpus/yara/xor_modifier__valid.yar
+fold 0..117
+fold 11..86
+fold 89..115
+symbol rule r 0:5-0:6
+symbol string $a 2:4-2:6
+symbol string $b 3:4-3:6
+symbol string $c 4:4-4:6

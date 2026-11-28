@@ -1,0 +1,20 @@
+[platform]
+enabled = true
+
+[[tenants]]
+name = "sigma"
+description = "Takes Sigma rules and YARA files"
+[tenants.setup]
+ssl = true
+url = "https://hl.example.org/"
+api_token = "$HARFANGLAB_API_TOKEN"
+source_id = "sigma-source"
+
+[[tenants]]
+name = "yara"
+description = "Takes Sigma rules and YARA files"
+[tenants.setup]
+ssl = true
+url = "https://hl-yara.example.org"
+api_token = "$HARFANGLAB_API_TOKEN"
+source_id = "yara-source"

@@ -1,0 +1,46 @@
+---
+source: crates/opentide-analysis/tests/suggestions.rs
+expression: "queries(LanguageId::Esql, None,\n&[\"esql_unknown_command\", \"esql_unknown_function\", \"esql_unknown_type\",\n\"ecs_unknown_field\"],\n&[\"FROM logs-* | WEHRE process.pid > 1\",\n\"FROM logs-* | STAST count = COUNT(*)\", \"FROM logs-* | WHR process.pid > 1\",\n\"FROM logs-* | EVAL a = DATEDIFF(\\\"day\\\", @timestamp, @timestamp)\",\n\"FROM logs-* | EVAL a = TO_LOWR(process.name)\",\n\"FROM logs-* | EVAL a = TOLOWER(process.name)\",\n\"FROM logs-* | EVAL a = process.pid::lng\",\n\"FROM logs-* | EVAL a = process.pid::keywrd\",\n\"FROM logs-* | WHERE process.nmae == \\\"cmd.exe\\\"\",\n\"FROM logs-* | WHERE process.parent.nmea == \\\"cmd.exe\\\"\",\n\"FROM logs-* | INLINESTAT x = COUNT(*)\", \"FROM logs-* | FILLNUL\",\n\"FROM logs-* | EVAL a = TSTE(@timestamp)\",\n\"FROM logs-* | EVAL a = V_MAGNITUD(x)\",],)"
+---
+FROM logs-* | WEHRE process.pid > 1
+  error esql_unknown_command `WEHRE` => WHERE
+  warning esql_metadata_id `FROM` => METADATA _id, _version, _index
+FROM logs-* | STAST count = COUNT(*)
+  error esql_unknown_command `STAST` => STATS
+  warning esql_metadata_id `FROM` => METADATA _id, _version, _index
+FROM logs-* | WHR process.pid > 1
+  error esql_unknown_command `WHR` => (none)
+  warning esql_metadata_id `FROM` => METADATA _id, _version, _index
+FROM logs-* | EVAL a = DATEDIFF("day", @timestamp, @timestamp)
+  error esql_unknown_function `DATEDIFF` => DATE_DIFF
+  warning esql_metadata_id `FROM` => METADATA _id, _version, _index
+FROM logs-* | EVAL a = TO_LOWR(process.name)
+  error esql_unknown_function `TO_LOWR` => TO_LOWER
+  warning esql_metadata_id `FROM` => METADATA _id, _version, _index
+FROM logs-* | EVAL a = TOLOWER(process.name)
+  error esql_unknown_function `TOLOWER` => TO_LOWER
+  warning esql_metadata_id `FROM` => METADATA _id, _version, _index
+FROM logs-* | EVAL a = process.pid::lng
+  error esql_unknown_type `lng` => long
+  warning esql_metadata_id `FROM` => METADATA _id, _version, _index
+FROM logs-* | EVAL a = process.pid::keywrd
+  error esql_unknown_type `keywrd` => keyword
+  warning esql_metadata_id `FROM` => METADATA _id, _version, _index
+FROM logs-* | WHERE process.nmae == "cmd.exe"
+  warning esql_metadata_id `FROM` => METADATA _id, _version, _index
+  warning ecs_unknown_field `process.nmae` => process.name
+FROM logs-* | WHERE process.parent.nmea == "cmd.exe"
+  warning esql_metadata_id `FROM` => METADATA _id, _version, _index
+  warning ecs_unknown_field `process.parent.nmea` => process.parent.name
+FROM logs-* | INLINESTAT x = COUNT(*)
+  error esql_unknown_command `INLINESTAT` => INLINE STATS
+  warning esql_metadata_id `FROM` => METADATA _id, _version, _index
+FROM logs-* | FILLNUL
+  error esql_unknown_command `FILLNUL` => (none)
+  warning esql_metadata_id `FROM` => METADATA _id, _version, _index
+FROM logs-* | EVAL a = TSTE(@timestamp)
+  error esql_unknown_function `TSTE` => (none)
+  warning esql_metadata_id `FROM` => METADATA _id, _version, _index
+FROM logs-* | EVAL a = V_MAGNITUD(x)
+  error esql_unknown_function `V_MAGNITUD` => (none)
+  warning esql_metadata_id `FROM` => METADATA _id, _version, _index

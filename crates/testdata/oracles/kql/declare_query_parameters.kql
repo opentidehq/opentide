@@ -1,0 +1,2 @@
+declare query_parameters(user:string = "alice@contoso.com", lookback:timespan = 1d);
+SigninLogs | where TimeGenerated > ago(lookback) and UserPrincipalName == user

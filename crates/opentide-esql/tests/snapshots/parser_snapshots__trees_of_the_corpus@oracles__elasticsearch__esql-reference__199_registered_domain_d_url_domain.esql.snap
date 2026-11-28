@@ -1,0 +1,33 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/oracles/elasticsearch/esql-reference/199_registered_domain_d_url_domain.esql
+---
+SOURCE_FILE@0..45
+  QUERY@0..44
+    FROM_COMMAND@0..9
+      FROM_KW@0..4 "FROM"
+      WHITESPACE@4..5 " "
+      INDEX_PATTERN@5..9
+        INDEX_NAME@5..9
+          SOURCE_TEXT@5..9 "logs"
+    WHITESPACE@9..10 " "
+    PIPE@10..11 "|"
+    WHITESPACE@11..12 " "
+    REGISTERED_DOMAIN_COMMAND@12..44
+      REGISTERED_DOMAIN_KW@12..29 "REGISTERED_DOMAIN"
+      WHITESPACE@29..30 " "
+      QUALIFIED_NAME@30..31
+        IDENTIFIER@30..31
+          IDENT@30..31 "d"
+      WHITESPACE@31..32 " "
+      EQ@32..33 "="
+      WHITESPACE@33..34 " "
+      QUALIFIED_NAME@34..44
+        IDENTIFIER@34..37
+          IDENT@34..37 "url"
+        DOT@37..38 "."
+        IDENTIFIER@38..44
+          IDENT@38..44 "domain"
+  WHITESPACE@44..45 "\n"
+--- errors

@@ -1,0 +1,11 @@
+`powershell` EventCode=4104 ScriptBlockText = "*firewall*" ScriptBlockText = "*Inbound*" ScriptBlockText = "*Allow*"  ScriptBlockText = "*-LocalPort*"
+  | fillnull
+  | stats count min(_time) as firstTime max(_time) as lastTime
+    BY dest signature signature_id
+       user_id vendor_product EventID
+       Guid Opcode Name
+       Path ProcessID ScriptBlockId
+       ScriptBlockText
+  | `security_content_ctime(firstTime)`
+  | `security_content_ctime(lastTime)`
+  | `allow_inbound_traffic_in_firewall_rule_filter`

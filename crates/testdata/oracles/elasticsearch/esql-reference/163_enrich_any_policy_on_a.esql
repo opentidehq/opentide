@@ -1,0 +1,1 @@
+FROM logs | ENRICH _any:policy ON a

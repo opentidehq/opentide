@@ -1,0 +1,3 @@
+SecurityEvent
+| where EventID == 4688
+| frobnicate

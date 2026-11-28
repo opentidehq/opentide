@@ -1,0 +1,88 @@
+name: "Sign-in from a new country - soc"
+
+#references:
+  #public:
+    #1: 
+  #internal:
+    #a: 
+
+metadata:
+  uuid: 00000000-0000-4000-8044-000000000002
+  schema: rule::1.0
+  version: 
+  created: 2026-05-06
+  modified: 2026-05-06
+  tlp: amber
+  author: opentide Sentinel Importer 
+  #contributors:
+    #-
+
+description: |2
+    Indented: the first line starts with spaces.
+  The second does not.
+#detection_model: 
+
+response:
+  alert_severity: Medium
+  #playbook: https://
+  #responders: 
+  #procedure:
+    #analysis: |
+      #...
+    #searches:
+      #- purpose: |
+          #...
+        #system: 
+        #query: |
+          #...
+    #containment: |
+      #...
+
+configurations:
+  sentinel: 
+    schema: platform::sentinel::1.0
+    status: DISABLED
+    tenants:
+      - soc
+    #contributors:
+      #-
+   
+    #trigger:
+      #operator: 
+      #threshold: 
+    
+    scheduling:
+      nrt: true
+    
+    alert:
+      create_incident: False
+      suppression: false
+      #title:  
+      #description: |
+        #...
+      #custom_details:
+        #- key: 
+          #column: 
+      #dynamic_properties:
+        #- property: 
+          #column: 
+  
+    grouping:
+      event: SingleAlert
+    
+      alert:
+        enabled: false
+        #reopen_closed_incidents: 
+  
+  
+    #entities:
+    #entities:
+      #- entity: 
+        #mappings:
+          #- identifier: 
+            #column: 
+    
+    query: |
+      SigninLogs
+      | where ResultType == 0
+  

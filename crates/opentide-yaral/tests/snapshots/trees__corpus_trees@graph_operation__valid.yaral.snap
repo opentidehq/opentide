@@ -1,0 +1,102 @@
+---
+source: crates/opentide-yaral/tests/trees.rs
+expression: debug_parse(&source)
+input_file: crates/testdata/corpus/yaral/graph_operation__valid.yaral
+---
+SOURCE_FILE@0..243
+  COMMENT@0..29 "// prod:graph_operation valid"
+  WHITESPACE@29..30 "\n"
+  RULE_DECLARATION@30..242
+    RULE_KW@30..34 "rule"
+    WHITESPACE@34..35 " "
+    RULE_NAME@35..36
+      IDENT@35..36 "r"
+    WHITESPACE@36..37 " "
+    L_BRACE@37..38 "{"
+    WHITESPACE@38..41 "\n  "
+    META_SECTION@41..63
+      META_KW@41..45 "meta"
+      COLON@45..46 ":"
+      WHITESPACE@46..51 "\n    "
+      META_ENTRY@51..63
+        META_KEY@51..57
+          IDENT@51..57 "author"
+        WHITESPACE@57..58 " "
+        EQ@58..59 "="
+        WHITESPACE@59..60 " "
+        LITERAL@60..63
+          STRING@60..63 "\"a\""
+    WHITESPACE@63..66 "\n  "
+    SETUP_SECTION@66..168
+      SETUP_KW@66..71 "setup"
+      COLON@71..72 ":"
+      WHITESPACE@72..77 "\n    "
+      GRAPH_APPEND@77..103
+        GRAPH_APPEND_KW@77..89 "graph_append"
+        WHITESPACE@89..90 " "
+        ARRAY_EXPR@90..103
+          L_BRACK@90..91 "["
+          VARIABLE@91..93
+            VAR_TOKEN@91..93 "$g"
+          COMMA@93..94 ","
+          WHITESPACE@94..95 " "
+          REFERENCE_LIST@95..102
+            REF_LIST_TOKEN@95..102 "%assets"
+          R_BRACK@102..103 "]"
+      WHITESPACE@103..108 "\n    "
+      GRAPH_JOIN@108..168
+        GRAPH_EXCLUDE_KW@108..121 "graph_exclude"
+        WHITESPACE@121..122 " "
+        L_PAREN@122..123 "("
+        COMPARISON@123..167
+          UDM_FIELD@123..147
+            VARIABLE@123..125
+              VAR_TOKEN@123..125 "$g"
+            MEMBER@125..131
+              ACCESS_DOT@125..126 "."
+              FIELD_NAME@126..131 "graph"
+            MEMBER@131..138
+              ACCESS_DOT@131..132 "."
+              FIELD_NAME@132..138 "entity"
+            MEMBER@138..147
+              ACCESS_DOT@138..139 "."
+              FIELD_NAME@139..147 "hostname"
+          WHITESPACE@147..148 " "
+          EQ@148..149 "="
+          WHITESPACE@149..150 " "
+          DATA_TABLE_COLUMN@150..167
+            REFERENCE_LIST@150..158
+              REF_LIST_TOKEN@150..158 "%retired"
+            DOT@158..159 "."
+            IDENT@159..167 "hostname"
+        R_PAREN@167..168 ")"
+    WHITESPACE@168..171 "\n  "
+    EVENTS_SECTION@171..220
+      EVENTS_KW@171..177 "events"
+      COLON@177..178 ":"
+      WHITESPACE@178..183 "\n    "
+      COMPARISON@183..220
+        UDM_FIELD@183..205
+          VARIABLE@183..185
+            VAR_TOKEN@183..185 "$e"
+          MEMBER@185..194
+            ACCESS_DOT@185..186 "."
+            FIELD_NAME@186..194 "metadata"
+          MEMBER@194..205
+            ACCESS_DOT@194..195 "."
+            FIELD_NAME@195..205 "event_type"
+        WHITESPACE@205..206 " "
+        EQ@206..207 "="
+        WHITESPACE@207..208 " "
+        LITERAL@208..220
+          STRING@208..220 "\"USER_LOGIN\""
+    WHITESPACE@220..223 "\n  "
+    CONDITION_SECTION@223..240
+      CONDITION_KW@223..232 "condition"
+      COLON@232..233 ":"
+      WHITESPACE@233..238 "\n    "
+      VARIABLE@238..240
+        VAR_TOKEN@238..240 "$e"
+    WHITESPACE@240..241 "\n"
+    R_BRACE@241..242 "}"
+  WHITESPACE@242..243 "\n"

@@ -1,0 +1,58 @@
+---
+source: crates/opentide-eql/tests/parser_trees.rs
+expression: "parser::debug(&source)"
+input_file: crates/testdata/corpus/eql/sequence__invalid.eql
+---
+SOURCE_FILE@0..109
+  LINE_COMMENT@0..24 "// prod:sequence invalid"
+  WHITESPACE@24..25 "\n"
+  SEQUENCE@25..108
+    SEQUENCE_KW@25..33 "sequence"
+    WHITESPACE@33..34 " "
+    JOIN_KEYS@34..44
+      BY_KW@34..36 "by"
+      WHITESPACE@36..37 " "
+      FIELD@37..44
+        IDENTIFIER@37..41
+          WORD@37..41 "host"
+        DOT@41..42 "."
+        IDENTIFIER@42..44
+          WORD@42..44 "id"
+    WHITESPACE@44..45 " "
+    SEQUENCE_PARAMS@45..62
+      WITH_KW@45..49 "with"
+      WHITESPACE@49..50 " "
+      MAXSPAN_KW@50..57 "maxspan"
+      EQ@57..58 "="
+      TIME_UNIT@58..62
+        NUMBER@58..61
+          NUMBER_TOKEN@58..61 "1.5"
+        IDENTIFIER@61..62
+          WORD@61..62 "m"
+    WHITESPACE@62..65 "\n  "
+    SEQUENCE_TERM@65..85
+      SUBQUERY@65..85
+        L_BRACK@65..66 "["
+        EVENT_CATEGORY@66..73
+          IDENTIFIER@66..73
+            WORD@66..73 "process"
+        WHITESPACE@73..74 " "
+        WHERE_KW@74..79 "where"
+        WHITESPACE@79..80 " "
+        BOOLEAN@80..84
+          TRUE_KW@80..84 "true"
+        R_BRACK@84..85 "]"
+    WHITESPACE@85..88 "\n  "
+    SEQUENCE_TERM@88..108
+      SUBQUERY@88..108
+        L_BRACK@88..89 "["
+        EVENT_CATEGORY@89..96
+          IDENTIFIER@89..96
+            WORD@89..96 "network"
+        WHITESPACE@96..97 " "
+        WHERE_KW@97..102 "where"
+        WHITESPACE@102..103 " "
+        BOOLEAN@103..107
+          TRUE_KW@103..107 "true"
+        R_BRACK@107..108 "]"
+  WHITESPACE@108..109 "\n"

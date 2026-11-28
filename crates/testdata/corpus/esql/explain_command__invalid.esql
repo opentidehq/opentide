@@ -1,0 +1,2 @@
+// prod:explain_command invalid
+EXPLAIN (FROM logs-* | LIMIT 1

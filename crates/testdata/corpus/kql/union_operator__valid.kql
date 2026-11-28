@@ -1,0 +1,2 @@
+// prod:union_operator valid
+SecurityEvent | union SecurityAlert

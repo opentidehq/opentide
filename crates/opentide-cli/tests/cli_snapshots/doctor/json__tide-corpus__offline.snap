@@ -1,0 +1,205 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: doctor/json/tide-corpus/offline
+---
+args: opentide --json doctor --offline
+exit: 0
+
+━━━ stdout · json, 1 lines
+{
+  "checks": [
+    {
+      "code": "opentide_version",
+      "fix": null,
+      "message": "opentide 0.28.1",
+      "status": "pass",
+      "subject": null
+    },
+    {
+      "code": "opentide_latest",
+      "fix": null,
+      "message": "Not checked: --offline",
+      "status": "skip",
+      "subject": null
+    },
+    {
+      "code": "workspace",
+      "fix": null,
+      "message": "Workspace ./ has .opentide/ (found from the current directory)",
+      "status": "pass",
+      "subject": null
+    },
+    {
+      "code": "git",
+      "fix": null,
+      "message": "git <GIT_VERSION>",
+      "status": "pass",
+      "subject": null
+    },
+    {
+      "code": "git_repository",
+      "fix": "git init ./",
+      "message": "./ is not in a git repository",
+      "status": "warn",
+      "subject": null
+    },
+    {
+      "code": "configuration",
+      "fix": null,
+      "message": "9 configuration files load",
+      "status": "pass",
+      "subject": null
+    },
+    {
+      "code": "templates_fresh",
+      "fix": "opentide generate templates schemas snippets",
+      "message": "4 template(s) missing: objective.1.0.template.yaml, rule.1.0.template.yaml, rule.1.1.template.yaml, threat.1.0.template.yaml",
+      "status": "warn",
+      "subject": null
+    },
+    {
+      "code": "schemas_fresh",
+      "fix": "opentide generate schemas",
+      "message": "6 schema(s) this version generates are missing: objective.1.0.schema.json, rule.1.0.schema.json, rule.1.1.schema.json, threat.1.0.schema.json, visibility.1.0.schema.json, opentide.schema.json",
+      "status": "warn",
+      "subject": null
+    },
+    {
+      "code": "lsp_catalog",
+      "fix": null,
+      "message": "Language-server catalog compiled into opentide 0.28.1",
+      "status": "pass",
+      "subject": null
+    },
+    {
+      "code": "platforms_enabled",
+      "fix": null,
+      "message": "Enabled: sentinel, microsoft_defender, splunk, sentinel_one, crowdstrike, harfanglab, carbon_black_cloud, elastic, sysdig",
+      "status": "pass",
+      "subject": null
+    },
+    {
+      "code": "analysis_engine",
+      "fix": null,
+      "message": "The analysis engine (language server 1.1.0) loads",
+      "status": "pass",
+      "subject": null
+    },
+    {
+      "code": "credentials",
+      "fix": "add a [[tenants]] entry in .opentide/configurations/platforms/sentinel.toml",
+      "message": "sentinel: no tenant configured",
+      "status": "skip",
+      "subject": "sentinel"
+    },
+    {
+      "code": "credentials",
+      "fix": "add a [[tenants]] entry in .opentide/configurations/platforms/microsoft_defender.toml",
+      "message": "microsoft_defender: no tenant configured",
+      "status": "skip",
+      "subject": "microsoft_defender"
+    },
+    {
+      "code": "credentials",
+      "fix": "add a [[tenants]] entry in .opentide/configurations/platforms/splunk.toml",
+      "message": "splunk: no tenant configured",
+      "status": "skip",
+      "subject": "splunk"
+    },
+    {
+      "code": "credentials",
+      "fix": "add a [[tenants]] entry in .opentide/configurations/platforms/sentinel_one.toml",
+      "message": "sentinel_one: no tenant configured",
+      "status": "skip",
+      "subject": "sentinel_one"
+    },
+    {
+      "code": "credentials",
+      "fix": "add a [[tenants]] entry in .opentide/configurations/platforms/crowdstrike.toml",
+      "message": "crowdstrike: no tenant configured",
+      "status": "skip",
+      "subject": "crowdstrike"
+    },
+    {
+      "code": "credentials",
+      "fix": "add a [[tenants]] entry in .opentide/configurations/platforms/harfanglab.toml",
+      "message": "harfanglab: no tenant configured",
+      "status": "skip",
+      "subject": "harfanglab"
+    },
+    {
+      "code": "credentials",
+      "fix": "add a [[tenants]] entry in .opentide/configurations/platforms/carbon_black_cloud.toml",
+      "message": "carbon_black_cloud: no tenant configured",
+      "status": "skip",
+      "subject": "carbon_black_cloud"
+    },
+    {
+      "code": "credentials",
+      "fix": "set ELASTIC_API_KEY in the environment (or a .env file you load)",
+      "message": "elastic/staging: 1 of 1 variables unset: ELASTIC_API_KEY",
+      "status": "warn",
+      "subject": "elastic/staging"
+    },
+    {
+      "code": "credentials",
+      "fix": "set SYSDIG_SECURE_API_TOKEN in the environment (or a .env file you load)",
+      "message": "sysdig/staging: 1 of 1 variables unset: SYSDIG_SECURE_API_TOKEN",
+      "status": "warn",
+      "subject": "sysdig/staging"
+    },
+    {
+      "code": "connectivity",
+      "fix": "opentide doctor --live reaches each tenant whose credentials are set",
+      "message": "Not checked: --live not set",
+      "status": "skip",
+      "subject": null
+    },
+    {
+      "code": "proxy",
+      "fix": null,
+      "message": "Proxy http://127.0.0.1:9 not checked: --offline",
+      "status": "skip",
+      "subject": null
+    },
+    {
+      "code": "vscode_settings",
+      "fix": "code --install-extension opentidehq.opentide (or opentide setup vscode, to recommend it to the team)",
+      "message": "No .vscode/extensions.json: VS Code does not suggest opentidehq.opentide",
+      "status": "skip",
+      "subject": null
+    },
+    {
+      "code": "vscode_snippets",
+      "fix": "opentide generate snippets",
+      "message": "No snippets at .vscode/model-templates.code-snippets",
+      "status": "skip",
+      "subject": null
+    },
+    {
+      "code": "mcp_config",
+      "fix": "opentide setup mcp --vscode (or --cursor, --claude-code, --generic)",
+      "message": "No MCP configuration: agents in editors cannot call opentide tools",
+      "status": "skip",
+      "subject": null
+    }
+  ],
+  "command": "doctor",
+  "duration_ms": 0,
+  "exit_code": 0,
+  "failure": null,
+  "message": "5 warnings · 7 passed, 13 skipped",
+  "next_actions": [],
+  "ok": true,
+  "schema_version": 1,
+  "status": "issues",
+  "summary": {
+    "checks": 25,
+    "failed": 0,
+    "passed": 7,
+    "skipped": 13,
+    "warnings": 5
+  }
+}
+
+━━━ stderr · empty

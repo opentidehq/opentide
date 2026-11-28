@@ -1,0 +1,248 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: generate.extract.elastic/json/tenants/tenant
+---
+args: opentide --json generate extract elastic --space soc
+exit: 0
+
+━━━ stdout · json, 1 lines
+{
+  "command": "generate extract elastic",
+  "destination": "<WS>/Imported",
+  "duration_ms": 0,
+  "exit_code": 0,
+  "extracted_count": 4,
+  "failure": null,
+  "import": "elastic",
+  "message": "Imported 4 rules from elastic · 2 skipped",
+  "next_actions": [],
+  "ok": true,
+  "schema_version": 1,
+  "skipped": [
+    {
+      "name": "New service name",
+      "reason": "does not validate as platform::elastic::1.0: configurations.elastic.scheduling.interval: ElasticConfig validation failed with code(s): duration (\"bogus\" is not a duration: a number and a unit, s, m, h or d, such as `14d`)"
+    },
+    {
+      "name": "Rule with a legacy id",
+      "reason": "Kibana rule_id \"legacy-rule-7\" is not a UUID"
+    }
+  ],
+  "space": "soc",
+  "status": "success",
+  "summary": {
+    "imported": 4,
+    "skipped": 2
+  },
+  "tenant": "soc"
+}
+
+━━━ stderr
+{"rule":"Encoded PowerShell: \"-enc\" flag","field":"process.args","type":"unknown","event":"elastic_import_required_field_dropped","level":"warning","timestamp":"0000-00-00 00:00:00"}
+{"rule":"Encoded PowerShell: \"-enc\" flag","command":"get-file","event":"skipping_unsupported_endpoint_response_action","level":"warning","timestamp":"0000-00-00 00:00:00"}
+{"rule":"Encoded PowerShell: \"-enc\" flag","reason":"osquery response action has no inline query (pack/saved query)","event":"skipping_unsupported_osquery_response_action","level":"warning","timestamp":"0000-00-00 00:00:00"}
+{"rule":"Encoded PowerShell: \"-enc\" flag","interval":"5m","from":"now-3m","event":"elastic_import_window_widened","level":"warning","timestamp":"0000-00-00 00:00:00"}
+{"rule":"New service name","interval":"bogus","from":"now-6m","event":"elastic_import_schedule_defaulted","level":"warning","timestamp":"0000-00-00 00:00:00"}
+{"rule":"New service name","reason":"does not validate as platform::elastic::1.0: configurations.elastic.scheduling.interval: ElasticConfig validation failed with code(s): duration (\"bogus\" is not a duration: a number and a unit, s, m, h or d, such as `14d`)","event":"elastic_import_rule_skipped","level":"warning","timestamp":"0000-00-00 00:00:00"}
+{"rule":"Rule with a legacy id","reason":"Kibana rule_id \"legacy-rule-7\" is not a UUID","event":"elastic_import_rule_skipped","level":"warning","timestamp":"0000-00-00 00:00:00"}
+
+━━━ ws/Imported/ · created 0755
+
+━━━ ws/Imported/ES QL aggregation.yaml · created 0644
+name: ES|QL aggregation
+metadata:
+  uuid: 7d1c0f00-0000-4000-8000-000000000105
+  schema: rule::1.0
+  version: 1
+  created: "2026-01-01"
+  modified: "2026-01-01"
+  tlp: amber
+  author: Elastic Security
+description: Counts per host.
+response:
+  alert_severity: Critical
+configurations:
+  elastic:
+    enabled: true
+    schema: platform::elastic::1.0
+    status: PRODUCTION
+    type: esql
+    query: FROM logs-* | STATS count = COUNT(*) BY host.name | WHERE count > 100
+    scheduling:
+      interval: 5m
+      lookback: 1m
+    risk: 99
+
+━━━ ws/Imported/Encoded PowerShell -enc flag 7d1c0f00.yaml · created 0644
+name: "Encoded PowerShell: \"-enc\" flag"
+metadata:
+  uuid: 7d1c0f00-0000-4000-8000-000000000103
+  schema: rule::1.0
+  version: 1
+  created: "2026-01-01"
+  modified: "2026-01-01"
+  tlp: amber
+  author: Elastic Security
+description: Many failed logons from one source.
+response:
+  alert_severity: Medium
+configurations:
+  elastic:
+    enabled: true
+    schema: platform::elastic::1.0
+    status: PRODUCTION
+    type: threshold
+    query: "event.outcome : failure"
+    language: kuery
+    data_view_id: dv-logs
+    scheduling:
+      interval: 5m
+      lookback: 0s
+    risk: 47
+    threshold:
+      field:
+        - source.ip
+      value: 20
+      cardinality:
+        field: REDACTED
+        value: 5
+
+━━━ ws/Imported/Encoded PowerShell -enc flag.yaml · created 0644
+name: "Encoded PowerShell: \"-enc\" flag"
+metadata:
+  uuid: 7d1c0f00-0000-4000-8000-000000000101
+  schema: rule::1.0
+  version: 1
+  created: "2026-02-03"
+  modified: "2026-03-04"
+  tlp: amber
+  author: Elastic
+  contributors:
+    - SOC team
+description: PowerShell started with an encoded command.
+techniques:
+  - T1059.001
+  - T1027
+references:
+  public:
+    "1": https://attack.mitre.org/techniques/T1059/001/
+response:
+  alert_severity: High
+configurations:
+  elastic:
+    enabled: true
+    schema: platform::elastic::1.0
+    status: PRODUCTION
+    type: query
+    query: "process.name : \"powershell.exe\" and process.args : \"-enc\""
+    language: kuery
+    index:
+      - logs-endpoint.events.process-*
+      - winlogbeat-*
+    scheduling:
+      interval: 5m
+      lookback: 4m
+      max_alerts: 100
+    severity:
+      default: High
+      mapping:
+        - field: REDACTED
+          value: windows
+          operator: equals
+          severity: critical
+    risk:
+      score: 73
+      mapping:
+        - field: event.risk_score
+          operator: equals
+          value: ""
+    suppression:
+      group_by:
+        - host.name
+      duration: 5m
+      missing_fields_strategy: suppress
+    filters:
+      - field: REDACTED
+        value: windows
+        negate: false
+      - meta:
+          type: exists
+          key: REDACTED
+          disabled: true
+        query:
+          exists:
+            field: REDACTED
+    highlighted_fields:
+      - REDACTED
+      - host.name
+    required_fields:
+      - name: process.name
+        type: keyword
+    integration:
+      - endpoint
+      - package: windows
+        version: ^1.5.0
+        integration: powershell
+    guide:
+      investigation: |-
+        ## Triage
+
+        Check the parent process.
+    false_positives:
+      - Administrators running scripts
+    tags:
+      - "Domain: Endpoint"
+      - "OS: Windows"
+    actions:
+      notify:
+        - id: slack-connector
+          group: default
+          params:
+            message: Alert
+      respond:
+        - endpoint: isolate
+          comment: Contain
+      timeline:
+        id: db366523-f1c6-4c1f-8731-6ce5ed9e5717
+        title: Generic Endpoint Timeline
+    exceptions:
+      endpoint: true
+      lists:
+        - id: ex-1
+          list_id: allowlist
+          namespace_type: single
+          type: detection
+    building_block: true
+
+━━━ ws/Imported/Process sequence – résumé.yaml · created 0644
+name: Process sequence – résumé
+metadata:
+  uuid: 7d1c0f00-0000-4000-8000-000000000102
+  schema: rule::1.0
+  version: 1
+  created: "2026-02-03"
+  modified: "2026-02-03"
+  tlp: amber
+  author: Detection team
+description: A sequence of processes.
+response:
+  alert_severity: Low
+configurations:
+  elastic:
+    enabled: true
+    schema: platform::elastic::1.0
+    status: DISABLED
+    type: eql
+    query: |-
+      sequence by host.id
+        [process where process.name == "cmd.exe"]
+        [network where true]
+    index:
+      - logs-*
+    scheduling:
+      interval: 1h
+      lookback: 335h
+    risk: 21
+    eql:
+      timestamp_field: event.ingested
+      tiebreaker_field: event.sequence

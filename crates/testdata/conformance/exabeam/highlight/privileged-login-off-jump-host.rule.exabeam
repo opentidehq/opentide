@@ -1,0 +1,3 @@
+activity_type:"app-login" AND outcome:"success"
+AND user IN "Privileged Accounts"
+AND NOT src_host IN "Jump Hosts"."Hostname"

@@ -1,0 +1,14 @@
+// prod:of_expression valid
+rule r {
+  meta:
+    author = "a"
+  events:
+    $a.metadata.event_type = "USER_LOGIN"
+    $b.metadata.event_type = "USER_LOGOUT"
+    $a.target.user.userid = $user
+    $b.target.user.userid = $user
+  match:
+    $user over 1h
+  condition:
+    any of [$a, $b]
+}

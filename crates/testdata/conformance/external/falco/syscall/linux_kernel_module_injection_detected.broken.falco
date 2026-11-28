@@ -1,0 +1,1 @@
+kernel_module_load and proc.name in (oops and container and thread.cap_effective icontains sys_module and not container.image.repository in (allowed_container_images_loading_kernel_module)

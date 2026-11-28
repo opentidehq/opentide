@@ -1,0 +1,2 @@
+# prod:from_clause invalid
+SELECT user FROM WHERE outcome:"fail"

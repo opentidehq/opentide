@@ -1,0 +1,49 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: share.push/json/none/help
+---
+args: opentide --json share push --help
+exit: 0
+
+━━━ stdout
+Create or update one MISP Event per selected Tide object.
+
+Usage: opentide share push [OPTIONS]
+
+Options:
+      --target <TARGET>
+          Destination block name. Repeatable.
+
+      --uuid <UUID>
+          Limit to these object UUIDs.
+
+      --type <OBJECT_TYPE>
+          Limit to threat, objective, or rule.
+
+      --file <FILE>
+          Limit to these object files.
+
+      --dry-run
+          Resolve the run locally and make no request.
+
+      --publish, --no-publish
+          Override the block publish flag.
+
+      --workers <WORKERS>
+          Parallel object workers for one destination.
+          
+          [default: 1]
+
+      --changed
+          Share only objects the default-branch CI diff changed.
+
+      --since <COMMIT>
+          With --changed: diff from this commit SHA or ref to HEAD.
+
+      --help
+          Print help
+
+Examples:
+  $ opentide share push --target misp-prod
+
+━━━ stderr · empty

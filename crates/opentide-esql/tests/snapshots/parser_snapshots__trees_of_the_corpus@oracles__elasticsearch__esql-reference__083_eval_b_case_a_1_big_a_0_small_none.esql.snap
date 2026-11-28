@@ -1,0 +1,65 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/oracles/elasticsearch/esql-reference/083_eval_b_case_a_1_big_a_0_small_none.esql
+---
+SOURCE_FILE@0..64
+  QUERY@0..63
+    FROM_COMMAND@0..9
+      FROM_KW@0..4 "FROM"
+      WHITESPACE@4..5 " "
+      INDEX_PATTERN@5..9
+        INDEX_NAME@5..9
+          SOURCE_TEXT@5..9 "logs"
+    WHITESPACE@9..10 " "
+    PIPE@10..11 "|"
+    WHITESPACE@11..12 " "
+    EVAL_COMMAND@12..63
+      EVAL_KW@12..16 "EVAL"
+      WHITESPACE@16..17 " "
+      FIELD_ASSIGNMENT_OR_EXPRESSION@17..63
+        QUALIFIED_NAME@17..18
+          IDENTIFIER@17..18
+            IDENT@17..18 "b"
+        WHITESPACE@18..19 " "
+        EQ@19..20 "="
+        WHITESPACE@20..21 " "
+        FUNCTION_CALL@21..63
+          IDENTIFIER@21..25
+            IDENT@21..25 "CASE"
+          L_PAREN@25..26 "("
+          COMPARISON@26..31
+            QUALIFIED_NAME@26..27
+              IDENTIFIER@26..27
+                IDENT@26..27 "a"
+            WHITESPACE@27..28 " "
+            GT@28..29 ">"
+            WHITESPACE@29..30 " "
+            NUMBER@30..31
+              NUMBER_LIT@30..31 "1"
+          COMMA@31..32 ","
+          WHITESPACE@32..33 " "
+          STRING@33..38
+            STRING_LIT@33..38 "\"big\""
+          COMMA@38..39 ","
+          WHITESPACE@39..40 " "
+          COMPARISON@40..45
+            QUALIFIED_NAME@40..41
+              IDENTIFIER@40..41
+                IDENT@40..41 "a"
+            WHITESPACE@41..42 " "
+            GT@42..43 ">"
+            WHITESPACE@43..44 " "
+            NUMBER@44..45
+              NUMBER_LIT@44..45 "0"
+          COMMA@45..46 ","
+          WHITESPACE@46..47 " "
+          STRING@47..54
+            STRING_LIT@47..54 "\"small\""
+          COMMA@54..55 ","
+          WHITESPACE@55..56 " "
+          STRING@56..62
+            STRING_LIT@56..62 "\"none\""
+          R_PAREN@62..63 ")"
+  WHITESPACE@63..64 "\n"
+--- errors

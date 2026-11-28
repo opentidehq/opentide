@@ -1,0 +1,629 @@
+{
+  "format": 1,
+  "scenario": "crowdstrike/query",
+  "recorded_from": [
+    "{python}",
+    "tests/cassettes/crowdstrike/client.py",
+    "query"
+  ],
+  "digest": "sha256:82ef79a0a818ab4742248d7be090396709dd2c22999dcd85eb703b466e2aba30",
+  "interactions": [
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://api.eu-1.crowdstrike.com/oauth2/token",
+        "headers": [
+          [
+            "content-type",
+            "application/x-www-form-urlencoded"
+          ]
+        ],
+        "body": "client_id=opentide-client&client_secret=REDACTED"
+      },
+      "response": {
+        "status": 201,
+        "headers": [
+          [
+            "server",
+            "falcon-stand-in"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"access_token\": \"REDACTED\", \"token_type\": \"REDACTED\", \"expires_in\": 1799}"
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://api.eu-1.crowdstrike.com/humio/api/v1/repositories/search-all/queryjobs",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "Bearer REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"queryString\": \"#event_simpleName=ProcessRollup2\\n| head(limit=2)\", \"start\": 1793001600000, \"end\": 1793088000250, \"isLive\": false}"
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "falcon-stand-in"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"id\": \"search-all-job-1\", \"hashedQueryOnView\": \"f00d\"}"
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://api.eu-1.crowdstrike.com/humio/api/v1/repositories/search-all/queryjobs/search-all-job-1",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "Bearer REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "falcon-stand-in"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"done\": false, \"events\": [], \"metaData\": {\"eventCount\": 0}}"
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://api.eu-1.crowdstrike.com/humio/api/v1/repositories/search-all/queryjobs/search-all-job-1",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "Bearer REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "falcon-stand-in"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"done\": true, \"cancelled\": false, \"events\": [{\"ComputerName\": \"ws-01\", \"aid\": {\"id\": \"a1\", \"cid\": \"c1\"}, \"@timestamp\": 1761465600000}, {\"ComputerName\": \"ws-02\", \"aid\": {\"id\": \"a2\"}, \"UserName\": \"\\u00dcn\\u00efcode\", \"tags\": [\"x\", 1]}, \"not an event\"], \"messages\": [{\"message\": \"the search hit a limit\"}, \"plain warning\"], \"metaData\": {\"eventCount\": 3}}"
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://api.eu-1.crowdstrike.com/oauth2/token",
+        "headers": [
+          [
+            "content-type",
+            "application/x-www-form-urlencoded"
+          ]
+        ],
+        "body": "client_id=opentide-client&client_secret=REDACTED"
+      },
+      "response": {
+        "status": 201,
+        "headers": [
+          [
+            "server",
+            "falcon-stand-in"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"access_token\": \"REDACTED\", \"token_type\": \"REDACTED\", \"expires_in\": 1799}"
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://api.eu-1.crowdstrike.com/humio/api/v1/repositories/investigate_view/queryjobs",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "Bearer REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"queryString\": \"#event_simpleName=DnsRequest | head(limit=5)\", \"start\": 1793001600000, \"end\": 1793088000250, \"isLive\": false}"
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "falcon-stand-in"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"id\": \"investigate_view-job-2\", \"hashedQueryOnView\": \"f00d\"}"
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://api.eu-1.crowdstrike.com/humio/api/v1/repositories/investigate_view/queryjobs/investigate_view-job-2",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "Bearer REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "falcon-stand-in"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"done\": false, \"events\": [], \"metaData\": {\"eventCount\": 0}}"
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://api.eu-1.crowdstrike.com/humio/api/v1/repositories/investigate_view/queryjobs/investigate_view-job-2",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "Bearer REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "falcon-stand-in"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"done\": true, \"cancelled\": false, \"events\": [{\"ComputerName\": \"ws-01\", \"aid\": {\"id\": \"a1\", \"cid\": \"c1\"}, \"@timestamp\": 1761465600000}, {\"ComputerName\": \"ws-02\", \"aid\": {\"id\": \"a2\"}, \"UserName\": \"\\u00dcn\\u00efcode\", \"tags\": [\"x\", 1]}, \"not an event\"], \"messages\": [{\"message\": \"the search hit a limit\"}, \"plain warning\"], \"metaData\": {\"eventCount\": 3}}"
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://api.eu-1.crowdstrike.com/oauth2/token",
+        "headers": [
+          [
+            "content-type",
+            "application/x-www-form-urlencoded"
+          ]
+        ],
+        "body": "client_id=opentide-client&client_secret=REDACTED"
+      },
+      "response": {
+        "status": 201,
+        "headers": [
+          [
+            "server",
+            "falcon-stand-in"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"access_token\": \"REDACTED\", \"token_type\": \"REDACTED\", \"expires_in\": 1799}"
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://api.eu-1.crowdstrike.com/humio/api/v1/repositories/slow_view/queryjobs",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "Bearer REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"queryString\": \"x\\n| head(limit=101)\", \"start\": 1793001600000, \"end\": 1793088000250, \"isLive\": false}"
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "falcon-stand-in"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"id\": \"slow_view-job-3\", \"hashedQueryOnView\": \"f00d\"}"
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://api.eu-1.crowdstrike.com/humio/api/v1/repositories/slow_view/queryjobs/slow_view-job-3",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "Bearer REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "falcon-stand-in"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"done\": false, \"events\": [], \"metaData\": {\"eventCount\": 0}}"
+      }
+    },
+    {
+      "request": {
+        "method": "DELETE",
+        "url": "https://api.eu-1.crowdstrike.com/humio/api/v1/repositories/slow_view/queryjobs/slow_view-job-3",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "Bearer REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 204,
+        "headers": [
+          [
+            "server",
+            "falcon-stand-in"
+          ]
+        ],
+        "body": ""
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://api.eu-1.crowdstrike.com/oauth2/token",
+        "headers": [
+          [
+            "content-type",
+            "application/x-www-form-urlencoded"
+          ]
+        ],
+        "body": "client_id=opentide-client&client_secret=REDACTED"
+      },
+      "response": {
+        "status": 201,
+        "headers": [
+          [
+            "server",
+            "falcon-stand-in"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"access_token\": \"REDACTED\", \"token_type\": \"REDACTED\", \"expires_in\": 1799}"
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://api.eu-1.crowdstrike.com/humio/api/v1/repositories/cancelled_view/queryjobs",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "Bearer REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"queryString\": \"x\\n| head(limit=101)\", \"start\": 1793001600000, \"end\": 1793088000250, \"isLive\": false}"
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "falcon-stand-in"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"id\": \"cancelled_view-job-4\", \"hashedQueryOnView\": \"f00d\"}"
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://api.eu-1.crowdstrike.com/humio/api/v1/repositories/cancelled_view/queryjobs/cancelled_view-job-4",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "Bearer REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "falcon-stand-in"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"done\": false, \"events\": [], \"metaData\": {\"eventCount\": 0}}"
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://api.eu-1.crowdstrike.com/humio/api/v1/repositories/cancelled_view/queryjobs/cancelled_view-job-4",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "Bearer REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "falcon-stand-in"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"done\": false, \"cancelled\": true, \"events\": []}"
+      }
+    },
+    {
+      "request": {
+        "method": "DELETE",
+        "url": "https://api.eu-1.crowdstrike.com/humio/api/v1/repositories/cancelled_view/queryjobs/cancelled_view-job-4",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "Bearer REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 204,
+        "headers": [
+          [
+            "server",
+            "falcon-stand-in"
+          ]
+        ],
+        "body": ""
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://api.eu-1.crowdstrike.com/oauth2/token",
+        "headers": [
+          [
+            "content-type",
+            "application/x-www-form-urlencoded"
+          ]
+        ],
+        "body": "client_id=opentide-client&client_secret=REDACTED"
+      },
+      "response": {
+        "status": 201,
+        "headers": [
+          [
+            "server",
+            "falcon-stand-in"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"access_token\": \"REDACTED\", \"token_type\": \"REDACTED\", \"expires_in\": 1799}"
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://api.eu-1.crowdstrike.com/humio/api/v1/repositories/forbidden_view/queryjobs",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "Bearer REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"queryString\": \"x\\n| head(limit=101)\", \"start\": 1793001600000, \"end\": 1793088000250, \"isLive\": false}"
+      },
+      "response": {
+        "status": 403,
+        "headers": [
+          [
+            "server",
+            "falcon-stand-in"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"meta\": {\"query_time\": 0.012, \"trace_id\": \"00000000-0000-4000-8000-0000000000aa\"}, \"errors\": [{\"code\": 403, \"message\": \"access denied, authorization failed\"}]}"
+      }
+    }
+  ]
+}

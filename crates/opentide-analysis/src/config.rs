@@ -1,0 +1,1097 @@
+//! Configuration TOML under `.opentide/configurations/`: the host checks, the
+//! engine places.
+//!
+//! opentide's models are the only authority on these files: the host checks
+//! a buffer with `opentide-schema`'s configuration checks (the language
+//! server does, natively, since UC-2.6, #821) and hands the findings to
+//! [`place_configuration_issues`], which turns each finding's `field_path`
+//! into a range in the buffer, as it does for Tide objects. The schemas
+//! `opentide-schema` generates ([`ConfigurationSchemas`], which the language
+//! server builds from the models) give hover and completion: nothing here
+//! guesses what opentide would say.
+
+use opentide_core::{ByteSpan, CompletionItem, Diagnostic, Range, Severity, span_to_range};
+use serde_json::Value;
+use std::collections::HashMap;
+use toml_edit::{ImDocument, Item, Table};
+
+/// The directory configuration files live in, relative to the workspace.
+pub const CONFIGURATIONS_DIRECTORY: &str = ".opentide/configurations/";
+
+/// One finding of the host's configuration checks. `field_path` is a key
+/// path into the buffer, list items by index (`["misp", "0", "max_tlp"]`);
+/// an empty path is about the whole file.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ConfigIssue {
+    pub code: String,
+    pub field_path: Vec<String>,
+    pub severity: Severity,
+    pub message: String,
+}
+
+/// The path of `path` relative to `.opentide/configurations/`, when it is a
+/// TOML file there (`sharing.toml`, `platforms/sentinel.toml`). A path may use
+/// either separator and be absolute or relative to the workspace.
+pub fn configuration_path(path: &str) -> Option<String> {
+    let path = path.replace('\\', "/");
+    let marker = format!("/{CONFIGURATIONS_DIRECTORY}");
+    let rest = match path.rsplit_once(marker.as_str()) {
+        Some((_, rest)) => rest,
+        None => path.strip_prefix(CONFIGURATIONS_DIRECTORY)?,
+    };
+    let stem = rest.strip_suffix(".toml")?;
+    (!stem.is_empty() && !stem.ends_with('/')).then(|| rest.to_string())
+}
+
+/// Whether `path` is a configuration TOML file ([`configuration_path`]).
+pub fn is_configuration_path(path: &str) -> bool {
+    configuration_path(path).is_some()
+}
+
+/// `issues`, the host's findings on `text`, each at its place in the buffer.
+pub fn place_configuration_issues(text: &str, issues: Vec<ConfigIssue>) -> Vec<Diagnostic> {
+    opentide_core::with_line_index(text, || place_all(text, issues))
+}
+
+fn place_all(text: &str, issues: Vec<ConfigIssue>) -> Vec<Diagnostic> {
+    let parsed = ImDocument::parse(text);
+    issues
+        .into_iter()
+        .map(|issue| place(text, parsed.as_ref(), issue))
+        .collect()
+}
+
+fn place(
+    text: &str,
+    parsed: Result<&ImDocument<&str>, &toml_edit::TomlError>,
+    issue: ConfigIssue,
+) -> Diagnostic {
+    let (span, resolved) = match parsed {
+        Ok(document) => locate(document.as_table(), &issue.field_path),
+        // Not TOML: only the parse error itself has a place.
+        Err(error) if issue.field_path.is_empty() => (error.span(), true),
+        Err(_) => (None, false),
+    };
+    // A finding the buffer cannot hold at its key says which key it is about,
+    // unless its message already names it ("block 'a' is missing url.").
+    let named = issue
+        .field_path
+        .last()
+        .is_some_and(|key| names_word(&issue.message, key));
+    let message = if resolved || issue.field_path.is_empty() || named {
+        issue.message
+    } else {
+        format!("{}: {}", display_path(&issue.field_path), issue.message)
+    };
+    let range = span
+        .map(|span| {
+            let start = span.start.min(text.len());
+            span_to_range(
+                text,
+                ByteSpan::new(start, span.end.clamp(start, text.len())),
+            )
+        })
+        .unwrap_or_else(|| first_line(text));
+    Diagnostic {
+        code: issue.code,
+        severity: issue.severity,
+        message,
+        range,
+        field_path: (!issue.field_path.is_empty()).then_some(issue.field_path),
+        suggestion: None,
+        object_uuid: None,
+        object_type: None,
+    }
+}
+
+/// The first line of `text`, where a finding about the whole file goes.
+fn first_line(text: &str) -> Range {
+    let end = text.find(['\r', '\n']).unwrap_or(text.len());
+    span_to_range(text, ByteSpan::new(0, end))
+}
+
+/// Whether `text` holds `word` on its own, not inside a longer name.
+fn names_word(text: &str, word: &str) -> bool {
+    let is_name = |ch: char| ch.is_alphanumeric() || ch == '_' || ch == '-';
+    text.match_indices(word).any(|(start, found)| {
+        #[expect(
+            clippy::string_slice,
+            reason = "a match from `match_indices` starts and ends on char boundaries"
+        )]
+        let (before, after) = (&text[..start], &text[start + found.len()..]);
+        !before.chars().next_back().is_some_and(is_name)
+            && !after.chars().next().is_some_and(is_name)
+    })
+}
+
+/// `misp[0].max_tlp` for `["misp", "0", "max_tlp"]`.
+fn display_path(path: &[String]) -> String {
+    let mut out = String::new();
+    for segment in path {
+        if segment.parse::<usize>().is_ok() {
+            out.push_str(&format!("[{segment}]"));
+        } else {
+            if !out.is_empty() {
+                out.push('.');
+            }
+            out.push_str(segment);
+        }
+    }
+    out
+}
+
+enum Node<'a> {
+    Table(&'a Table),
+    Item(&'a Item),
+    Value(&'a toml_edit::Value),
+}
+
+type Span = std::ops::Range<usize>;
+
+/// The span of `path` in the document: its last key, or an array-of-tables
+/// entry's header, and whether the whole path exists. When only a prefix
+/// exists, the deepest part of it that has a span.
+fn locate(root: &Table, path: &[String]) -> (Option<Span>, bool) {
+    let mut node = Node::Table(root);
+    let mut best = None;
+    for segment in path {
+        let next = match node {
+            Node::Table(table) => table_child(table, segment),
+            Node::Item(Item::Table(table)) => table_child(table, segment),
+            Node::Item(Item::ArrayOfTables(tables)) => segment
+                .parse::<usize>()
+                .ok()
+                .and_then(|index| tables.get(index))
+                .map(|table| (table.span(), Node::Table(table))),
+            Node::Item(Item::Value(value)) | Node::Value(value) => value_child(value, segment),
+            Node::Item(Item::None) => None,
+        };
+        let Some((span, child)) = next else {
+            return (best, false);
+        };
+        if span.is_some() {
+            best = span;
+        }
+        node = child;
+    }
+    (best, true)
+}
+
+fn table_child<'a>(table: &'a Table, key: &str) -> Option<(Option<Span>, Node<'a>)> {
+    table
+        .get_key_value(key)
+        .map(|(key, item)| (key.span().or_else(|| item.span()), Node::Item(item)))
+}
+
+fn value_child<'a>(value: &'a toml_edit::Value, segment: &str) -> Option<(Option<Span>, Node<'a>)> {
+    match value {
+        toml_edit::Value::InlineTable(table) => table
+            .get_key_value(segment)
+            .map(|(key, item)| (key.span().or_else(|| item.span()), Node::Item(item))),
+        toml_edit::Value::Array(array) => segment
+            .parse::<usize>()
+            .ok()
+            .and_then(|index| array.get(index))
+            .map(|item| (item.span(), Node::Value(item))),
+        _ => None,
+    }
+}
+
+// --- Schemas, for hover and completion ---------------------------------------
+
+/// The configuration schemas hover and completion read: the router
+/// (`configurations.router.json`) and the schema documents by file name, as
+/// `opentide-schema` generates them (`generate::configuration`, UC-1.8b). The
+/// language server builds them from the models; the engine never holds a
+/// process-wide copy.
+#[derive(Debug, Clone, Default)]
+pub struct ConfigurationSchemas {
+    /// The router's `files`: router key → `{ "schema": <file name>, ... }`.
+    files: serde_json::Map<String, Value>,
+    /// Schema documents by file name.
+    documents: HashMap<String, Value>,
+}
+
+/// The router key a platform file without a dedicated entry falls back to.
+const GENERIC_PLATFORM_FILE: &str = "platforms/*.toml";
+
+impl ConfigurationSchemas {
+    /// The schemas from the router document and the schema documents by file
+    /// name. A router without `files` is an error.
+    pub fn new(
+        router: &Value,
+        documents: impl IntoIterator<Item = (String, Value)>,
+    ) -> Result<Self, String> {
+        let files = router
+            .get("files")
+            .and_then(Value::as_object)
+            .cloned()
+            .ok_or("configurations.router.json: no `files` table")?;
+        Ok(Self {
+            files,
+            documents: documents.into_iter().collect(),
+        })
+    }
+
+    /// [`Self::new`] from the files' texts: the router, and each schema as
+    /// `(file name, text)`. Text that is not JSON is an error.
+    pub fn parse(router: &str, schemas: &[(String, String)]) -> Result<Self, String> {
+        let router: Value = serde_json::from_str(router)
+            .map_err(|err| format!("configurations.router.json: {err}"))?;
+        let mut documents = Vec::with_capacity(schemas.len());
+        for (name, text) in schemas {
+            let document: Value =
+                serde_json::from_str(text).map_err(|err| format!("{name}: {err}"))?;
+            documents.push((name.clone(), document));
+        }
+        Self::new(&router, documents)
+    }
+}
+
+impl ConfigurationSchemas {
+    /// The schema of the file at `relative` (under the configurations
+    /// directory): its router entry, or the generic platform entry.
+    fn for_file(&self, relative: &str) -> Option<&Value> {
+        let entry = self.files.get(relative).or_else(|| {
+            let name = relative.strip_prefix("platforms/")?;
+            (!name.contains('/'))
+                .then(|| self.files.get(GENERIC_PLATFORM_FILE))
+                .flatten()
+        })?;
+        self.documents.get(entry.get("schema")?.as_str()?)
+    }
+}
+
+/// A walk over one schema document. It reads the schema; it never validates.
+struct Walker<'a> {
+    root: &'a Value,
+}
+
+const MAX_DEPTH: usize = 16;
+
+impl<'a> Walker<'a> {
+    /// `node` with local `$ref`s followed.
+    fn resolve(&self, mut node: &'a Value) -> &'a Value {
+        for _ in 0..MAX_DEPTH {
+            let Some(pointer) = node
+                .get("$ref")
+                .and_then(Value::as_str)
+                .and_then(|reference| reference.strip_prefix('#'))
+            else {
+                break;
+            };
+            match self.root.pointer(pointer) {
+                Some(target) => node = target,
+                None => break,
+            }
+        }
+        node
+    }
+
+    /// The shapes a node may take: each non-null branch of `anyOf`, `oneOf`
+    /// and `allOf`, else the node itself.
+    fn branches(&self, node: &'a Value) -> Vec<&'a Value> {
+        let mut out = Vec::new();
+        self.collect_branches(node, 0, &mut out);
+        out
+    }
+
+    fn collect_branches(&self, node: &'a Value, depth: usize, out: &mut Vec<&'a Value>) {
+        let node = self.resolve(node);
+        if depth > MAX_DEPTH || is_null_type(node) {
+            return;
+        }
+        let mut nested = false;
+        for key in ["anyOf", "oneOf", "allOf"] {
+            if let Some(list) = node.get(key).and_then(Value::as_array) {
+                nested = true;
+                for branch in list {
+                    self.collect_branches(branch, depth + 1, out);
+                }
+            }
+        }
+        if !nested || node.get("properties").is_some() || node.get("type").is_some() {
+            out.push(node);
+        }
+    }
+
+    /// The tables a node stands for: an array's items (an array of tables),
+    /// else the node's own branches.
+    fn tables(&self, node: &'a Value) -> Vec<&'a Value> {
+        let mut out = Vec::new();
+        for branch in self.branches(node) {
+            match branch.get("items") {
+                Some(items) if is_array(branch) => out.extend(self.branches(items)),
+                _ => out.push(branch),
+            }
+        }
+        out
+    }
+
+    fn child(&self, node: &'a Value, key: &str) -> Option<&'a Value> {
+        let tables = self.tables(node);
+        tables
+            .iter()
+            .find_map(|table| table.get("properties").and_then(|p| p.get(key)))
+            .or_else(|| {
+                tables.iter().find_map(|table| {
+                    table
+                        .get("additionalProperties")
+                        .filter(|extra| extra.is_object())
+                })
+            })
+    }
+
+    fn at(&self, path: &[String]) -> Option<&'a Value> {
+        path.iter()
+            .try_fold(self.root, |node, key| self.child(node, key))
+    }
+
+    /// Every property of the table `node` stands for, in schema order, once.
+    fn properties(&self, node: &'a Value) -> Vec<(&'a str, &'a Value)> {
+        let mut out: Vec<(&'a str, &'a Value)> = Vec::new();
+        for table in self.tables(node) {
+            if let Some(properties) = table.get("properties").and_then(Value::as_object) {
+                for (name, schema) in properties {
+                    if !out.iter().any(|(seen, _)| *seen == name.as_str()) {
+                        out.push((name.as_str(), schema));
+                    }
+                }
+            }
+        }
+        out
+    }
+
+    fn first(&self, node: &'a Value, key: &str) -> Option<&'a Value> {
+        let node_value = self.resolve(node).get(key).or_else(|| node.get(key));
+        node_value.or_else(|| {
+            self.branches(node)
+                .into_iter()
+                .find_map(|branch| branch.get(key))
+        })
+    }
+
+    /// `string`, `boolean`, `array of string`, `string or null`…
+    fn type_label(&self, node: &'a Value) -> Option<String> {
+        let mut labels: Vec<String> = Vec::new();
+        for branch in self.branches(node) {
+            let label = match branch.get("type") {
+                Some(Value::String(kind)) if kind == "array" => match branch.get("items") {
+                    Some(items) => match self.type_label(items) {
+                        Some(item) => format!("array of {item}"),
+                        None => "array".to_string(),
+                    },
+                    None => "array".to_string(),
+                },
+                Some(Value::String(kind)) if kind == "object" => "table".to_string(),
+                Some(Value::String(kind)) => kind.clone(),
+                Some(Value::Array(kinds)) => kinds
+                    .iter()
+                    .filter_map(Value::as_str)
+                    .collect::<Vec<_>>()
+                    .join(" or "),
+                _ if branch.get("properties").is_some() => "table".to_string(),
+                _ => continue,
+            };
+            if !labels.contains(&label) {
+                labels.push(label);
+            }
+        }
+        (!labels.is_empty()).then(|| labels.join(" or "))
+    }
+
+    /// The values a scalar node allows (`enum`, `const`), in schema order.
+    fn values(&self, node: &'a Value) -> Vec<&'a Value> {
+        let mut out: Vec<&'a Value> = Vec::new();
+        for branch in self.branches(node) {
+            let found = branch
+                .get("enum")
+                .and_then(Value::as_array)
+                .map(|values| values.iter().collect::<Vec<_>>())
+                .or_else(|| branch.get("const").map(|value| vec![value]))
+                .unwrap_or_default();
+            for value in found {
+                if !value.is_null() && !out.contains(&value) {
+                    out.push(value);
+                }
+            }
+        }
+        out
+    }
+
+    fn is_table(&self, node: &'a Value) -> bool {
+        self.branches(node).iter().any(|branch| is_object(branch))
+    }
+
+    fn is_array_of_tables(&self, node: &'a Value) -> bool {
+        self.branches(node).iter().any(|branch| {
+            is_array(branch)
+                && branch
+                    .get("items")
+                    .is_some_and(|items| self.branches(items).iter().any(|item| is_object(item)))
+        })
+    }
+
+    fn is_boolean(&self, node: &'a Value) -> bool {
+        self.branches(node)
+            .iter()
+            .any(|branch| branch.get("type").and_then(Value::as_str) == Some("boolean"))
+    }
+
+    /// Hover text: title, type, description, allowed values, default.
+    fn describe(&self, node: &'a Value, key: &str) -> String {
+        let title = self
+            .first(node, "title")
+            .and_then(Value::as_str)
+            .unwrap_or(key);
+        let mut out = format!("**{title}**");
+        if let Some(kind) = self.type_label(node) {
+            out.push_str(&format!(" · `{kind}`"));
+        }
+        if let Some(description) = self.first(node, "description").and_then(Value::as_str) {
+            out.push_str("\n\n");
+            out.push_str(description);
+        }
+        let mut values = self.values(node);
+        if values.is_empty()
+            && let Some(items) = self.branches(node).into_iter().find_map(|b| b.get("items"))
+        {
+            values = self.values(items);
+        }
+        if !values.is_empty() {
+            let listed: Vec<String> = values
+                .iter()
+                .map(|v| format!("`{}`", toml_value(v)))
+                .collect();
+            out.push_str(&format!("\n\nValues: {}", listed.join(", ")));
+        }
+        if let Some(default) = self.first(node, "default").filter(|value| !value.is_null()) {
+            out.push_str(&format!("\n\nDefault: `{}`", toml_value(default)));
+        }
+        out
+    }
+}
+
+fn is_null_type(node: &Value) -> bool {
+    node.get("type").and_then(Value::as_str) == Some("null")
+}
+
+fn is_array(node: &Value) -> bool {
+    node.get("type").and_then(Value::as_str) == Some("array")
+}
+
+fn is_object(node: &Value) -> bool {
+    node.get("type").and_then(Value::as_str) == Some("object") || node.get("properties").is_some()
+}
+
+/// A JSON value written as TOML writes it: `toml_edit` escapes strings and
+/// quotes keys that are not bare (#1929). TOML has no null, so a value that
+/// holds one is written as JSON writes it.
+fn toml_value(value: &Value) -> String {
+    to_toml(value).map_or_else(|| value.to_string(), |value| value.to_string())
+}
+
+fn to_toml(value: &Value) -> Option<toml_edit::Value> {
+    Some(match value {
+        Value::Null => return None,
+        Value::Bool(flag) => toml_edit::Value::from(*flag),
+        Value::Number(number) => match number.as_i64() {
+            Some(int) => toml_edit::Value::from(int),
+            None => toml_edit::Value::from(number.as_f64()?),
+        },
+        Value::String(text) => toml_edit::Value::from(text.as_str()),
+        Value::Array(items) => {
+            let mut array = items
+                .iter()
+                .map(to_toml)
+                .collect::<Option<toml_edit::Array>>()?;
+            array.fmt();
+            toml_edit::Value::Array(array)
+        }
+        Value::Object(map) => {
+            let mut table = map
+                .iter()
+                .map(|(key, value)| Some((toml_edit::Key::new(key.as_str()), to_toml(value)?)))
+                .collect::<Option<toml_edit::InlineTable>>()?;
+            table.fmt();
+            toml_edit::Value::InlineTable(table)
+        }
+    })
+}
+
+// --- Where the cursor is ------------------------------------------------------
+
+/// What the cursor is on, read from the text around it: a buffer being typed
+/// is rarely valid TOML.
+#[derive(Debug, PartialEq, Eq)]
+enum Cursor {
+    /// Inside a `[table]` or `[[array]]` header, after `parent`.
+    Header {
+        array: bool,
+        parent: Vec<String>,
+    },
+    /// Where a key goes, in `table`, after a dotted `parent`.
+    Key {
+        table: Vec<String>,
+        parent: Vec<String>,
+    },
+    /// After `key =`, possibly inside an array or a string.
+    Value {
+        path: Vec<String>,
+        in_array: bool,
+        quoted: bool,
+    },
+    Nothing,
+}
+
+/// A `[header]` or `[[header]]` line's key path and whether it is an array.
+fn header(line: &str) -> Option<(bool, Vec<String>)> {
+    let line = line.trim_start();
+    let (array, inner) = if let Some(rest) = line.strip_prefix("[[") {
+        (true, rest.split("]]").next()?)
+    } else {
+        (false, line.strip_prefix('[')?.split(']').next()?)
+    };
+    Some((array, dotted(inner)))
+}
+
+/// `a."b.c".d` → `["a", "b.c", "d"]`.
+fn dotted(text: &str) -> Vec<String> {
+    let mut parts = Vec::new();
+    let mut current = String::new();
+    let mut quote: Option<char> = None;
+    for ch in text.chars() {
+        match quote {
+            Some(open) if ch == open => quote = None,
+            Some(_) => current.push(ch),
+            None if ch == '"' || ch == '\'' => quote = Some(ch),
+            None if ch == '.' => parts.push(std::mem::take(&mut current).trim().to_string()),
+            None => current.push(ch),
+        }
+    }
+    parts.push(current.trim().to_string());
+    parts
+}
+
+/// The table the line starting at `line_start` belongs to: the last header
+/// above it, and where that table's body starts. `None` when `line_start` is
+/// not a char boundary of `text`; every caller passes the start of a line.
+fn table_at(text: &str, line_start: usize) -> Option<(Vec<String>, usize)> {
+    debug_assert!(
+        text.is_char_boundary(line_start),
+        "{text:?} cut at {line_start}"
+    );
+    let (above, _) = text.split_at_checked(line_start)?;
+    let mut table = Vec::new();
+    let mut body_start = 0;
+    let mut position = 0;
+    for line in above.split_inclusive('\n') {
+        if let Some((_, path)) = header(line) {
+            table = path;
+            body_start = position + line.len();
+        }
+        position += line.len();
+    }
+    Some((table, body_start))
+}
+
+/// The line holding `offset` (floored to a char boundary): where it starts
+/// in `text`, its text up to `offset`, and its text from `offset` to its end.
+fn line_at(text: &str, offset: usize) -> (usize, &str, &str) {
+    let offset = text.floor_char_boundary(offset);
+    #[expect(
+        clippy::string_slice,
+        reason = "`floor_char_boundary` returns a char boundary of `text`"
+    )]
+    let (before, after) = (&text[..offset], &text[offset..]);
+    let head = before.rsplit_once('\n').map_or(before, |(_, line)| line);
+    let tail = after.split_once('\n').map_or(after, |(line, _)| line);
+    (before.len() - head.len(), head, tail)
+}
+
+/// Where `=` is on `line`, outside strings, before any comment, and the text
+/// before it.
+fn equals(line: &str) -> Option<(usize, &str)> {
+    let mut quote: Option<char> = None;
+    for (index, ch) in line.char_indices() {
+        match quote {
+            Some(open) if ch == open => quote = None,
+            Some(_) => {}
+            None if ch == '"' || ch == '\'' => quote = Some(ch),
+            None if ch == '#' => return None,
+            None if ch == '=' => {
+                #[expect(clippy::string_slice, reason = "`char_indices` yields char boundaries")]
+                return Some((index, &line[..index]));
+            }
+            None => {}
+        }
+    }
+    None
+}
+
+fn cursor(text: &str, offset: usize) -> Cursor {
+    let (line_start, prefix, _) = line_at(text, offset);
+    if prefix.trim_start().starts_with('[') {
+        let inner = prefix.trim_start();
+        if inner.contains(']') {
+            return Cursor::Nothing;
+        }
+        let array = inner.starts_with("[[");
+        let mut parent = dotted(inner.trim_start_matches('['));
+        parent.pop();
+        return Cursor::Header { array, parent };
+    }
+    let Some((table, body_start)) = table_at(text, line_start) else {
+        return Cursor::Nothing;
+    };
+    // The body starts after a header's newline, at or before `line_start`.
+    debug_assert!(
+        text.is_char_boundary(body_start),
+        "{text:?} cut at {body_start}"
+    );
+    let Some(body) = text.get(body_start..line_start + prefix.len()) else {
+        return Cursor::Nothing;
+    };
+    // Inside the table's body, read up to the cursor: open brackets and
+    // strings, and the key of the value being written.
+    let mut depth: i32 = 0;
+    let mut quote: Option<char> = None;
+    let mut key: Option<String> = None;
+    // The statement read so far, up to and including `ch`.
+    let mut statement = String::new();
+    let mut in_comment = false;
+    for ch in body.chars() {
+        statement.push(ch);
+        if in_comment {
+            if ch == '\n' {
+                in_comment = false;
+            } else {
+                continue;
+            }
+        }
+        match quote {
+            Some(open) if ch == open => {
+                quote = None;
+                continue;
+            }
+            Some(_) if ch == '\n' => quote = None,
+            Some(_) => continue,
+            None => {}
+        }
+        match ch {
+            '"' | '\'' => quote = Some(ch),
+            '#' => in_comment = true,
+            '[' | '{' if key.is_some() => depth += 1,
+            ']' | '}' => depth = (depth - 1).max(0),
+            '=' if depth == 0 && key.is_none() => {
+                // The key is the statement before this `=`.
+                statement.pop();
+                key = Some(statement.trim().to_string());
+            }
+            '\n' if depth == 0 => {
+                key = None;
+                statement.clear();
+            }
+            _ => {}
+        }
+    }
+    match key {
+        Some(key) => {
+            let mut path = table;
+            path.extend(dotted(&key));
+            Cursor::Value {
+                path,
+                in_array: depth > 0,
+                quoted: quote.is_some(),
+            }
+        }
+        None => {
+            let mut parent = dotted(prefix.trim_start());
+            parent.pop();
+            Cursor::Key { table, parent }
+        }
+    }
+}
+
+/// Keys already set in the table whose body starts at `body_start`; none
+/// when `body_start` is not a char boundary of `text`, which no caller
+/// passes.
+fn present_keys(text: &str, body_start: usize) -> Vec<String> {
+    debug_assert!(
+        text.is_char_boundary(body_start),
+        "{text:?} cut at {body_start}"
+    );
+    let mut keys = Vec::new();
+    for line in text.get(body_start..).unwrap_or_default().lines() {
+        if header(line).is_some() {
+            break;
+        }
+        if let Some((_, key)) = equals(line)
+            && let Some(first) = dotted(key).into_iter().next()
+            && !first.is_empty()
+        {
+            keys.push(first);
+        }
+    }
+    keys
+}
+
+/// Hover on a key or a table header in the configuration file at `path`:
+/// its schema's title, type, description, allowed values and default. Never
+/// the value in the buffer.
+pub fn configuration_hover(
+    schemas: &ConfigurationSchemas,
+    path: &str,
+    text: &str,
+    offset: usize,
+) -> Option<String> {
+    let relative = configuration_path(path)?;
+    let walker = Walker {
+        root: schemas.for_file(&relative)?,
+    };
+    let (line_start, head, tail) = line_at(text, offset);
+    // The line runs from `line_start` to the end of `tail`: char boundaries.
+    debug_assert!(
+        text.is_char_boundary(line_start),
+        "{text:?} cut at {line_start}"
+    );
+    let line = text.get(line_start..line_start + head.len() + tail.len())?;
+    let path: Vec<String> = if let Some((_, segments)) = header(line) {
+        segments
+    } else if let Some((index, key)) = equals(line) {
+        let (table, _) = table_at(text, line_start)?;
+        let mut segments = dotted(key);
+        if head.len() <= index {
+            // The segment under the cursor and the ones before it: `head` is
+            // the key up to the cursor.
+            let before = dotted(head).len();
+            segments.truncate(before.max(1));
+        }
+        table.into_iter().chain(segments).collect()
+    } else {
+        match cursor(text, offset) {
+            Cursor::Value { path, .. } => path,
+            _ => return None,
+        }
+    };
+    let key = path.last()?.clone();
+    let node = walker.at(&path)?;
+    Some(walker.describe(node, &key))
+}
+
+/// Completion in the configuration file at `path`: keys of the table at the
+/// cursor (not those already set), table names in a header, and allowed
+/// values after `=`.
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
+pub fn configuration_completions(
+    schemas: &ConfigurationSchemas,
+    path: &str,
+    text: &str,
+    offset: usize,
+) -> Vec<CompletionItem> {
+    let Some(relative) = configuration_path(path) else {
+        return Vec::new();
+    };
+    let Some(root) = schemas.for_file(&relative) else {
+        return Vec::new();
+    };
+    let walker = Walker { root };
+    let item = |name: &str, node: &Value| {
+        let mut item = CompletionItem::new(name, "property");
+        if let Some(kind) = walker.type_label(node) {
+            item = item.with_detail(kind);
+        }
+        if let Some(description) = walker.first(node, "description").and_then(Value::as_str) {
+            item = item.with_docs(description);
+        }
+        item
+    };
+    match cursor(text, offset) {
+        Cursor::Header { array, parent } => {
+            let Some(node) = walker.at(&parent) else {
+                return Vec::new();
+            };
+            walker
+                .properties(node)
+                .into_iter()
+                .filter(|(_, schema)| {
+                    if array {
+                        walker.is_array_of_tables(schema)
+                    } else {
+                        walker.is_table(schema)
+                    }
+                })
+                .map(|(name, schema)| item(name, schema))
+                .collect()
+        }
+        Cursor::Key { table, parent } => {
+            let (line_start, _, _) = line_at(text, offset);
+            let Some((_, body_start)) = table_at(text, line_start) else {
+                return Vec::new();
+            };
+            let present = if parent.is_empty() {
+                present_keys(text, body_start)
+            } else {
+                Vec::new()
+            };
+            let path: Vec<String> = table.into_iter().chain(parent).collect();
+            let Some(node) = walker.at(&path) else {
+                return Vec::new();
+            };
+            walker
+                .properties(node)
+                .into_iter()
+                .filter(|(name, schema)| {
+                    !present.iter().any(|key| key == name)
+                        && !walker.is_table(schema)
+                        && !walker.is_array_of_tables(schema)
+                })
+                .map(|(name, schema)| item(name, schema))
+                .collect()
+        }
+        Cursor::Value {
+            path,
+            in_array,
+            quoted,
+        } => {
+            let Some(mut node) = walker.at(&path) else {
+                return Vec::new();
+            };
+            if in_array {
+                match walker
+                    .branches(node)
+                    .into_iter()
+                    .find_map(|b| b.get("items"))
+                {
+                    Some(items) => node = items,
+                    None => return Vec::new(),
+                }
+            }
+            let mut values: Vec<String> = walker
+                .values(node)
+                .into_iter()
+                .map(|value| match value {
+                    Value::String(text) if quoted => text.clone(),
+                    other => toml_value(other),
+                })
+                .collect();
+            if values.is_empty() && !in_array && walker.is_boolean(node) {
+                values = vec!["true".to_string(), "false".to_string()];
+            }
+            let detail = walker.type_label(node);
+            let docs = walker
+                .first(node, "description")
+                .or_else(|| {
+                    walker
+                        .at(&path)
+                        .and_then(|field| walker.first(field, "description"))
+                })
+                .and_then(Value::as_str);
+            values
+                .into_iter()
+                .map(|value| {
+                    let mut item = CompletionItem::new(value, "enum");
+                    if let Some(detail) = &detail {
+                        item = item.with_detail(detail.clone());
+                    }
+                    if let Some(docs) = docs {
+                        item = item.with_docs(docs);
+                    }
+                    item
+                })
+                .collect()
+        }
+        Cursor::Nothing => Vec::new(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// What `toml_value` writes parses back as TOML to the same value (#1929).
+    #[test]
+    fn toml_values_escape_control_characters_and_quote_keys() {
+        let value = serde_json::json!({
+            "plain": "line\nbreak\r\u{7f}\u{1}\t\"quoted\" \\ é😀",
+            "dotted.key": ["a\u{0}b", 1, 2.5, true],
+            "spaced key": { "inner key": "x" },
+            "é": "😀",
+        });
+        let text = format!("v = {}", toml_value(&value));
+        let parsed: toml::Table = toml::from_str(&text).unwrap_or_else(|e| panic!("{text}: {e}"));
+        let back = serde_json::to_value(&parsed["v"]).unwrap();
+        assert_eq!(back, value, "{text}");
+    }
+
+    #[test]
+    fn toml_values_keep_their_short_form() {
+        let value = serde_json::json!({"type": "string", "list": ["a", "b"]});
+        assert_eq!(
+            toml_value(&value),
+            r#"{ list = ["a", "b"], type = "string" }"#
+        );
+        assert_eq!(toml_value(&serde_json::json!("a")), r#""a""#);
+        assert_eq!(toml_value(&serde_json::json!(null)), "null");
+    }
+
+    #[test]
+    fn configuration_paths_are_toml_files_under_the_directory() {
+        assert_eq!(
+            configuration_path("/w/.opentide/configurations/sharing.toml").as_deref(),
+            Some("sharing.toml")
+        );
+        assert_eq!(
+            configuration_path("C:\\w\\.opentide\\configurations\\platforms\\sentinel.toml")
+                .as_deref(),
+            Some("platforms/sentinel.toml")
+        );
+        assert_eq!(
+            configuration_path(".opentide/configurations/deployment.toml").as_deref(),
+            Some("deployment.toml")
+        );
+        assert_eq!(configuration_path("/w/Cargo.toml"), None);
+        assert_eq!(
+            configuration_path("/w/.opentide/configurations/notes.md"),
+            None
+        );
+        assert_eq!(
+            configuration_path("/w/.opentide/configurations/.toml"),
+            None
+        );
+        assert_eq!(configuration_path("/w/.opentide/lsp/x.toml"), None);
+    }
+
+    #[test]
+    fn dotted_keys_split_outside_quotes() {
+        assert_eq!(dotted("a.b"), ["a", "b"]);
+        assert_eq!(dotted(" a . \"b.c\" .d"), ["a", "b.c", "d"]);
+        assert_eq!(dotted("'x.y'"), ["x.y"]);
+    }
+
+    #[test]
+    fn a_message_names_a_key_only_as_a_whole_word() {
+        assert!(names_word("block 'a' is missing url.", "url"));
+        assert!(!names_word("block 'a' is missing url_base.", "url"));
+        assert!(!names_word("Field required", "url"));
+    }
+
+    #[test]
+    fn paths_display_list_items_by_index() {
+        let path = ["misp", "0", "max_tlp"].map(String::from);
+        assert_eq!(display_path(&path), "misp[0].max_tlp");
+    }
+
+    #[test]
+    fn the_cursor_is_read_from_the_text_around_it() {
+        let text = "[[misp]]\nname = \"a\"\nmax_tlp = \"\nobject_types = [\"threat\", \n[pro";
+        let at = |needle: &str| text.find(needle).unwrap() + needle.len();
+        assert_eq!(
+            cursor(text, at("name")),
+            Cursor::Key {
+                table: vec!["misp".into()],
+                parent: vec![]
+            }
+        );
+        assert_eq!(
+            cursor(text, at("max_tlp = \"")),
+            Cursor::Value {
+                path: vec!["misp".into(), "max_tlp".into()],
+                in_array: false,
+                quoted: true
+            }
+        );
+        assert_eq!(
+            cursor(text, at("\"threat\", ")),
+            Cursor::Value {
+                path: vec!["misp".into(), "object_types".into()],
+                in_array: true,
+                quoted: false
+            }
+        );
+        assert_eq!(
+            cursor(text, text.len()),
+            Cursor::Header {
+                array: false,
+                parent: vec![]
+            }
+        );
+    }
+
+    #[test]
+    fn multi_byte_text_reads_the_same_paths_keys_and_cursor() {
+        // #1946: the text around the cursor is cut by characters and lines,
+        // never by a byte index that could fall inside `é` or `😀`.
+        assert_eq!(
+            configuration_path("/w/é😀/.opentide/configurations/sharing.toml").as_deref(),
+            Some("sharing.toml")
+        );
+        assert!(names_word("le bloc « é » n'a pas d'url.", "url"));
+        assert!(names_word("😀url😀", "url"));
+        assert!(!names_word("éurl", "url"));
+        assert!(!names_word("urlé", "url"));
+        let text = "# é😀\n[[misp]]\nname = \"é😀\" # 😀\nmax_tlp = \"😀";
+        let inside = |needle: &str| text.rfind(needle).unwrap() + 1;
+        assert_eq!(
+            cursor(text, inside("😀")),
+            Cursor::Value {
+                path: vec!["misp".into(), "max_tlp".into()],
+                in_array: false,
+                quoted: true
+            }
+        );
+        assert_eq!(
+            cursor(text, inside("é😀\" #")),
+            Cursor::Value {
+                path: vec!["misp".into(), "name".into()],
+                in_array: false,
+                quoted: true
+            }
+        );
+        let keys = format!("{text}\"\n");
+        assert_eq!(
+            cursor(&keys, keys.len()),
+            Cursor::Key {
+                table: vec!["misp".into()],
+                parent: vec![]
+            }
+        );
+        assert_eq!(
+            present_keys(&keys, "# é😀\n[[misp]]\n".len()),
+            ["name", "max_tlp"]
+        );
+    }
+
+    #[test]
+    fn a_multi_line_array_value_is_still_a_value() {
+        let text = "[[misp]]\nobject_types = [\n  \"threat\",\n  ";
+        assert_eq!(
+            cursor(text, text.len()),
+            Cursor::Value {
+                path: vec!["misp".into(), "object_types".into()],
+                in_array: true,
+                quoted: false
+            }
+        );
+    }
+
+    #[test]
+    fn locate_finds_keys_headers_and_prefixes() {
+        let text = "[promotion]\nenabeld = true\n\n[[misp]]\nname = \"a\"\n\n[[misp]]\nname = \"b\"\nmax_tlp = \"white\"\ninline = { x = 1 }\nlist = [1, 2]\n";
+        let document = ImDocument::parse(text).unwrap();
+        let span = |path: &[&str]| {
+            let path: Vec<String> = path.iter().map(|s| s.to_string()).collect();
+            let (span, resolved) = locate(document.as_table(), &path);
+            (span.map(|s| text.get(s).unwrap()), resolved)
+        };
+        assert_eq!(span(&["promotion", "enabeld"]), (Some("enabeld"), true));
+        assert_eq!(span(&["misp", "1", "max_tlp"]), (Some("max_tlp"), true));
+        assert_eq!(span(&["misp", "1", "inline", "x"]), (Some("x"), true));
+        assert_eq!(span(&["misp", "1", "list", "1"]), (Some("2"), true));
+        // A missing key: the entry it belongs to.
+        let (header, resolved) = span(&["misp", "0", "url"]);
+        assert!(!resolved);
+        assert!(header.is_some_and(|h| h.contains("[[misp]]")), "{header:?}");
+        assert_eq!(span(&[]), (None, true));
+    }
+}

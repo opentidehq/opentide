@@ -1,0 +1,1 @@
+FROM logs | FORK (WHERE a > 1 | LIMIT 5) (STATS COUNT(*)) (SORT a | LIMIT 1)

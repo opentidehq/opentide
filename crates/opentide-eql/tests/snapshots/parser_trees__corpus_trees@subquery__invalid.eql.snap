@@ -1,0 +1,38 @@
+---
+source: crates/opentide-eql/tests/parser_trees.rs
+expression: "parser::debug(&source)"
+input_file: crates/testdata/corpus/eql/subquery__invalid.eql
+---
+SOURCE_FILE@0..78
+  LINE_COMMENT@0..24 "// prod:subquery invalid"
+  WHITESPACE@24..25 "\n"
+  SEQUENCE@25..77
+    SEQUENCE_KW@25..33 "sequence"
+    WHITESPACE@33..36 "\n  "
+    SEQUENCE_TERM@36..56
+      SUBQUERY@36..56
+        L_BRACK@36..37 "["
+        EVENT_CATEGORY@37..44
+          IDENTIFIER@37..44
+            WORD@37..44 "process"
+        WHITESPACE@44..45 " "
+        WHERE_KW@45..50 "where"
+        WHITESPACE@50..51 " "
+        BOOLEAN@51..55
+          TRUE_KW@51..55 "true"
+        R_BRACK@55..56 "]"
+    WHITESPACE@56..59 "\n  "
+    SEQUENCE_TERM@59..77
+      SUBQUERY@59..77
+        MISSING_EVENT_OPEN@59..61
+          BANG_L_BRACK@59..61 "!["
+        EVENT_CATEGORY@61..65
+          IDENTIFIER@61..65
+            WORD@61..65 "file"
+        WHITESPACE@65..66 " "
+        WHERE_KW@66..71 "where"
+        WHITESPACE@71..72 " "
+        BOOLEAN@72..76
+          TRUE_KW@72..76 "true"
+        R_BRACK@76..77 "]"
+  WHITESPACE@77..78 "\n"

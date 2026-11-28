@@ -1,0 +1,20 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: generate.extract.defender/json/none/help
+---
+args: opentide --json generate extract defender --help
+exit: 0
+
+━━━ stdout
+Import Defender custom detections (needs tenant credentials).
+
+Usage: opentide generate extract defender
+
+Options:
+      --help
+          Print help
+
+Examples:
+  $ opentide generate extract defender
+
+━━━ stderr · empty

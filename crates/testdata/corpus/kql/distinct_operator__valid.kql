@@ -1,0 +1,2 @@
+// prod:distinct_operator valid
+SecurityEvent | distinct Computer

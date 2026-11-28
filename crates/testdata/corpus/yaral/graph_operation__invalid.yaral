@@ -1,0 +1,5 @@
+// prod:graph_operation invalid
+rule r {
+  setup:
+    graph_append [$g,
+}

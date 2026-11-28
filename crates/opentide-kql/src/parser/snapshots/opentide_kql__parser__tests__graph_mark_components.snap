@@ -1,0 +1,27 @@
+---
+source: crates/opentide-kql/src/parser/tests.rs
+expression: "show(\"T | graph-mark-components kind=weak with_component_id=c\")"
+---
+SOURCE_FILE@0..55
+  QUERY@0..55
+    TABULAR_EXPRESSION@0..55
+      TABULAR_SOURCE@0..1
+        TABLE_REF@0..1
+          IDENT@0..1 "T"
+      WHITESPACE@1..2 " "
+      PIPE@2..3 "|"
+      WHITESPACE@3..4 " "
+      GRAPH_MARK_COMPONENTS_OPERATOR@4..55
+        GRAPH_MARK_COMPONENTS_KW@4..25 "graph-mark-components"
+        WHITESPACE@25..26 " "
+        OPERATOR_OPTION@26..35
+          IDENT@26..30 "kind"
+          EQ@30..31 "="
+          OPTION_VALUE@31..35
+            IDENT@31..35 "weak"
+        WHITESPACE@35..36 " "
+        OPERATOR_OPTION@36..55
+          IDENT@36..53 "with_component_id"
+          EQ@53..54 "="
+          OPTION_VALUE@54..55
+            IDENT@54..55 "c"

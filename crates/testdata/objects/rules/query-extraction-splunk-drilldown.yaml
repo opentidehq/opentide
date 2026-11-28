@@ -1,0 +1,24 @@
+name: Query Extraction Splunk Drilldown
+metadata:
+  uuid: 00000000-0000-4000-8003-000000000118
+  schema: rule::1.0
+  version: 1
+  created: "2026-10-29"
+  modified: "2026-10-29"
+  tlp: clear
+description: |
+  The drilldown search is a template Splunk fills with `$token$` values. It is
+  not the rule's query and is not analysed (#118).
+response:
+  alert_severity: Low
+configurations:
+  splunk:
+    enabled: true
+    status: STAGING
+    query: |
+      index=a | stats count by user
+    actions:
+      notable:
+        drilldown:
+          name: Drilldown
+          search: '| from datamodel:"Risk.All_Risk" | search user=$user|s$'

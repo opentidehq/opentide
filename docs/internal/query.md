@@ -67,8 +67,8 @@ Nothing goes through environment flags.
 - **Defender** — Graph `runHuntingQuery` with an ISO-8601 interval `Timespan`;
   windows over 30 days are refused before sending.
 - **Splunk** — `jobs.oneshot(..., count=N+1, output_mode="json")`: no saved
-  search. `--rule` sends `create_query(rule)`, the deploy query with its MDR
-  mapping macro.
+  search. `--rule` sends `create_query(block)`, the deploy query: the
+  block's `query` as written.
 - **SentinelOne** — PowerQuery `POST dv/events/pq`, then `GET dv/events/pq-ping`
   with exponential back-off until `FINISHED`, bounded by `--timeout`.
 - **Carbon Black** — `select(Process).where(q).set_time_range().set_rows(N+1)`
@@ -122,10 +122,9 @@ the report; `DetectionRule.validate_query` reads the same report.
 A query that gets no answer within the check timeout (`check_timeout()`:
 `--check-timeout`, `OPENTIDE_QUERY_CHECK_TIMEOUT`, else `CHECK_TIMEOUT`) is a
 failed `RuleCheck` with `code` `query_check_timeout`, caught per query before
-`reaching_tenant` sees it. `transport.read_timeout` decides what counts: a read
-timeout however it is wrapped (`requests`, urllib3's retries, Azure's
-`inner_exception`, Carbon Black's `original_exception`), a `GatewayTimeoutError`
-(a gateway's 502/503/504 page, or a page after `SLOW_ANSWER_SECONDS`), and a
+`reaching_tenant` sees it. What counts: a read timeout of the tenant's HTTP
+client (`ConnectorError::Timeout`, after a connection was made), a gateway's
+answer (a 502/503/504 page, or a page after `SLOW_ANSWER_SECONDS`), and a
 runner's `QueryTimedOut` (an asynchronous search past its deadline, which does
 not count toward the streak). `TimeoutStreak` raises `TenantUnreachableError` at
 `UNREACHABLE_AFTER_TIMEOUTS` read timeouts in a row on one tenant. A connect

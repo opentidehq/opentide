@@ -1,0 +1,226 @@
+// The generated Tide grammar embeds the query languages whose path fixes the
+// language (#171): a KQL token inside `configurations.sentinel.query: |`
+// carries both the embedded region and a KQL scope. Elastic queries, whose
+// language depends on sibling keys, get no region.
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
+import { dirname, join } from 'node:path';
+import { test } from 'node:test';
+import { fileURLToPath } from 'node:url';
+import oniguruma from 'vscode-oniguruma';
+import textmate from 'vscode-textmate';
+
+const here = dirname(fileURLToPath(import.meta.url));
+const generated = join(here, '..', 'generated');
+const require = createRequire(import.meta.url);
+const wasm = readFileSync(require.resolve('vscode-oniguruma/release/onig.wasm')).buffer;
+await oniguruma.loadWASM(wasm);
+
+const files = {
+  'source.opentide-yaml': 'tide.tmLanguage.json',
+  'source.kql': 'kql.tmLanguage.json',
+  'source.spl': 'spl.tmLanguage.json',
+  'source.lucene': 'lucene.tmLanguage.json',
+  'source.opentide.esql': 'esql.tmLanguage.json',
+  'source.eql': 'eql.tmLanguage.json',
+  'source.kuery': 'kuery.tmLanguage.json',
+  'source.falco': 'falco.tmLanguage.json',
+  'source.opentide.cql': 'cql.tmLanguage.json',
+};
+const registry = new textmate.Registry({
+  onigLib: Promise.resolve({
+    createOnigScanner: (patterns) => new oniguruma.OnigScanner(patterns),
+    createOnigString: (s) => new oniguruma.OnigString(s),
+  }),
+  loadGrammar: async (scope) => {
+    const file = files[scope];
+    if (!file) return null;
+    return textmate.parseRawGrammar(readFileSync(join(generated, file), 'utf8'), join(generated, file));
+  },
+});
+const tide = await registry.loadGrammar('source.opentide-yaml');
+
+/** Every token of `text`, as `[text, scopes]`. */
+function tokens(text) {
+  let stack = textmate.INITIAL;
+  const out = [];
+  for (const line of text.split('\n')) {
+    const result = tide.tokenizeLine(line, stack);
+    for (const t of result.tokens) out.push([line.slice(t.startIndex, t.endIndex), t.scopes]);
+    stack = result.ruleStack;
+  }
+  return out;
+}
+
+const scopesOf = (all, text) => all.filter(([t]) => t.trim() === text).map(([, s]) => s);
+
+const RULE = `name: Rule
+metadata:
+  schema: rule::1.0
+configurations:
+  sentinel:
+    query: |
+      SecurityEvent
+      | where EventID == 4688
+  splunk:
+    query: index=main | stats count by host
+  carbon_black_cloud:
+    query: process_name:cmd.exe
+  sysdig:
+    condition: >
+      spawned_process and proc.name = bash
+  crowdstrike:
+    query: |
+      #event_simpleName=ProcessRollup2
+      | groupBy([aid], function=count())
+  elastic:
+    type: query
+    language: lucene
+    query: process.name:cmd.exe
+description: where
+`;
+
+test('a KQL block under configurations.sentinel.query is embedded KQL', () => {
+  const all = tokens(RULE);
+  const where = scopesOf(all, 'where')[0];
+  assert.ok(where.includes('meta.embedded.block.kql'), where.join(' '));
+  // The KQL grammar's own keyword scope, inside the region.
+  assert.ok(where.some((s) => s.startsWith('keyword.')), where.join(' '));
+});
+
+test('KQL literals: obfuscated strings, hex numbers and multi-line fences', () => {
+  const rule = `name: Rule
+metadata:
+  schema: rule::1.0
+configurations:
+  sentinel:
+    query: |
+      SecurityEvent
+      | where CommandLine has h"x // y" and Mask == 0x1F and $h"b" != "c"
+      | extend Note = H\`\`\`first
+      second // not a comment\`\`\`
+      | where EventID == 4688
+description: where
+`;
+  const all = tokens(rule);
+  const kql = (scopes) => scopes.includes('meta.embedded.block.kql');
+  const string = (scopes) => scopes.some((s) => s.startsWith('string.'));
+  const number = (scopes) => scopes.some((s) => s.startsWith('constant.numeric'));
+  // `h"x // y"` is one string: its `//` is not a comment.
+  const obfuscated = scopesOf(all, 'h"x // y"');
+  assert.equal(obfuscated.length, 1, JSON.stringify(all));
+  assert.ok(kql(obfuscated[0]) && string(obfuscated[0]), obfuscated[0].join(' '));
+  const hex = scopesOf(all, '0x1F');
+  assert.equal(hex.length, 1, JSON.stringify(all));
+  assert.ok(number(hex[0]), hex[0].join(' '));
+  // After `$`, the `h` belongs to the name: only `"b"` is a string.
+  assert.equal(scopesOf(all, '$h"b"').length, 0, JSON.stringify(all));
+  assert.ok(string(scopesOf(all, '"b"')[0] ?? []), JSON.stringify(all));
+  // The fence spans its two lines, `//` included; the query goes on after it.
+  for (const piece of ['H\`\`\`', 'first', 'second // not a comment', '\`\`\`']) {
+    const [scopes] = scopesOf(all, piece);
+    assert.ok(scopes && string(scopes), `${piece}: ${JSON.stringify(all)}`);
+  }
+  const after = scopesOf(all, 'where').slice(-2, -1)[0];
+  assert.ok(after && kql(after) && after.some((s) => s.startsWith('keyword.')), JSON.stringify(all));
+});
+
+test('a plain SPL scalar and a Carbon Black query are embedded too', () => {
+  const all = tokens(RULE);
+  const stats = scopesOf(all, 'stats')[0];
+  assert.ok(stats.includes('meta.embedded.block.spl'), stats.join(' '));
+  const cmd = all.find(([t, s]) => t.includes('process_name') && s.includes('meta.embedded.block.lucene'));
+  assert.ok(cmd, 'carbon_black_cloud.query is embedded Lucene');
+  const falco = all.find(([t, s]) => t.includes('spawned_process') && s.includes('meta.embedded.block.falco'));
+  assert.ok(falco, 'sysdig.condition is embedded Falco');
+});
+
+test('a CrowdStrike query is embedded CQL, in the source.opentide.cql grammar', () => {
+  const all = tokens(RULE);
+  const groupBy = all.find(([t]) => t.includes('groupBy'));
+  assert.ok(groupBy, 'groupBy is a token');
+  assert.ok(groupBy[1].includes('meta.embedded.block.cql'), groupBy[1].join(' '));
+  // The CQL grammar's own pipe scope, inside the region.
+  const pipe = all.find(([t, s]) => t.trim() === '|' && s.includes('meta.embedded.block.cql'));
+  assert.ok(pipe, 'the CQL pipe is a token of the region');
+  assert.ok(pipe[1].includes('keyword.operator.pipe.opentide'), pipe[1].join(' '));
+});
+
+test('Elastic queries and text after the block get no region', () => {
+  const all = tokens(RULE);
+  const elastic = all.filter(([t]) => t.includes('process.name'));
+  assert.ok(elastic.length > 0);
+  for (const [, scopes] of elastic) {
+    assert.ok(!scopes.some((s) => s.startsWith('meta.embedded')), scopes.join(' '));
+  }
+  // `description: where` is YAML again.
+  const last = scopesOf(all, 'where').at(-1);
+  assert.ok(!last.some((s) => s.startsWith('meta.embedded')), last.join(' '));
+});
+
+test('package-contributions.json maps each region to its language id', () => {
+  const contributions = JSON.parse(readFileSync(join(generated, 'package-contributions.json'), 'utf8'));
+  const grammar = contributions.contributes.grammars.find((g) => g.scopeName === 'source.opentide-yaml');
+  assert.deepEqual(grammar.embeddedLanguages, {
+    'meta.embedded.block.kql': 'kql',
+    'meta.embedded.block.spl': 'spl',
+    'meta.embedded.block.lucene': 'lucene',
+    'meta.embedded.block.falco': 'falco',
+    'meta.embedded.block.cql': 'cql',
+    'meta.embedded.block.yaral': 'yaral',
+  });
+});
+
+const INLINE = `name: Rule
+metadata:
+  schema: rule::1.0
+configurations:
+  splunk:
+    query: 'index=main | stats count by host' # a note
+  sentinel:
+    query: "SecurityEvent | where EventID == 4688"
+  carbon_black_cloud:
+    query: process_name:cmd.exe # plain, with a note
+description: where
+`;
+
+test('a quoted inline query: YAML owns the quotes, the language owns the text', () => {
+  const all = tokens(INLINE);
+  const string = (scopes) => scopes.some((s) => s.startsWith('string.'));
+  // The quotes are YAML's string punctuation.
+  const quotes = all.filter(([t, s]) => (t === "'" || t === '"') && s.some((x) => x.startsWith('punctuation.definition.string')));
+  assert.equal(quotes.length, 4, JSON.stringify(quotes));
+  // Inside, no token carries a YAML string scope: the SPL and KQL ones are
+  // their language's own.
+  const inner = all.filter(([, s]) => s.includes('meta.embedded.block.spl') || s.includes('meta.embedded.block.kql'));
+  assert.ok(inner.length > 8, JSON.stringify(inner));
+  for (const [t, scopes] of inner) {
+    assert.ok(!scopes.some((s) => s.startsWith('string.quoted.yaml')), `${t}: ${scopes.join(' ')}`);
+  }
+  const pipe = all.find(([t, s]) => t.trim() === '|' && s.includes('meta.embedded.block.spl'));
+  assert.ok(pipe && pipe[1].includes('keyword.operator.pipe.opentide'), JSON.stringify(pipe));
+  const stats = all.find(([t, s]) => t.trim() === 'stats' && s.includes('meta.embedded.block.spl'));
+  assert.ok(stats && stats[1].some((s) => s.startsWith('keyword.')), JSON.stringify(stats));
+  const where = all.find(([t, s]) => t.trim() === 'where' && s.includes('meta.embedded.block.kql'));
+  assert.ok(where && where[1].some((s) => s.startsWith('keyword.')), JSON.stringify(where));
+  assert.ok(![...inner].some(([, s]) => string(s) && s.some((x) => x.startsWith('string.quoted.yaml'))));
+});
+
+test('a trailing # note after an inline query stays a comment, quoted or not', () => {
+  const all = tokens(INLINE);
+  const notes = all.filter(([t]) => t.includes('# a note') || t.includes('# plain, with a note') || t.trim().startsWith('#'));
+  assert.ok(notes.length >= 1, JSON.stringify(all));
+  const note = all.find(([t]) => t.includes('a note'));
+  assert.ok(note && note[1].some((s) => s.startsWith('comment')), JSON.stringify(note));
+  assert.ok(!note[1].includes('meta.embedded.block.spl'), note[1].join(' '));
+  const plain = all.find(([t]) => t.includes('plain, with a note'));
+  assert.ok(plain && plain[1].some((s) => s.startsWith('comment')), JSON.stringify(plain));
+  assert.ok(!plain[1].some((s) => s.startsWith('meta.embedded')), plain[1].join(' '));
+  // The unquoted query before its note is still the embedded language.
+  const cmd = all.find(([t]) => t.includes('process_name'));
+  assert.ok(cmd && cmd[1].includes('meta.embedded.block.lucene'), JSON.stringify(cmd));
+  // And YAML after it is YAML again.
+  const last = scopesOf(all, 'where').at(-1);
+  assert.ok(!last.some((s) => s.startsWith('meta.embedded')), last.join(' '));
+});

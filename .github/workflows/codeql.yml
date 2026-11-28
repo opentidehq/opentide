@@ -1,18 +1,42 @@
-# CodeQL for python + GitHub Actions workflows. Restores /language:python in this
+# CodeQL for Python, Rust and the GitHub Actions workflows. Restores /language:python in this
 # workflow so PR code-scanning comparison matches the configuration registered on
 # development (Code Quality dynamic scans alone do not satisfy that category).
 name: CodeQL
 
 on:
   push:
-    branches: [main, development]
+    # integration/unified-core: the Unified Core PRs merge there before development.
+    branches: [main, development, integration/unified-core]
+  # A pull request is analysed when it changes what CodeQL reads: Python
+  # sources, the Rust workspace and the workflows. Pushes and the nightly analyse everything. Not a
+  # required check (a path-filtered workflow does not report when it does not
+  # run): its alerts gate through code scanning (.github/AGENTS.md).
   pull_request:
+    paths:
+      - "**/*.py"
+      - "pyproject.toml"
+      - "uv.lock"
+      - ".github/workflows/**"
+      - ".github/actions/**"
+      - "crates/**"
+      - "bindings/**"
+      - "xtask/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "vendor/**"
+      - "fuzz/**"
+      - "rust-toolchain.toml"
+      - ".cargo/**"
   schedule:
-    - cron: "30 5 * * 1"
+    - cron: "30 5 * * *"
 
 concurrency:
-  group: codeql-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  # A pull request's new push cancels its stale run; every other run (a push
+  # to development, integration/unified-core or main, the nightly, Run
+  # workflow) has a group of its own, its run id, so none cancels another and
+  # each push to a base branch gets a complete run (tests/test_ci/test_workflows.py).
+  group: codeql-${{ github.workflow }}-${{ github.event_name }}-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   actions: read
@@ -27,25 +51,132 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        language: [python, actions]
+        language: [python, rust, actions]
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The merge commit and its first parent, the base branch's tip.
+          fetch-depth: 2
+          persist-credentials: false
 
-      - uses: github/codeql-action/init@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+      # On a pull request, Python and the workflows are analysed when their files
+      # change (*.py, pyproject.toml, uv.lock; the workflows and actions). Rust,
+      # 19-23 minutes of the run where the others take about one, is not analysed
+      # on an ordinary pull request: every push to a base branch (each merge) and
+      # the nightly analyse it, and so does a release pull request (into
+      # development from integration/unified-core or release/*, or labelled
+      # `release`, as ci.yml defines it) and a change to this workflow.
+      # The job still starts, so its check reports either way. Every
+      # push and the nightly analyse every language;
+      # so does a checkout that is not a pull request's merge commit (it fails
+      # open). Bash patterns, one a line; `*` matches `/` too.
+      - name: Whether this language's files changed
+        id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          LANGUAGE: ${{ matrix.language }}
+          BASE_REF: ${{ github.base_ref }}
+          HEAD_REF: ${{ github.head_ref }}
+          LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
+          PYTHON_PATHS: |
+            *.py
+            pyproject.toml
+            uv.lock
+          RUST_PATHS: |
+            crates/*
+            bindings/*
+            xtask/*
+            Cargo.toml
+            Cargo.lock
+            vendor/*
+            fuzz/*
+            rust-toolchain.toml
+            .cargo/*
+          ACTIONS_PATHS: |
+            .github/workflows/*
+            .github/actions/*
+        run: |
+          set -euo pipefail
+          if [[ "${EVENT_NAME}" != "pull_request" ]] \
+            || ! git rev-parse --verify --quiet HEAD^2 >/dev/null; then
+            echo "analyse=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          patterns_var="${LANGUAGE^^}_PATHS"
+          patterns="${!patterns_var}"
+          value=false
+          while IFS= read -r file; do
+            [[ -n "${file}" ]] || continue
+            # A change to this workflow analyses every language: it can
+            # change how any of them is analysed.
+            if [[ "${file}" == .github/workflows/codeql.yml ]]; then
+              echo "codeql.yml changed: every language is analysed"
+              value=true
+            fi
+            while IFS= read -r pattern; do
+              # Unquoted on the right: a pattern, not a string.
+              # shellcheck disable=SC2053
+              if [[ -n "${pattern}" && "${file}" == ${pattern} ]]; then
+                echo "${LANGUAGE} input changed: ${file}"
+                value=true
+              fi
+            done <<<"${patterns}"
+          done <<<"$(git diff --no-renames --name-only HEAD^1 HEAD)"
+          if [[ "${LANGUAGE}" == rust && "${value}" == true ]]; then
+            release=false
+            if [[ "${BASE_REF}" == development && ( "${HEAD_REF}" == integration/unified-core || "${HEAD_REF}" == release/* ) ]]; then
+              release=true
+            fi
+            if jq -e 'index("release") != null' <<<"${LABELS:-[]}" >/dev/null 2>&1; then
+              release=true
+            fi
+            if [[ "${release}" != true ]] \
+              && ! git diff --no-renames --name-only HEAD^1 HEAD | grep -qx '.github/workflows/codeql.yml'; then
+              echo "Rust changed, but this is not a release pull request: Rust is analysed on merge, nightly and on release pull requests."
+              value=false
+            fi
+          fi
+          if [[ "${value}" != true ]]; then
+            echo "No ${LANGUAGE} analysis on this pull request: it runs on merge and nightly."
+          fi
+          echo "analyse=${value}" >> "$GITHUB_OUTPUT"
+
+      - if: steps.scope.outputs.analyse == 'true'
+        uses: github/codeql-action/init@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
         with:
           languages: ${{ matrix.language }}
+          # Every language here is extracted from source: Rust without a
+          # cargo build (CodeQL 2.23.3+, GA), Python and Actions as before.
+          build-mode: none
           queries: security-extended
+          # Analyse what ships, not what tests it: about 86% of the files under
+          # crates/ are tests and test data. Excluding them is GitHub's first
+          # advice for a slow analysis ("Analysis takes too long"); for
+          # build-mode none, paths-ignore applies to every language here.
+          config: |
+            paths-ignore:
+              - crates/testdata/**
+              - "**/tests/**"
+              - "**/benches/**"
+              - fuzz/**
+              - xtask/**
+              - vendor/**
+              - tests/**
 
-      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
-        if: matrix.language == 'python'
+      - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
+        if: steps.scope.outputs.analyse == 'true' && matrix.language == 'python'
         with:
           enable-cache: true
 
       - name: Install Python dependencies
-        if: matrix.language == 'python'
-        run: uv sync --group dev
+        if: steps.scope.outputs.analyse == 'true' && matrix.language == 'python'
+        # The dependencies CodeQL models, not opentide itself: building the
+        # project compiled the Rust engine for minutes, and CodeQL reads the
+        # Python sources, never the extension (#841).
+        run: uv sync --group dev --no-install-project
 
-      - uses: github/codeql-action/analyze@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+      - if: steps.scope.outputs.analyse == 'true'
+        uses: github/codeql-action/analyze@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
         with:
           category: /language:${{ matrix.language }}

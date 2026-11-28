@@ -1,0 +1,36 @@
+name: CrowdStrike Full
+
+metadata:
+  uuid: 00000000-0000-4000-8005-000000000501
+  schema: rule::1.0
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+  author: Detection Team
+
+description: CrowdStrike Full for the compile corpus.
+
+response:
+  alert_severity: Low
+
+configurations:
+  crowdstrike:
+    status: STAGING
+    contributors:
+      - Analyst One
+      - Analyst Two
+    query: '#event_simpleName=ProcessRollup2 | CommandLine=/-enc/i'
+    details:
+      name: CS Override
+      description: Overridden description
+      severity: High
+      tactic: TA0002
+      technique: T1059
+      trigger: Verbose
+      outcome: Detection
+    schedule:
+      frequency: 1h
+      lookback: 2h
+      start: "2025-04-15T19:00:00Z"
+      end: "2026-01-01 10:00:00+00:00"

@@ -1,0 +1,719 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: lint/plain/tide-corpus/sarif
+---
+args: opentide lint --format sarif
+exit: 0
+
+━━━ stdout · json, 9750 lines
+{
+  "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
+  "runs": [
+    {
+      "automationDetails": {
+        "id": "opentide/lint/"
+      },
+      "columnKind": "unicodeCodePoints",
+      "results": [
+        {
+          "level": "note",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "00000000-0000-4000-8001-000000000001"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/threats/threat-0001-simulated-actor.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 9,
+                  "startColumn": 1,
+                  "startLine": 4
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "Recommended metadata missing: author, organisation\nhelp: add the missing keys under metadata"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "407b6be05edae6782bb880b63f332ac276ffc2d18798b49a8442b4e8984bb278"
+          },
+          "ruleId": "metadata_recommended"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "00000000-0000-4000-8002-000000000001"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/objectives/objective-0001-credential-access.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 9,
+                  "startColumn": 1,
+                  "startLine": 3
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "Recommended metadata missing: author, organisation\nhelp: add the missing keys under metadata"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "ebb7f880cf139afb1d49d10d86ff31973a6fa7f0088835cfad9226f2f004293d"
+          },
+          "ruleId": "metadata_recommended"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "00000000-0000-4000-8003-000000000001"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/rule-0001-sentinel-kql.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 9,
+                  "startColumn": 1,
+                  "startLine": 3
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "Recommended metadata missing: author, organisation\nhelp: add the missing keys under metadata"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "6b1ae61bad411ac77e732e5791713d4851a6185d3e54a0941eb4e4c823176609"
+          },
+          "ruleId": "metadata_recommended"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "00000000-0000-4000-8003-000000000002"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/rule-0002-defender-kql.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 9,
+                  "startColumn": 1,
+                  "startLine": 3
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "Recommended metadata missing: author, organisation\nhelp: add the missing keys under metadata"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "a02466d5cbde20e7e6fc8c7fa7409a8745b619f68678bcee69daee5ed974b2f2"
+          },
+          "ruleId": "metadata_recommended"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "00000000-0000-4000-8003-000000000003"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/rule-0003-splunk-spl.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 9,
+                  "startColumn": 1,
+                  "startLine": 3
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "Recommended metadata missing: author, organisation\nhelp: add the missing keys under metadata"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "bce92ba6dc12e2f3bcd543edfe7698410f5ae115acfb1a68fb7f49ee8d71ceb5"
+          },
+          "ruleId": "metadata_recommended"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "00000000-0000-4000-8003-000000000004"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/rule-0004-sentinel-one-s1ql.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 9,
+                  "startColumn": 1,
+                  "startLine": 3
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "Recommended metadata missing: author, organisation\nhelp: add the missing keys under metadata"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "ccdb549a6b7aa9ea2a08bb29de2db6ec0e301f4ca3030f7c4ed309bd73f59ee6"
+          },
+          "ruleId": "metadata_recommended"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "00000000-0000-4000-8003-000000000005"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/rule-0005-carbon-black-lucene.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 9,
+                  "startColumn": 1,
+                  "startLine": 3
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "Recommended metadata missing: author, organisation\nhelp: add the missing keys under metadata"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "9f22e704916593750e28476d32c58b1f2719a9f3577b10f250fb7e3583b91bb5"
+          },
+          "ruleId": "metadata_recommended"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "00000000-0000-4000-8003-000000000006"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/rule-0006-crowdstrike-deploy-only.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 9,
+                  "startColumn": 1,
+                  "startLine": 3
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "Recommended metadata missing: author, organisation\nhelp: add the missing keys under metadata"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "62290d0ae6be7cd621c74ed329b520201115c1b02925525fcbfb47e7bec36891"
+          },
+          "ruleId": "metadata_recommended"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "00000000-0000-4000-8003-000000000007"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/rule-0007-harfanglab-deploy-only.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 9,
+                  "startColumn": 1,
+                  "startLine": 3
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "Recommended metadata missing: author, organisation\nhelp: add the missing keys under metadata"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "6ddc958f0208fc166aaac50c19171a64550171d6e8d3136b4a4ad0f4e9e57205"
+          },
+          "ruleId": "metadata_recommended"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "00000000-0000-4000-8003-000000000008"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/rule-0008-staging-promote.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 9,
+                  "startColumn": 1,
+                  "startLine": 3
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "Recommended metadata missing: author, organisation\nhelp: add the missing keys under metadata"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "0513cc4592cc0e6130419b6c1098b1a0999269451cd2041d6945d6544d2596d3"
+          },
+          "ruleId": "metadata_recommended"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "00000000-0000-4000-8003-000000000009"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/rule-0009-elastic-kql.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 9,
+                  "startColumn": 1,
+                  "startLine": 3
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "Recommended metadata missing: author, organisation\nhelp: add the missing keys under metadata"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "10eac045272f99667b76982c4d358ef7175e464041efb3f0a3eebf0f76117844"
+          },
+          "ruleId": "metadata_recommended"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "00000000-0000-4000-8003-0000005d1a90"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/rule-0013-sysdig-falco.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 9,
+                  "startColumn": 1,
+                  "startLine": 3
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "Recommended metadata missing: author, organisation\nhelp: add the missing keys under metadata"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "69811d0d47a1e3eafcd60a2a48a6d58c07ba8d96c85f00aca837c3521a123702"
+          },
+          "ruleId": "metadata_recommended"
+        },
+        {
+          "level": "warning",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "00000000-0000-4000-8001-000000000001"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/threats/threat-0001-simulated-actor.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "Filename \"threat-0001-simulated-actor.yaml\" does not match slugify(name)=\"simulated-actor\"\nhelp: rename it to objects/threats/simulated-actor.yaml"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "d93170d1c0a066926a7a447f4879ca3e29c7ab456efae8bae1b9db8cefa5bf6c"
+          },
+          "ruleId": "filename_mismatch"
+        },
+        {
+          "level": "warning",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "00000000-0000-4000-8002-000000000001"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/objectives/objective-0001-credential-access.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "Filename \"objective-0001-credential-access.yaml\" does not match slugify(name)=\"credential-access-objective\"\nhelp: rename it to objects/objectives/credential-access-objective.yaml"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "9ed635c4df949a3e1f3ba914ff37ba2d1674d218e89985dcc781b9e90018a9b8"
+          },
+          "ruleId": "filename_mismatch"
+        },
+        {
+          "level": "warning",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "00000000-0000-4000-8003-000000000001"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/rule-0001-sentinel-kql.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "Filename \"rule-0001-sentinel-kql.yaml\" does not match slugify(name)=\"sentinel-kql-rule\"\nhelp: rename it to objects/rules/sentinel-kql-rule.yaml"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "0b085098b8cb3d1bc14e9c24e3453cd7df012fd25ecfbab8fa22a2525a36dcdc"
+          },
+          "ruleId": "filename_mismatch"
+        },
+        {
+          "level": "warning",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "00000000-0000-4000-8003-000000000002"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/rule-0002-defender-kql.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "Filename \"rule-0002-defender-kql.yaml\" does not match slugify(name)=\"defender-kql-rule\"\nhelp: rename it to objects/rules/defender-kql-rule.yaml"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "9e6416f7d10ac8e63af21d2205ee03cce63c2b6e05719106fe5311188751b0c6"
+          },
+          "ruleId": "filename_mismatch"
+        },
+        {
+          "level": "warning",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "00000000-0000-4000-8003-000000000003"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/rule-0003-splunk-spl.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "Filename \"rule-0003-splunk-spl.yaml\" does not match slugify(name)=\"splunk-spl-rule\"\nhelp: rename it to objects/rules/splunk-spl-rule.yaml"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "87ad1b1028f76bba92fe22d664e4f08a0903c17fa11a1172bda051aa1e009326"
+          },
+          "ruleId": "filename_mismatch"
+        },
+        {
+          "level": "warning",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "00000000-0000-4000-8003-000000000004"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/rule-0004-sentinel-one-s1ql.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "Filename \"rule-0004-sentinel-one-s1ql.yaml\" does not match slugify(name)=\"sentinelone-s1ql-rule\"\nhelp: rename it to objects/rules/sentinelone-s1ql-rule.yaml"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "ccc47d5bf15157f7de0ba4ae1997000837db83173ef7822553c37c22b64542bf"
+          },
+          "ruleId": "filename_mismatch"
+        },
+        {
+          "level": "warning",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "00000000-0000-4000-8003-000000000005"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/rule-0005-carbon-black-lucene.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "Filename \"rule-0005-carbon-black-lucene.yaml\" does not match slugify(name)=\"carbon-black-lucene-rule\"\nhelp: rename it to objects/rules/carbon-black-lucene-rule.yaml"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "9b7a25fc7bd23bb6e0f274563419abd0fdceb2ae89791f941bda53163444c2d7"
+          },
+          "ruleId": "filename_mismatch"
+        },
+        {
+          "level": "warning",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "00000000-0000-4000-8003-000000000006"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/rule-0006-crowdstrike-deploy-only.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "Filename \"rule-0006-crowdstrike-deploy-only.yaml\" does not match slugify(name)=\"crowdstrike-deploy-rule\"\nhelp: rename it to objects/rules/crowdstrike-deploy-rule.yaml"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "6cc5493dca61ccac83f873768f0494d1a11d4ed266738a2af11e4df860469ae6"
+          },
+          "ruleId": "filename_mismatch"
+        },
+        {
+          "level": "warning",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "00000000-0000-4000-8003-000000000007"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/rule-0007-harfanglab-deploy-only.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "Filename \"rule-0007-harfanglab-deploy-only.yaml\" does not match slugify(name)=\"harfanglab-deploy-rule\"\nhelp: rename it to objects/rules/harfanglab-deploy-rule.yaml"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "a27871474f309e4953b5208ace9e2de77c7d2879b0c2a07bd0953133de5c7a6f"
+          },
+          "ruleId": "filename_mismatch"
+        },
+        {
+          "level": "warning",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "00000000-0000-4000-8003-000000000008"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/rule-0008-staging-promote.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "Filename \"rule-0008-staging-promote.yaml\" does not match slugify(name)=\"staging-promote-rule\"\nhelp: rename it to objects/rules/staging-promote-rule.yaml"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "eaec387135110811a61668c42b8751e44680edb04abf176e2afa4eab3e7800a5"
+          },
+          "ruleId": "filename_mismatch"
+        },
+        {
+          "level": "warning",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "00000000-0000-4000-8003-000000000009"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/rule-0009-elastic-kql.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "Filename \"rule-0009-elastic-kql.yaml\" does not match slugify(name)=\"elastic-kql-rule\"\nhelp: rename it to objects/rules/elastic-kql-rule.yaml"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "a1c0a0a1c58af0449df5b5b8ade8daebdb847ef5371421bf84f5fcb8a23d454d"
+          },
+          "ruleId": "filename_mismatch"
+        },
+        {
+          "level": "warning",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "00000000-0000-4000-8003-0000005d1a90"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/rule-0013-sysdig-falco.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "Filename \"rule-0013-sysdig-falco.yaml\" does not match slugify(name)=\"sysdig-falco-rule\"\nhelp: rename it to objects/rules/sysdig-falco-rule.yaml"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "be13fc0c71f1130397a4a4ed24f97a81ab4446ecaaac8a8c1a5457929eda45bf"
+          },
+          "ruleId": "filename_mismatch"
+        }
+      ],
+      "tool": {
+        "driver": {
+          "informationUri": "https://opentide.org/docs/cli/diagnostics",
+          "name": "opentide",
+          "rules": [
+            "filename_mismatch | warning | FilenameMismatch | https://opentide.org/docs/cli/diagnostics#filename_mismatch",
+            "metadata_recommended | note | MetadataRecommended | https://opentide.org/docs/cli/diagnostics#metadata_recommended"
+          ],
+          "version": "0.28.1"
+        }
+      }
+    }
+  ],
+  "version": "2.1.0"
+}
+
+━━━ stderr · empty

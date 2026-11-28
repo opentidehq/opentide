@@ -1,0 +1,29 @@
+---
+source: crates/opentide-spl/tests/search_parse.rs
+expression: render(&body(path))
+input_file: crates/testdata/corpus/spl/search_expression__invalid.spl
+---
+SOURCE_FILE@0..18
+  PIPELINE@0..18
+    BARE_SEARCH@0..18
+      FIELD_VALUE@0..10
+        FIELD_REF@0..5
+          IDENTIFIER@0..5
+            IDENT@0..5 "index"
+        EQ@5..6 "="
+        FIELD_VALUE_RHS@6..10
+          IDENTIFIER@6..10
+            IDENT@6..10 "main"
+      WHITESPACE@10..11 " "
+      SEARCH_GROUP@11..18
+        L_PAREN@11..12 "("
+        SEARCH_EXPRESSION@12..16
+          IDENTIFIER@12..13
+            IDENT@12..13 "a"
+          WHITESPACE@13..14 " "
+          SEARCH_BOOLEAN@14..16
+            OR_KW@14..16 "OR"
+        WHITESPACE@16..17 " "
+        R_PAREN@17..18 ")"
+--
+16..17: expected a search term

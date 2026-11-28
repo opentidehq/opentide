@@ -5,11 +5,17 @@ loaded rule that attribute was Pydantic's deprecated ``BaseModel.schema``
 classmethod, so the documented line evaluated to a bound method and nothing
 noticed: the golden runner reads shell fences only, never Python ones.
 
-Only statements without side effects run — imports, and expressions or name
-assignments that contain no call — so every attribute path a page prints is
-resolved without deploying, writing files, or reaching a vendor API. A trailing
-comment that opens with a literal (``# "rule::1.0"``, ``# ["T1059"]``) states
-the value the line evaluates to, and has to match.
+The pages of the SDK's ``Workspace`` (UC-5.2, #837: ``RUN_PAGES``) run whole,
+every statement of every fence in order, from a copy of the tide corpus: nothing
+they do leaves it or reaches a vendor API. Their tenant operations (UC-5.2b) reach
+the tenant the Workspace page's TOML fence configures, which the run points at the
+SentinelOne stand-in of ``tests/cassettes/`` on loopback. On the other pages, which document
+the models and the platform plugins, only statements without side
+effects run — imports, and expressions or name assignments that contain no
+call — so every attribute path a page prints is resolved without deploying,
+writing files, or reaching a vendor API. A trailing comment that opens with a
+literal (``# "rule::1.0"``, ``# ["T1059"]``) states the value the line evaluates
+to, and has to match.
 """
 
 from __future__ import annotations
@@ -17,6 +23,7 @@ from __future__ import annotations
 import ast
 import inspect
 import io
+import os
 import re
 import tokenize
 from collections.abc import Iterator
@@ -26,9 +33,47 @@ from typing import Any
 
 import pytest
 from tests.corpus_support import CORPUS_RULE_UUIDS
-from tests.docs_commands import DOCS, ROOT, _iter_fenced
+from tests.stand_in_support import S1_TOKEN, sentinel_one
+
+ROOT = Path(__file__).resolve().parents[2]
+DOCS = ROOT / "docs"
+
+#: CommonMark fence: three or more backticks or tildes, then an info string
+#: whose first word is the language (Fumadocs adds ``title="…"`` after it).
+_FENCE = re.compile(r"^(?P<marker>`{3,}|~{3,})\s*(?P<info>.*)$")
+
+
+def _iter_fenced(text: str) -> Iterator[tuple[str, int, str]]:
+    """Yield ``(language, line_number, raw_line)`` for every line inside a fence.
+
+    A fence closes only on the same character repeated at least as many times
+    with no info string, as CommonMark has it.
+    """
+    marker: str | None = None
+    language = ""
+    for number, raw in enumerate(text.splitlines(), start=1):
+        fence = _FENCE.match(raw.strip())
+        if marker is None:
+            if fence is not None:
+                marker = fence["marker"]
+                info = fence["info"].strip()
+                language = info.split()[0].lower() if info else ""
+            continue
+        if (
+            fence is not None
+            and fence["marker"][0] == marker[0]
+            and len(fence["marker"]) >= len(marker)
+            and not fence["info"].strip()
+        ):
+            marker = None
+            continue
+        yield language, number, raw
+
 
 SDK_PAGES = sorted((DOCS / "sdk").glob("*.md"))
+#: The pages whose Python fences run whole, calls included.
+RUN_PAGES = frozenset({"index.md", "workspace.md", "migration.md"})
+INERT_PAGES = [page for page in SDK_PAGES if page.name not in RUN_PAGES]
 
 #: Names the pages leave for the reader to fill in, bound to a corpus object.
 PLACEHOLDERS: dict[str, Any] = {"uuid": CORPUS_RULE_UUIDS["sentinel"], "platform": "sentinel"}
@@ -114,8 +159,11 @@ class PageReport:
     problems: list[str] = field(default_factory=list)
 
 
-def check_page(fences: list[Fence], namespace: dict[str, Any]) -> PageReport:
-    """Run the inert statements of *fences* in order, sharing one namespace per page."""
+def check_page(
+    fences: list[Fence], namespace: dict[str, Any], *, run_all: bool = False
+) -> PageReport:
+    """Run the inert statements of *fences* (every statement with *run_all*) in order,
+    sharing one namespace per page."""
     report = PageReport()
     unbound: set[str] = set()
     for fence in fences:
@@ -128,11 +176,13 @@ def check_page(fences: list[Fence], namespace: dict[str, Any]) -> PageReport:
         for node in tree.body:
             where = f"{fence.page}:{fence.line + node.lineno - 1}"
             text = ast.get_source_segment(fence.source, node) or ""
-            if not _is_inert(node) or _mentions_invented(node):
+            if not run_all and (not _is_inert(node) or _mentions_invented(node)):
                 unbound |= _bound_names(node)
                 continue
             try:
-                if isinstance(node, ast.Assign):
+                if isinstance(node, ast.Assign) and all(
+                    isinstance(t, ast.Name) for t in node.targets
+                ):
                     value = eval(compile(ast.Expression(node.value), where, "eval"), namespace)
                     namespace.update(dict.fromkeys(_bound_names(node), value))
                 elif isinstance(node, ast.Expr):
@@ -142,7 +192,7 @@ def check_page(fences: list[Fence], namespace: dict[str, Any]) -> PageReport:
                     report.checked.append(f"{where}: {text}")
                     continue
             except NameError as exc:
-                if exc.name in unbound:
+                if not run_all and exc.name in unbound:
                     unbound |= _bound_names(node)
                     continue
                 report.problems.append(f"{where}: {text}\n    raised {exc!r}")
@@ -167,10 +217,32 @@ def check_page(fences: list[Fence], namespace: dict[str, Any]) -> PageReport:
 
 @pytest.fixture
 def sdk_namespace(tide_corpus_repo: Path) -> Iterator[dict[str, Any]]:
-    from opentide import Opentide
+    """The objects the pages read from: the corpus's Sentinel rule, its first
+    objective and threat, as the Rust models, read as models.md says."""
+    import yaml
 
-    Opentide.initialise()
-    yield {"Opentide": Opentide, **PLACEHOLDERS}
+    from opentide.models import DetectionObjective, DetectionRule, DetectionRule_v1_1, ThreatVector
+
+    classes: dict[str, Any] = {
+        "rule::1.0": DetectionRule,
+        "rule::1.1": DetectionRule_v1_1,
+        "objective::1.0": DetectionObjective,
+        "threat::1.0": ThreatVector,
+    }
+    by_uuid: dict[str, Any] = {}
+    for path in sorted((tide_corpus_repo / "Objects").rglob("*.yaml")):
+        document = yaml.safe_load(path.read_text(encoding="utf-8"))
+        metadata = document.get("metadata") if isinstance(document, dict) else None
+        if isinstance(metadata, dict) and metadata.get("schema") in classes:
+            by_uuid.setdefault(
+                str(metadata["uuid"]), classes[metadata["schema"]].model_validate(document)
+            )
+    yield {
+        "rule": by_uuid[CORPUS_RULE_UUIDS["sentinel"]],
+        "obj": by_uuid["00000000-0000-4000-8002-000000000001"],
+        "threat": by_uuid["00000000-0000-4000-8001-000000000001"],
+        **PLACEHOLDERS,
+    }
 
 
 # --------------------------------------------------------------------------
@@ -178,7 +250,61 @@ def sdk_namespace(tide_corpus_repo: Path) -> Iterator[dict[str, Any]]:
 # --------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("page", SDK_PAGES, ids=lambda page: page.name)
+def _toml_fence(page: Path) -> str:
+    """The lines of *page*'s ``toml`` fences, in order."""
+    text = page.read_text(encoding="utf-8")
+    toml = [raw for language, _, raw in _iter_fenced(text) if language == "toml"]
+    assert toml, f"{page.name} has no toml fence"
+    return "\n".join(toml) + "\n"
+
+
+@pytest.fixture
+def stand_in_tenant(tide_corpus_repo: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+    """The tenant the Workspace page configures, as its TOML fence writes it, on the
+    SentinelOne stand-in; no proxy of the process applies."""
+    config = tide_corpus_repo / ".opentide" / "configurations" / "platforms" / "sentinel_one.toml"
+    page = DOCS / "sdk" / "workspace.md"
+    config.write_text(
+        config.read_text(encoding="utf-8") + "\n" + _toml_fence(page), encoding="utf-8"
+    )
+    for name in list(os.environ):
+        if name.lower().endswith("_proxy"):
+            monkeypatch.delenv(name)
+    with sentinel_one() as url:
+        monkeypatch.setenv("S1_URL", url)
+        monkeypatch.setenv("S1_API_TOKEN", S1_TOKEN)
+        yield
+
+
+@pytest.mark.parametrize("page", sorted(RUN_PAGES))
+@pytest.mark.usefixtures("stand_in_tenant")
+def test_the_workspace_pages_run_whole(
+    page: str, tide_corpus_repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.chdir(tide_corpus_repo)
+    fences = python_fences(DOCS / "sdk" / page)
+    report = check_page(fences, {**PLACEHOLDERS}, run_all=True)
+    assert not report.problems, "\n".join(report.problems)
+    statements = sum(len(ast.parse(fence.source).body) for fence in fences)
+    assert len(report.checked) == statements, report.checked
+
+
+def test_a_failing_statement_on_a_run_page_is_reported(
+    tide_corpus_repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.chdir(tide_corpus_repo)
+    source = "\n".join(
+        [
+            "from opentide import Workspace",
+            'ws = Workspace.open(".")',
+            'ws.coverage("T1059")["count"]  # 0',
+        ]
+    )
+    (problem,) = check_page(_fence(source), {}, run_all=True).problems
+    assert "documented 0" in problem
+
+
+@pytest.mark.parametrize("page", INERT_PAGES, ids=lambda page: page.name)
 def test_sdk_samples_resolve_to_their_documented_values(
     page: Path, sdk_namespace: dict[str, Any]
 ) -> None:
@@ -205,10 +331,11 @@ def test_the_sdk_pages_yield_enough_samples(sdk_namespace: dict[str, Any]) -> No
     """A filter that silently skips everything would make the page test pass."""
     checked = [
         line
-        for page in SDK_PAGES
+        for page in INERT_PAGES
         for line in check_page(python_fences(page), dict(sdk_namespace)).checked
     ]
-    assert len(checked) > 40, checked
+    # 35 since the registry, validation and documentation pages went (UC-6.2).
+    assert len(checked) >= 35, checked
 
 
 # --------------------------------------------------------------------------
@@ -221,28 +348,28 @@ def _fence(source: str) -> list[Fence]:
 
 
 def test_an_attribute_that_is_a_method_is_reported(sdk_namespace: dict[str, Any]) -> None:
-    source = "rule = Opentide.Rules[uuid]\nrule.metadata.model_dump"
+    source = "rule.metadata.model_dump"
     (problem,) = check_page(_fence(source), sdk_namespace).problems
     assert "a method the reader would print" in problem
 
 
 def test_a_documented_value_that_differs_is_reported(sdk_namespace: dict[str, Any]) -> None:
-    source = 'rule = Opentide.Rules[uuid]\nrule.name  # "Some Other Rule"'
+    source = 'rule.name  # "Some Other Rule"'
     (problem,) = check_page(_fence(source), sdk_namespace).problems
     assert "documented 'Some Other Rule'" in problem
 
 
 def test_a_missing_attribute_is_reported(sdk_namespace: dict[str, Any]) -> None:
-    source = "rule = Opentide.Rules[uuid]\nrule.metadata.schema_version"
+    source = "rule.metadata.schema_version"
     (problem,) = check_page(_fence(source), sdk_namespace).problems
     assert "AttributeError" in problem
 
 
 def test_calls_and_names_they_bind_are_skipped(sdk_namespace: dict[str, Any]) -> None:
-    source = 'result = rule.deploy("sentinel")\nresult.dry_run\nOpentide.debug'
+    source = "result = ws.validate()\nresult.failed\nrule.name"
     report = check_page(_fence(source), sdk_namespace)
     assert report.problems == []
-    assert [line.split(": ", 1)[1] for line in report.checked] == ["Opentide.debug"]
+    assert [line.split(": ", 1)[1] for line in report.checked] == ["rule.name"]
 
 
 @pytest.mark.parametrize(

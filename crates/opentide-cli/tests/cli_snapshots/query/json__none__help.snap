@@ -1,0 +1,81 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: query/json/none/help
+---
+args: opentide --json query --help
+exit: 0
+
+━━━ stdout
+Run a read-only query on platform tenants and show rows
+
+Sends the query, or a rule's query, to each selected tenant over the
+window and prints at most --limit rows per tenant. No search or rule is
+saved on the tenant.
+
+Usage: opentide query [OPTIONS] --platform <PLATFORM> [query]
+
+Arguments:
+  [query]
+          The query, in the platform's language. '-' reads it from stdin
+
+Options:
+      --platform <PLATFORM>
+          Detection platform: sentinel, microsoft_defender, splunk, sentinel_one, crowdstrike, harfanglab, carbon_black_cloud, elastic, sysdig, bitdefender, graylog, exabeam, google_secops, datadog
+          
+          [possible values: sentinel, microsoft_defender, splunk, sentinel_one, crowdstrike, harfanglab, carbon_black_cloud, elastic, sysdig, bitdefender, graylog, exabeam, google_secops, datadog]
+
+      --tenant <TENANT>
+          Run on this tenant (repeatable), or 'all'. Default: the only tenant configured
+
+      --rule <RULE>
+          Run the query this rule (by UUID) deploys to the platform
+
+      --file <FILE>
+          Run the query of the rule in this file
+
+      --query-file <QUERY_FILE>
+          Read the query from this file
+
+      --since <SINCE>
+          Look back this far from --to or now: 15m, 24h, 7d, PT1H. Default: 24h
+
+      --from <START>
+          Start of the window, ISO-8601 (UTC unless it names an offset)
+
+      --to <END>
+          End of the window, ISO-8601. Default: now
+
+      --limit <LIMIT>
+          Rows per tenant, at most 5000
+          
+          [default: 100]
+
+      --language <LANGUAGE>
+          Elastic only: esql (default), eql, lucene or kuery
+
+      --index <INDEX>
+          Elastic index pattern, CrowdStrike repository or Graylog stream alias (repeatable)
+
+      --timeout <TIMEOUT>
+          Seconds to wait for a search to finish
+          
+          [default: 120.0]
+
+      --columns <COLUMNS>
+          Comma-separated columns the table shows
+
+      --format <ROW_FORMAT>
+          table, jsonl or csv (--json prints the envelope)
+          
+          [default: table]
+          [possible values: table, jsonl, csv]
+
+      --help
+          Print help
+
+Examples:
+  $ opentide query --platform sentinel 'SecurityEvent | take 10'
+  $ opentide query --platform splunk --rule <rule-uuid> --tenant all --since 7d
+  $ opentide query --platform elastic --language eql --index 'logs-*' --format jsonl 'process where process.name == "cmd.exe"'
+
+━━━ stderr · empty

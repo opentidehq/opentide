@@ -1,0 +1,2 @@
+// prod:join_operator invalid
+SecurityEvent | join

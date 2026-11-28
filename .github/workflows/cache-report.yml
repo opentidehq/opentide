@@ -1,0 +1,48 @@
+name: Cache report
+
+# What fills the 10 GB of Actions caches GitHub keeps per repository (#841):
+# every cache with its ref, key family, size and last use, summed per ref and
+# per family into the job summary (scripts/cache_report.py). The caches pull
+# requests restore were evicted within hours more than once; this shows which
+# families and refs crowd them out. Read-only: `actions: read` lists the
+# caches, and the job runs a base branch's own script, never a pull
+# request's code. GitHub starts a schedule, and Run workflow, from the default
+# branch's copy only: a push to a base branch that changes the report runs it
+# too, so it runs where it lands first.
+on:
+  schedule:
+    - cron: "41 5 * * 1"
+  workflow_dispatch:
+  push:
+    branches: [development, integration/unified-core]
+    paths:
+      - .github/workflows/cache-report.yml
+      - scripts/cache_report.py
+
+permissions:
+  contents: read
+
+jobs:
+  report:
+    name: Actions caches
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: List the caches
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          gh api --paginate "repos/${REPOSITORY}/actions/caches?per_page=100" \
+            --jq '.actions_caches[]' > "$RUNNER_TEMP/caches.jsonl"
+          python3 scripts/cache_report.py < "$RUNNER_TEMP/caches.jsonl" > "$RUNNER_TEMP/report.md"
+          cat "$RUNNER_TEMP/report.md"
+          cat "$RUNNER_TEMP/report.md" >> "$GITHUB_STEP_SUMMARY"

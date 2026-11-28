@@ -1,0 +1,32 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: validate.query/json/tide-corpus/live-no-platform
+---
+args: opentide --json validate query --live
+exit: 2
+
+━━━ stdout · json, 1 lines
+{
+  "command": "validate query",
+  "duration_ms": 0,
+  "error": "--live checks one platform's tenants: pass --platform",
+  "exit_code": 2,
+  "failure": {
+    "argument": "--platform",
+    "code": "usage_missing_option",
+    "crash_log": null,
+    "message": "--live checks one platform's tenants: pass --platform",
+    "suggestion": null
+  },
+  "message": "--live checks one platform's tenants: pass --platform",
+  "mode": "live",
+  "next_actions": [],
+  "ok": false,
+  "platform": null,
+  "schema_version": 1,
+  "status": "failed",
+  "summary": {},
+  "supported": true
+}
+
+━━━ stderr · empty

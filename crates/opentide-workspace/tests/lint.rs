@@ -1,0 +1,1515 @@
+//! `lint` over a workspace in memory (UC-2.3, #818): every rule of
+//! `LINT_CODES`, `lint.toml`, `--check`, `--file`, `--changed`, `--strict`,
+//! `--fix`, the JSON entry of each finding (its keys in the oracle's order)
+//! and the frame's diagnostic. The CLI's `lint` snapshots hold what
+//! `lint --json` prints (the oracle comparison was retired in #1142).
+
+#![expect(
+    clippy::unwrap_used,
+    reason = "test helpers: every configuration they parse is valid"
+)]
+
+mod lint {
+    use std::path::{Path, PathBuf};
+    use std::sync::Arc;
+
+    use opentide_schema::configuration::lint::{LintConfig, parse_lint_config};
+    use opentide_schema::configuration::toml;
+    use opentide_workspace::lint::{
+        Changed, LintCheck, LintFinding, LintOptions, LintReport, LintStatus, NextAction, lint,
+    };
+    use opentide_workspace::{FileSystem, MemoryFs, RootOptions, Severity, Workspace};
+
+    const ROOT: &str = "/ws";
+    const U1: &str = "11111111-1111-4111-8111-111111111111";
+    const U2: &str = "22222222-2222-4222-8222-222222222222";
+
+    /// A rule with every field lint asks for: the recommended
+    /// `configurations` and `response` included.
+    fn rule(uuid: &str, name: &str) -> String {
+        format!(
+            "name: {name}\nmetadata:\n  uuid: {uuid}\n  schema: rule::1.1\n  author: me\n  organisation: us\nconfigurations: {{}}\nresponse: {{}}\n"
+        )
+    }
+
+    fn workspace() -> MemoryFs {
+        let fs = MemoryFs::new();
+        fs.create_dir("/ws/.opentide/configurations");
+        for family in ["rules", "threats", "objectives"] {
+            fs.create_dir(format!("/ws/objects/{family}"));
+        }
+        fs
+    }
+
+    fn config(text: &str) -> LintConfig {
+        parse_lint_config(Some(&toml::parse(text).unwrap())).unwrap()
+    }
+
+    fn options() -> LintOptions<'static> {
+        LintOptions {
+            cwd: PathBuf::from(ROOT),
+            ..LintOptions::default()
+        }
+    }
+
+    fn run(fs: &MemoryFs, config: &LintConfig, options: &LintOptions<'_>) -> LintReport {
+        lint(fs, Some(fs), Path::new(ROOT), config, options)
+    }
+
+    fn codes(report: &LintReport) -> Vec<(&str, &str)> {
+        report
+            .findings
+            .iter()
+            .map(|finding| (finding.code(), finding.path()))
+            .collect()
+    }
+
+    fn json(finding: &LintFinding) -> String {
+        serde_json::to_string(finding).unwrap()
+    }
+
+    /// The finding as `lint --json` writes it.
+    fn entry(finding: &LintFinding) -> serde_json::Value {
+        serde_json::to_value(finding).unwrap()
+    }
+
+    /// The fields of the finding's JSON entry, sorted.
+    fn keys(finding: &LintFinding) -> Vec<String> {
+        let mut keys: Vec<String> = entry(finding)
+            .as_object()
+            .unwrap()
+            .keys()
+            .cloned()
+            .collect();
+        keys.sort_unstable();
+        keys
+    }
+
+    #[test]
+    fn a_clean_catalogue_passes_with_its_count() {
+        let fs = workspace();
+        fs.write("/ws/objects/rules/a-rule.yaml", rule(U1, "A rule"));
+        let report = run(&fs, &LintConfig::default(), &options());
+        assert!(report.findings.is_empty(), "{:?}", codes(&report));
+        assert_eq!(report.status, LintStatus::Completed);
+        assert_eq!(report.message, "Catalogue lint passed");
+        assert_eq!(report.exit_code, 0);
+        assert_eq!(report.summary.unwrap().files, 1);
+        assert_eq!(report.outcome.as_deref(), Some("1 file clean"));
+        assert_eq!(
+            report.checks,
+            [
+                LintCheck::Filenames,
+                LintCheck::Metadata,
+                LintCheck::Recommended,
+                LintCheck::Placeholders,
+                LintCheck::Queries
+            ]
+        );
+    }
+
+    #[test]
+    fn a_file_name_that_is_not_the_slug_is_a_warning_with_a_rename_step() {
+        let fs = workspace();
+        fs.write(
+            "/ws/objects/rules/rule-0001.yaml",
+            rule(U1, "Sentinel KQL Rule"),
+        );
+        let report = run(&fs, &LintConfig::default(), &options());
+        assert_eq!(
+            codes(&report),
+            [("filename_mismatch", "objects/rules/rule-0001.yaml")]
+        );
+        assert_eq!(
+            json(&report.findings[0]),
+            format!(
+                r#"{{"check":"filenames","severity":"warning","path":"objects/rules/rule-0001.yaml","yaml_line":null,"uuid":"{U1}","expected":"objects/rules/sentinel-kql-rule.yaml","message":"Filename \"rule-0001.yaml\" does not match slugify(name)=\"sentinel-kql-rule\"","code":"filename_mismatch","field_path":[],"line":null,"column":null,"end_line":null,"end_column":null,"help":"rename it to objects/rules/sentinel-kql-rule.yaml","fix":null,"explain":"opentide explain filename_mismatch"}}"#
+            )
+        );
+        assert_eq!(report.status, LintStatus::Issues);
+        let next: Vec<(&str, &str)> = report
+            .next_actions
+            .iter()
+            .map(|next: &NextAction| (next.command.as_str(), next.reason.as_str()))
+            .collect();
+        assert_eq!(
+            next,
+            [("opentide lint --fix", "rename 1 file to match their names")]
+        );
+        assert_eq!(report.outcome.as_deref(), Some("1 finding in 1 file"));
+    }
+
+    #[test]
+    fn fix_renames_through_the_writer_and_reports_where_the_file_went() {
+        let fs = workspace();
+        // No organisation: its note follows the file to its new name.
+        fs.write(
+            "/ws/objects/rules/rule-0001.yaml",
+            format!("name: Sentinel KQL Rule\nmetadata:\n  uuid: {U1}\n  author: me\n"),
+        );
+        // Debug output keeps its suffix.
+        fs.write("/ws/objects/rules/x.debug.yaml", rule(U2, "B"));
+        let report = run(
+            &fs,
+            &LintConfig::default(),
+            &LintOptions {
+                fix: true,
+                ..options()
+            },
+        );
+        assert!(fs.is_file(Path::new("/ws/objects/rules/sentinel-kql-rule.yaml")));
+        assert!(!fs.is_file(Path::new("/ws/objects/rules/rule-0001.yaml")));
+        assert!(fs.is_file(Path::new("/ws/objects/rules/b.debug.yaml")));
+        assert_eq!(report.fixed, 2);
+        assert!(report.next_actions.is_empty());
+        let note = &report.findings[0];
+        assert_eq!(note.code(), "metadata_recommended");
+        assert_eq!(entry(note)["path"], "objects/rules/sentinel-kql-rule.yaml");
+        // Read from the file at its new name: the `metadata` key's place.
+        assert_eq!(entry(note)["line"], 2);
+        let first = &report.findings[1];
+        assert_eq!(entry(first)["fixed"], true);
+        assert_eq!(entry(first)["from"], "objects/rules/rule-0001.yaml");
+        assert_eq!(entry(first)["path"], "objects/rules/sentinel-kql-rule.yaml");
+        // A fixed finding carries `expected`, `fixed` and `from` beside the
+        // fields every finding has, and no step.
+        assert_eq!(
+            keys(first),
+            [
+                "check",
+                "code",
+                "column",
+                "end_column",
+                "end_line",
+                "expected",
+                "explain",
+                "field_path",
+                "fix",
+                "fixed",
+                "from",
+                "help",
+                "line",
+                "message",
+                "path",
+                "severity",
+                "uuid",
+                "yaml_line",
+            ]
+        );
+        assert_eq!(entry(first)["help"], serde_json::Value::Null);
+        assert_eq!(
+            first.diagnostic.notes,
+            [(
+                "note".to_owned(),
+                "renamed from objects/rules/rule-0001.yaml".to_owned()
+            )]
+        );
+        assert_eq!(
+            report.outcome.as_deref(),
+            Some("1 note in 1 file · 2 fixed")
+        );
+    }
+
+    #[test]
+    fn fix_leaves_a_file_whose_name_is_taken() {
+        let fs = workspace();
+        fs.write("/ws/objects/rules/a.yaml", rule(U1, "A"));
+        fs.write("/ws/objects/rules/other.yaml", rule(U2, "A"));
+        let report = run(
+            &fs,
+            &LintConfig::default(),
+            &LintOptions {
+                fix: true,
+                ..options()
+            },
+        );
+        // `a.yaml` holds the slug; the other object gets its UUID's prefix.
+        assert_eq!(report.findings.len(), 1);
+        assert_eq!(
+            entry(&report.findings[0])["expected"],
+            "objects/rules/a-22222222.yaml"
+        );
+        assert!(fs.is_file(Path::new("/ws/objects/rules/a-22222222.yaml")));
+        // Now a name taken by a file lint does not read (not YAML).
+        let fs = workspace();
+        fs.write("/ws/objects/rules/one.yaml", rule(U1, "Two"));
+        fs.write("/ws/objects/rules/two.yaml", "not: [yaml\n");
+        let report = run(
+            &fs,
+            &LintConfig::default(),
+            &LintOptions {
+                fix: true,
+                ..options()
+            },
+        );
+        let mismatch = report
+            .findings
+            .iter()
+            .find(|f| f.code() == "filename_mismatch")
+            .unwrap();
+        assert_eq!(entry(mismatch)["fixed"], false);
+        assert!(
+            entry(mismatch)["message"]
+                .as_str()
+                .unwrap()
+                .ends_with("; --fix skipped because objects/rules/two.yaml exists"),
+            "{}",
+            entry(mismatch)["message"]
+        );
+        assert!(fs.is_file(Path::new("/ws/objects/rules/one.yaml")));
+        assert_eq!(report.fixed, 0);
+    }
+
+    #[test]
+    fn a_file_that_does_not_parse_is_an_error_at_the_parsers_place() {
+        let fs = workspace();
+        fs.write("/ws/objects/rules/bad.yaml", "name: x\nlist: [a, b\n");
+        fs.write("/ws/objects/rules/empty.yaml", "");
+        let report = run(&fs, &LintConfig::default(), &options());
+        let bad = &report.findings[0];
+        assert_eq!(bad.code(), "yaml_parse");
+        assert_eq!(bad.severity(), "error");
+        assert!(
+            entry(bad)["message"]
+                .as_str()
+                .unwrap()
+                .starts_with("Could not parse object YAML: ")
+        );
+        assert!(entry(bad)["line"].is_u64() && entry(bad)["column"].is_u64());
+        assert_eq!(entry(bad)["end_line"], entry(bad)["line"]);
+        let empty = &report.findings[1];
+        assert_eq!(
+            entry(empty)["message"],
+            "Could not parse object YAML: expected a mapping at the top of the file, found an empty file"
+        );
+        assert_eq!(entry(empty)["line"], serde_json::Value::Null);
+        assert_eq!(report.summary.unwrap().errors, 2);
+        assert_eq!(report.status, LintStatus::Issues);
+        // Errors do not fail the run; --strict does.
+        let strict = run(
+            &fs,
+            &LintConfig::default(),
+            &LintOptions {
+                strict: true,
+                ..options()
+            },
+        );
+        assert_eq!(strict.status, LintStatus::Failed);
+        assert_eq!(strict.exit_code, 1);
+        assert_eq!(strict.failure_code, Some("issues_found"));
+    }
+
+    #[test]
+    fn an_object_without_a_name_cannot_have_its_file_name_checked() {
+        let fs = workspace();
+        fs.write(
+            "/ws/objects/rules/x.yaml",
+            format!("name: '  '\nmetadata:\n  uuid: {U1}\n"),
+        );
+        let report = run(&fs, &LintConfig::default(), &options());
+        let finding = &report.findings[0];
+        assert_eq!(finding.code(), "name_missing");
+        assert_eq!(
+            entry(finding)["message"],
+            "Object has no name; cannot check filename slug"
+        );
+        // The `name` key is on the first line.
+        assert_eq!(entry(finding)["yaml_line"], 0);
+        assert_eq!(entry(finding)["line"], 1);
+        assert_eq!(entry(finding)["column"], 1);
+        assert_eq!(entry(finding)["end_column"], 5);
+        assert_eq!(
+            entry(finding)["help"],
+            "add a name: the file name is derived from it"
+        );
+    }
+
+    #[test]
+    fn recommended_metadata_is_a_note_at_the_metadata_key() {
+        let fs = workspace();
+        fs.write(
+            "/ws/objects/rules/a.yaml",
+            format!("name: A\nmetadata:\n  uuid: {U1}\n  schema: rule::1.1\n  organisation:\n    name: us\nconfigurations: {{}}\nresponse: {{}}\n"),
+        );
+        // A threat's schema has no `reviewed`: it is not recommended there.
+        fs.write(
+            "/ws/objects/threats/t.yaml",
+            format!("name: T\nmetadata:\n  uuid: {U2}\n  schema: threat::1.0\n  author: me\n  organization: us\n"),
+        );
+        let config =
+            config("[metadata]\nrequired = [\"author\", \"organisation\", \"reviewed\"]\n");
+        let report = run(&fs, &config, &options());
+        assert_eq!(
+            codes(&report),
+            [("metadata_recommended", "objects/rules/a.yaml")]
+        );
+        let finding = &report.findings[0];
+        assert_eq!(
+            json(finding),
+            format!(
+                r#"{{"check":"metadata","severity":"info","path":"objects/rules/a.yaml","yaml_line":1,"uuid":"{U1}","message":"Recommended metadata missing: author, reviewed","code":"metadata_recommended","field_path":["metadata"],"line":2,"column":1,"end_line":2,"end_column":9,"help":"add the missing keys under metadata","fix":null,"explain":"opentide explain metadata_recommended"}}"#
+            )
+        );
+        // Lint's info is a note: its frame says so, its run is not a warning.
+        assert_eq!(finding.diagnostic.severity, Severity::Info);
+        assert_eq!(finding.diagnostic.severity.frame_label(), "note");
+        assert!(report.outcome_ok);
+        assert_eq!(report.outcome.as_deref(), Some("1 note in 1 file"));
+        assert_eq!(report.summary.unwrap().notes, 1);
+    }
+
+    #[test]
+    fn a_rule_without_configurations_or_response_gets_a_recommended_note() {
+        let fs = workspace();
+        fs.write(
+            "/ws/objects/rules/a.yaml",
+            format!("name: A\nmetadata:\n  uuid: {U1}\n  schema: rule::1.1\n  author: me\n  organisation: us\nresponse: null\n"),
+        );
+        // A threat has no recommended field; an unknown schema is validate's.
+        fs.write(
+            "/ws/objects/threats/t.yaml",
+            format!("name: T\nmetadata:\n  uuid: {U2}\n  schema: threat::1.0\n  author: me\n  organisation: us\n"),
+        );
+        fs.write(
+            "/ws/objects/rules/b.yaml",
+            "name: B\nmetadata:\n  uuid: 33333333-3333-4333-8333-333333333333\n  schema: rule::9.9\n  author: me\n  organisation: us\n",
+        );
+        let report = run(&fs, &LintConfig::default(), &options());
+        // `response: null` is there: only `configurations` is missing.
+        assert_eq!(
+            codes(&report),
+            [("recommended_field_missing", "objects/rules/a.yaml")]
+        );
+        let finding = &report.findings[0];
+        assert_eq!(finding.check, LintCheck::Recommended);
+        assert_eq!(
+            json(finding),
+            format!(
+                r#"{{"check":"recommended","severity":"info","path":"objects/rules/a.yaml","yaml_line":0,"uuid":"{U1}","message":"Recommended field missing: configurations","code":"recommended_field_missing","field_path":["configurations"],"line":1,"column":1,"end_line":1,"end_column":2,"help":null,"fix":null,"explain":"opentide explain recommended_field_missing"}}"#
+            )
+        );
+        assert_eq!(finding.diagnostic.severity, Severity::Info);
+        assert_eq!(report.status, LintStatus::Issues);
+        assert!(report.outcome_ok);
+        // `[recommended]` turns it off, or raises it.
+        let off = run(&fs, &config("[recommended]\nenabled = false\n"), &options());
+        assert!(off.findings.is_empty(), "{:?}", codes(&off));
+        assert!(!off.checks.contains(&LintCheck::Recommended));
+        let raised = run(
+            &fs,
+            &config("[recommended]\nseverity = \"warning\"\n"),
+            &options(),
+        );
+        assert_eq!(raised.findings[0].severity(), "warning");
+        assert_eq!(raised.findings[0].diagnostic.severity, Severity::Warning);
+        // `--check recommended` runs it alone, even when lint.toml disables it.
+        let only = run(
+            &fs,
+            &config("[recommended]\nenabled = false\n"),
+            &LintOptions {
+                checks: vec![LintCheck::Recommended],
+                ..options()
+            },
+        );
+        assert_eq!(codes(&only), codes(&report));
+        assert_eq!(
+            LintCheck::parse("recommended"),
+            Some(LintCheck::Recommended)
+        );
+    }
+
+    /// The queries check's engine, standing in: one warning per code it is told of.
+    struct Engine(&'static [&'static str]);
+
+    impl opentide_workspace::lint::LintQueryCheck for Engine {
+        fn check(
+            &self,
+            _: &Path,
+            relative: &str,
+            uuid: Option<&str>,
+            _: &str,
+        ) -> Result<Vec<LintFinding>, String> {
+            Ok(self
+                .0
+                .iter()
+                .map(|code| {
+                    let engine =
+                        opentide_workspace::Diagnostic::new(*code, Severity::Warning, "finding");
+                    LintFinding::from_engine(relative, uuid, engine)
+                })
+                .collect())
+        }
+    }
+
+    fn severities(report: &LintReport) -> Vec<(&str, &str)> {
+        report
+            .findings
+            .iter()
+            .filter(|finding| finding.check == LintCheck::Queries)
+            .map(|finding| (finding.code(), finding.severity()))
+            .collect()
+    }
+
+    /// OT-5: `[queries.codes]` sets one code's severity, wins over the check's
+    /// `severity`, and `off` drops the finding; `--strict` counts the result.
+    #[test]
+    fn a_codes_table_sets_one_codes_severity_and_off_drops_it() {
+        const ALL: &[&str] = &[
+            "kql_join_summarize_before_project",
+            "kql_table_not_declared",
+            "kql_unknown_table",
+        ];
+        let fs = workspace();
+        fs.write("/ws/objects/rules/a.yaml", rule(U1, "A"));
+        let engine = Engine(ALL);
+        let strict = LintOptions {
+            strict: true,
+            checks: vec![LintCheck::Queries],
+            query_check: Some(&engine),
+            ..options()
+        };
+        let plain = run(&fs, &LintConfig::default(), &strict);
+        assert!(
+            severities(&plain)
+                .iter()
+                .all(|(_, level)| *level == "warning")
+        );
+        assert_eq!(plain.exit_code, 1);
+        // Downgrade the inherited warning and raise another: the rest stay.
+        let tuned = run(
+            &fs,
+            &config(
+                "[queries.codes]\nkql_join_summarize_before_project = \"info\"\nkql_unknown_table = \"error\"\n",
+            ),
+            &strict,
+        );
+        assert_eq!(
+            severities(&tuned),
+            [
+                ("kql_join_summarize_before_project", "info"),
+                ("kql_table_not_declared", "warning"),
+                ("kql_unknown_table", "error"),
+            ]
+        );
+        let downgraded = tuned
+            .findings
+            .iter()
+            .find(|finding| finding.code() == "kql_join_summarize_before_project")
+            .unwrap();
+        assert_eq!(downgraded.diagnostic.severity, Severity::Info);
+        assert_eq!(tuned.exit_code, 1, "the raised code still fails --strict");
+        // A code's own setting wins over the check's; `off` drops it.
+        let layered = run(
+            &fs,
+            &config(
+                "[queries]\nseverity = \"error\"\n[queries.codes]\nkql_join_summarize_before_project = \"info\"\nkql_table_not_declared = \"off\"\nkql_unknown_table = \"off\"\n",
+            ),
+            &strict,
+        );
+        assert_eq!(
+            severities(&layered),
+            [("kql_join_summarize_before_project", "info")]
+        );
+        assert_eq!(layered.exit_code, 0, "only a note is left");
+        assert_eq!(layered.status, LintStatus::Issues);
+        // `--strict` passes once every warning is a note or off.
+        let quiet = run(
+            &fs,
+            &config(
+                "[queries.codes]\nkql_join_summarize_before_project = \"info\"\nkql_table_not_declared = \"off\"\nkql_unknown_table = \"info\"\n",
+            ),
+            &strict,
+        );
+        assert_eq!(quiet.exit_code, 0);
+        assert!(quiet.outcome_ok);
+    }
+
+    /// `off` means off: `--fix` does not rename a file whose `filename_mismatch`
+    /// lint.toml drops, and the report does not mention it.
+    #[test]
+    fn off_stops_fix_from_renaming() {
+        let fs = workspace();
+        fs.write(
+            "/ws/objects/rules/rule-0001.yaml",
+            rule(U1, "Sentinel KQL Rule"),
+        );
+        let fix = LintOptions {
+            fix: true,
+            ..options()
+        };
+        let off = run(
+            &fs,
+            &config("[filenames.codes]\nfilename_mismatch = \"off\"\n"),
+            &fix,
+        );
+        assert!(fs.is_file(Path::new("/ws/objects/rules/rule-0001.yaml")));
+        assert!(!fs.is_file(Path::new("/ws/objects/rules/sentinel-kql-rule.yaml")));
+        assert_eq!(off.fixed, 0);
+        assert!(off.findings.iter().all(|f| f.code() != "filename_mismatch"));
+        // Without the table the same run renames it.
+        let on = run(&fs, &LintConfig::default(), &fix);
+        assert_eq!(on.fixed, 1);
+        assert!(fs.is_file(Path::new("/ws/objects/rules/sentinel-kql-rule.yaml")));
+    }
+
+    /// The code to check map `lint.toml` validates against is lint's own list,
+    /// and names, for each code, the check that reports it.
+    #[test]
+    fn the_codes_tables_know_every_code_lint_reports_itself() {
+        use opentide_schema::configuration::lint::{LINT_CODE_CHECKS, RETIRED_CODES};
+        use opentide_workspace::lint::codes;
+        // Each lint code with the check that reports it, once.
+        let reporters = [
+            (codes::PARSE, LintCheck::Filenames),
+            (codes::NAME, LintCheck::Filenames),
+            (codes::FILENAME, LintCheck::Filenames),
+            (codes::FILENAME_PATTERN, LintCheck::Filenames),
+            (codes::NESTED, LintCheck::Filenames),
+            (codes::METADATA, LintCheck::Metadata),
+            (codes::REVIEWED_BEFORE_MODIFIED, LintCheck::Metadata),
+            (codes::RECOMMENDED, LintCheck::Recommended),
+            (codes::PLACEHOLDER, LintCheck::Placeholders),
+        ];
+        let mut listed: Vec<&str> = opentide_workspace::lint::LINT_CODES.to_vec();
+        let mut mapped: Vec<&str> = LINT_CODE_CHECKS.iter().map(|(code, _)| *code).collect();
+        listed.sort_unstable();
+        mapped.sort_unstable();
+        assert_eq!(mapped, listed, "LINT_CODE_CHECKS and LINT_CODES differ");
+        let mut covered: Vec<&str> = reporters.iter().map(|(code, _)| *code).collect();
+        covered.sort_unstable();
+        assert_eq!(covered, listed, "a lint code has no reporter in this test");
+        for (code, check) in reporters {
+            assert_eq!(
+                opentide_schema::configuration::lint::check_of_code(code),
+                Some(check.name()),
+                "{code} is reported by the {} check",
+                check.name()
+            );
+        }
+        for (retired, _) in RETIRED_CODES {
+            assert!(!listed.contains(&retired));
+        }
+    }
+
+    /// A retired code in a `codes` table is a warning of the report, not a refusal.
+    #[test]
+    fn a_retired_code_is_a_warning_of_the_report() {
+        let fs = workspace();
+        fs.write("/ws/objects/rules/a.yaml", rule(U1, "A"));
+        let report = run(
+            &fs,
+            &config("[filenames.codes]\nfilename_slug = \"off\"\n"),
+            &options(),
+        );
+        assert_eq!(report.warnings.len(), 1, "{:?}", report.warnings);
+        assert!(report.warnings[0].contains("\"filename_slug\" is retired"));
+        assert!(report.warnings[0].contains("filename_mismatch"));
+    }
+
+    /// A query check that refuses to run, as an engine that does not load.
+    struct Unavailable;
+
+    impl opentide_workspace::lint::LintQueryCheck for Unavailable {
+        fn check(
+            &self,
+            _: &Path,
+            _: &str,
+            _: Option<&str>,
+            _: &str,
+        ) -> Result<Vec<LintFinding>, String> {
+            Err("engine unavailable".to_owned())
+        }
+    }
+
+    /// The warning about a retired code is on the refused runs too: an engine
+    /// that does not load, and a `--file` that selects nothing.
+    #[test]
+    fn a_retired_codes_warning_is_on_a_refused_run_too() {
+        let fs = workspace();
+        fs.write("/ws/objects/rules/a.yaml", rule(U1, "A"));
+        let retired = config("[filenames.codes]\nfilename_slug = \"off\"\n");
+        let engine = run(
+            &fs,
+            &retired,
+            &LintOptions {
+                checks: vec![LintCheck::Queries],
+                query_check: Some(&Unavailable),
+                ..options()
+            },
+        );
+        assert_eq!(engine.failure_code, Some("engine_unavailable"));
+        assert_eq!(engine.warnings.len(), 1, "{:?}", engine.warnings);
+        let unmatched = run(
+            &fs,
+            &retired,
+            &LintOptions {
+                files: vec!["objects/rules/missing.yaml".to_owned()],
+                ..options()
+            },
+        );
+        assert_eq!(unmatched.exit_code, 1);
+        assert_eq!(unmatched.warnings.len(), 1, "{:?}", unmatched.warnings);
+    }
+
+    /// The codes lint reports itself take the table of their check, and a
+    /// table does not touch the check's other codes.
+    #[test]
+    fn a_codes_table_covers_the_codes_lint_reports_itself() {
+        let fs = workspace();
+        fs.write("/ws/objects/rules/misnamed.yaml", rule(U1, "Another rule"));
+        fs.write(
+            "/ws/objects/rules/a-rule.yaml",
+            format!("name: A rule\nmetadata:\n  uuid: {U2}\n  schema: rule::1.1\n"),
+        );
+        let base = run(&fs, &LintConfig::default(), &options());
+        assert!(
+            base.findings
+                .iter()
+                .any(|f| f.code() == "filename_mismatch" && f.severity() == "warning")
+        );
+        let tuned = run(
+            &fs,
+            &config(
+                "[filenames.codes]\nfilename_mismatch = \"error\"\n[metadata.codes]\nmetadata_recommended = \"off\"\n[recommended.codes]\nrecommended_field_missing = \"warning\"\n",
+            ),
+            &options(),
+        );
+        for finding in &tuned.findings {
+            match finding.code() {
+                "filename_mismatch" => assert_eq!(finding.severity(), "error"),
+                "recommended_field_missing" => assert_eq!(finding.severity(), "warning"),
+                "metadata_recommended" => panic!("`off` left {:?}", json(finding)),
+                _ => {}
+            }
+        }
+        assert!(
+            tuned
+                .findings
+                .iter()
+                .any(|f| f.code() == "filename_mismatch")
+        );
+        assert!(
+            tuned
+                .findings
+                .iter()
+                .any(|f| f.code() == "recommended_field_missing")
+        );
+        assert_eq!(
+            tuned.findings.len() + 1,
+            base.findings.len(),
+            "only metadata dropped"
+        );
+        // `lint --file`'s editor path (`lint_file`) applies it too.
+        let editor = opentide_workspace::lint::lint_file(
+            &fs,
+            Path::new(ROOT),
+            &config("[metadata.codes]\nmetadata_recommended = \"off\"\n"),
+            Path::new("/ws/objects/rules/a-rule.yaml"),
+        );
+        assert!(editor.iter().all(|f| f.code() != "metadata_recommended"));
+    }
+
+    #[test]
+    fn strict_fails_on_errors_and_warnings_but_never_on_notes() {
+        let fs = workspace();
+        fs.write(
+            "/ws/objects/rules/a-rule.yaml",
+            format!("name: A rule\nmetadata:\n  uuid: {U1}\n  schema: rule::1.1\n"),
+        );
+        let strict = LintOptions {
+            strict: true,
+            ..options()
+        };
+        let notes = run(&fs, &LintConfig::default(), &strict);
+        assert_eq!(notes.summary.unwrap().notes, 3, "{:?}", codes(&notes));
+        assert_eq!(notes.status, LintStatus::Issues);
+        assert_eq!(notes.exit_code, 0);
+        assert!(notes.outcome_ok);
+        // lint.toml raises a check to gate on it.
+        let gated = run(
+            &fs,
+            &config("[metadata]\nseverity = \"warning\"\n"),
+            &strict,
+        );
+        assert_eq!(gated.status, LintStatus::Failed);
+        assert_eq!(gated.exit_code, 1);
+        assert_eq!(gated.failure_code, Some("issues_found"));
+        // A warning fails it whatever the notes.
+        fs.write("/ws/objects/rules/misnamed.yaml", rule(U2, "Another rule"));
+        assert_eq!(
+            run(&fs, &LintConfig::default(), &strict).status,
+            LintStatus::Failed
+        );
+    }
+
+    #[test]
+    fn blank_or_empty_metadata_counts_as_missing() {
+        let fs = workspace();
+        for (file, uuid, author) in [
+            ("blank", U1, "\"  \""),
+            ("list", U2, "[]"),
+            ("map", "33333333-3333-4333-8333-333333333333", "{}"),
+        ] {
+            fs.write(
+                format!("/ws/objects/rules/{file}.yaml"),
+                format!(
+                    "name: {file}\nmetadata:\n  uuid: {uuid}\n  schema: rule::1.1\n  author: {author}\n  organisation: us\nconfigurations: {{}}\nresponse: {{}}\n"
+                ),
+            );
+        }
+        // A filled-in author is not reported.
+        fs.write(
+            "/ws/objects/rules/kept.yaml",
+            rule("44444444-4444-4444-8444-444444444444", "kept"),
+        );
+        let report = run(&fs, &LintConfig::default(), &options());
+        let mut reported: Vec<(&str, &str, &str)> = report
+            .findings
+            .iter()
+            .map(|finding| {
+                (
+                    finding.code(),
+                    finding.path(),
+                    finding.entry.message.as_str(),
+                )
+            })
+            .collect();
+        reported.sort_unstable();
+        assert_eq!(
+            reported,
+            [
+                (
+                    "metadata_recommended",
+                    "objects/rules/blank.yaml",
+                    "Recommended metadata missing: author"
+                ),
+                (
+                    "metadata_recommended",
+                    "objects/rules/list.yaml",
+                    "Recommended metadata missing: author"
+                ),
+                (
+                    "metadata_recommended",
+                    "objects/rules/map.yaml",
+                    "Recommended metadata missing: author"
+                ),
+            ]
+        );
+    }
+
+    #[test]
+    fn a_placeholder_points_at_its_value() {
+        let fs = workspace();
+        fs.write(
+            "/ws/objects/rules/a.yaml",
+            format!(
+                "name: A\nmetadata:\n  uuid: {U1}\n  author: Your Name  # opentide:placeholder\n  organisation: us\ndescription: |  # opentide:placeholder\n  text\nsurface:\n  - x\n  - Y  # opentide:placeholder\n"
+            ),
+        );
+        let report = run(&fs, &LintConfig::default(), &options());
+        let marked: Vec<(String, u64, u64, u64)> = report
+            .findings
+            .iter()
+            .filter(|f| f.code() == "placeholder")
+            .map(|f| {
+                (
+                    entry(f)["message"].as_str().unwrap().to_owned(),
+                    entry(f)["line"].as_u64().unwrap(),
+                    entry(f)["column"].as_u64().unwrap(),
+                    entry(f)["end_column"].as_u64().unwrap(),
+                )
+            })
+            .collect();
+        assert_eq!(
+            marked,
+            [
+                (
+                    "author holds a placeholder value written by opentide new".to_owned(),
+                    4,
+                    11,
+                    20
+                ),
+                (
+                    "description holds a placeholder value written by opentide new".to_owned(),
+                    6,
+                    1,
+                    12
+                ),
+                (
+                    "surface[1] holds a placeholder value written by opentide new".to_owned(),
+                    10,
+                    5,
+                    6
+                ),
+            ]
+        );
+        // Every field a finding has, and none of a file name finding's.
+        assert_eq!(
+            keys(&report.findings[0]),
+            [
+                "check",
+                "code",
+                "column",
+                "end_column",
+                "end_line",
+                "explain",
+                "field_path",
+                "fix",
+                "help",
+                "line",
+                "message",
+                "path",
+                "severity",
+                "uuid",
+                "yaml_line",
+            ]
+        );
+    }
+
+    #[test]
+    fn a_file_in_a_subfolder_is_reported_once() {
+        let fs = workspace();
+        fs.write("/ws/objects/rules/team/r.yaml", rule(U1, "R"));
+        let report = run(&fs, &LintConfig::default(), &options());
+        assert_eq!(
+            codes(&report),
+            [("nested_object_file", "objects/rules/team/r.yaml")]
+        );
+        assert!(entry(&report.findings[0])["message"]
+            .as_str()
+            .unwrap()
+            .starts_with("objects/rules/team/r.yaml is in a subfolder of objects/rules and is not an object instance"));
+        assert_eq!(report.summary.unwrap().files, 0);
+    }
+
+    #[test]
+    fn lint_toml_sets_styles_patterns_severities_and_checks() {
+        let fs = workspace();
+        fs.write("/ws/objects/rules/Rule One.yaml", rule(U1, "Rule One"));
+        fs.write("/ws/objects/threats/t.yaml", rule(U2, "T 2"));
+        let config = config(
+            "[filenames]\nstyle = \"slug\"\nseverity = \"error\"\n[filenames.rules]\nstyle = \"name\"\npattern = \"R-.*\"\n[metadata]\nenabled = false\n",
+        );
+        let report = run(&fs, &config, &options());
+        assert_eq!(
+            report
+                .findings
+                .iter()
+                .map(|f| (f.code(), f.severity(), f.path()))
+                .collect::<Vec<_>>(),
+            // Threats come first: lint reads threats, objectives, rules.
+            [
+                ("filename_mismatch", "error", "objects/threats/t.yaml"),
+                ("filename_pattern", "error", "objects/rules/Rule One.yaml"),
+            ]
+        );
+        assert_eq!(
+            entry(&report.findings[1])["help"],
+            "rename the file so its name matches the pattern R-.*"
+        );
+        assert_eq!(report.findings[1].diagnostic.severity, Severity::Error);
+        assert!(!report.checks.contains(&LintCheck::Metadata));
+        // `--check` runs a check the file disables.
+        let named = run(
+            &fs,
+            &config,
+            &LintOptions {
+                checks: vec![LintCheck::Metadata],
+                ..options()
+            },
+        );
+        assert_eq!(named.checks, [LintCheck::Metadata]);
+        assert!(named.findings.is_empty());
+    }
+
+    #[test]
+    fn file_narrows_every_check_but_stems_still_collide() {
+        let fs = workspace();
+        fs.write("/ws/objects/rules/a.yaml", rule(U1, "A"));
+        fs.write("/ws/objects/rules/b.yaml", rule(U2, "A"));
+        let report = run(
+            &fs,
+            &LintConfig::default(),
+            &LintOptions {
+                files: vec!["objects/rules/b.yaml".to_owned()],
+                ..options()
+            },
+        );
+        assert_eq!(report.scope, Some("selected"));
+        assert_eq!(
+            codes(&report),
+            [("filename_mismatch", "objects/rules/b.yaml")]
+        );
+        assert_eq!(
+            entry(&report.findings[0])["expected"],
+            "objects/rules/a-22222222.yaml"
+        );
+        assert_eq!(report.summary.unwrap().files, 1);
+        assert_eq!(
+            report.next_actions[0].command,
+            "opentide lint --fix --file objects/rules/b.yaml"
+        );
+        // A target that selects nothing fails the run and is named.
+        let missing = run(
+            &fs,
+            &LintConfig::default(),
+            &LintOptions {
+                files: vec!["objects/rules/none.yaml".to_owned()],
+                ..options()
+            },
+        );
+        assert_eq!(missing.exit_code, 1);
+        assert_eq!(missing.unmatched, ["objects/rules/none.yaml"]);
+        assert_eq!(
+            missing.message,
+            "No object file directly in objects/threats, objects/objectives, objects/rules matched: objects/rules/none.yaml"
+        );
+        assert!(missing.summary.is_none());
+        let payload = missing.payload();
+        assert_eq!(
+            payload.keys().copied().collect::<Vec<_>>(),
+            ["path", "checks", "findings", "count", "fixed", "unmatched"]
+        );
+    }
+
+    #[test]
+    fn stems_that_differ_only_in_case_collide_in_one_folder() {
+        const U3: &str = "33333333-3333-4333-8333-333333333333";
+        const U4: &str = "44444444-4444-4444-8444-444444444444";
+        let fs = workspace();
+        fs.write("/ws/objects/rules/Rule One.yaml", rule(U1, "Rule One"));
+        fs.write("/ws/objects/rules/x.yaml", rule(U2, "RULE ONE"));
+        // Lowercase, not casefold: `ß` and `ss` are two names.
+        fs.write("/ws/objects/rules/Straße.yaml", rule(U3, "Straße"));
+        fs.write("/ws/objects/rules/y.yaml", rule(U4, "STRASSE"));
+        let config = config("[filenames]\nstyle = \"name\"\n");
+        let report = run(&fs, &config, &options());
+        let mut expected: Vec<(&str, &str)> = report
+            .findings
+            .iter()
+            .filter(|finding| finding.code() == "filename_mismatch")
+            .map(|finding| (finding.path(), finding.entry.expected.as_deref().unwrap()))
+            .collect();
+        expected.sort_unstable();
+        assert_eq!(
+            expected,
+            [
+                (
+                    "objects/rules/x.yaml",
+                    "objects/rules/RULE ONE-22222222.yaml"
+                ),
+                ("objects/rules/y.yaml", "objects/rules/STRASSE.yaml"),
+            ]
+        );
+    }
+
+    /// #1957: a NUL in a `--file` value once emptied the quoted flags, and
+    /// the rename step fell back to a bare `opentide lint --fix`, which
+    /// renames every file in the workspace. The step keeps the scope.
+    #[test]
+    fn the_rename_step_keeps_a_file_flag_that_holds_a_nul() {
+        let fs = workspace();
+        fs.write(
+            "/ws/objects/rules/é\0😀.yaml",
+            rule(U1, "Sentinel KQL Rule"),
+        );
+        fs.write("/ws/objects/rules/other.yaml", rule(U2, "Other Rule"));
+        let report = run(
+            &fs,
+            &LintConfig::default(),
+            &LintOptions {
+                files: vec!["objects/rules/é\0😀.yaml".to_owned()],
+                ..options()
+            },
+        );
+        assert_eq!(report.scope, Some("selected"));
+        assert_eq!(
+            codes(&report),
+            [("filename_mismatch", "objects/rules/é\0😀.yaml")]
+        );
+        let commands: Vec<&str> = report
+            .next_actions
+            .iter()
+            .map(|next| next.command.as_str())
+            .collect();
+        assert_eq!(
+            commands,
+            [r#"opentide lint --fix --file "objects/rules/é\0😀.yaml""#]
+        );
+    }
+
+    #[test]
+    fn changed_narrows_to_the_hosts_diff_and_refuses_with_file() {
+        let fs = workspace();
+        fs.write("/ws/objects/rules/a.yaml", rule(U1, "A"));
+        fs.write("/ws/objects/rules/x.yaml", rule(U2, "B"));
+        let report = run(
+            &fs,
+            &LintConfig::default(),
+            &LintOptions {
+                changed: Some(Changed::Files {
+                    files: vec![PathBuf::from("/ws/objects/rules/a.yaml")],
+                    warning: None,
+                }),
+                ..options()
+            },
+        );
+        assert_eq!(report.scope, Some("changed"));
+        assert!(report.findings.is_empty());
+        assert_eq!(report.summary.unwrap().files, 1);
+        let nothing = run(
+            &fs,
+            &LintConfig::default(),
+            &LintOptions {
+                changed: Some(Changed::Files {
+                    files: Vec::new(),
+                    warning: Some("no commit yet".to_owned()),
+                }),
+                ..options()
+            },
+        );
+        assert_eq!(
+            nothing.outcome.as_deref(),
+            Some("No changed object file to lint")
+        );
+        assert_eq!(nothing.warnings, ["no commit yet"]);
+        let failed = run(
+            &fs,
+            &LintConfig::default(),
+            &LintOptions {
+                changed: Some(Changed::Failed {
+                    message: "--changed needs a git checkout".to_owned(),
+                    exit_code: 1,
+                }),
+                ..options()
+            },
+        );
+        assert_eq!((failed.exit_code, failed.failure_code), (1, None));
+        let both = run(
+            &fs,
+            &LintConfig::default(),
+            &LintOptions {
+                changed: Some(Changed::Failed {
+                    message: String::new(),
+                    exit_code: 1,
+                }),
+                files: vec!["a.yaml".to_owned()],
+                ..options()
+            },
+        );
+        assert_eq!(both.exit_code, 2);
+        assert_eq!(both.failure_code, Some("usage_error"));
+        assert_eq!(both.message, "--changed cannot be combined with --file");
+    }
+
+    #[test]
+    fn one_file_gets_the_editors_file_name_and_metadata_findings() {
+        use opentide_workspace::lint::lint_file;
+        let fs = workspace();
+        fs.write("/ws/objects/rules/a.yaml", rule(U1, "A"));
+        // Shares A's name: expected with its UUID's prefix; no organisation.
+        fs.write(
+            "/ws/objects/rules/a-v2.yaml",
+            format!("name: A\nmetadata:\n  uuid: {U2}\n  author: me\n"),
+        );
+        fs.write("/ws/objects/rules/team/n.yaml", rule(U2, "N"));
+        let found = lint_file(
+            &fs,
+            Path::new(ROOT),
+            &LintConfig::default(),
+            Path::new("/ws/objects/rules/a-v2.yaml"),
+        );
+        assert_eq!(
+            found
+                .iter()
+                .map(|f| (f.code(), f.entry.expected.as_deref().unwrap_or("")))
+                .collect::<Vec<_>>(),
+            [
+                ("metadata_recommended", ""),
+                ("filename_mismatch", "objects/rules/a-22222222.yaml"),
+            ]
+        );
+        assert_eq!(found[0].diagnostic.severity, Severity::Info);
+        // A rule without `response`: the editor shows lint's note, as
+        // `opentide lint` reports it (language-server #250).
+        fs.write(
+            "/ws/objects/rules/b.yaml",
+            "name: B\nmetadata:\n  uuid: 33333333-3333-4333-8333-333333333333\n  schema: rule::1.1\n  author: me\n  organisation: us\nconfigurations: {}\n",
+        );
+        let recommended = lint_file(
+            &fs,
+            Path::new(ROOT),
+            &LintConfig::default(),
+            Path::new("/ws/objects/rules/b.yaml"),
+        );
+        assert_eq!(
+            recommended
+                .iter()
+                .map(LintFinding::code)
+                .collect::<Vec<_>>(),
+            ["recommended_field_missing"]
+        );
+        assert_eq!(recommended[0].diagnostic.severity, Severity::Info);
+        assert_eq!(recommended[0].diagnostic.field_path, ["response"]);
+        assert!(
+            lint_file(
+                &fs,
+                Path::new(ROOT),
+                &config("[recommended]\nenabled = false\n"),
+                Path::new("/ws/objects/rules/b.yaml"),
+            )
+            .is_empty()
+        );
+        assert!(
+            lint_file(
+                &fs,
+                Path::new(ROOT),
+                &LintConfig::default(),
+                Path::new("/ws/objects/rules/a.yaml")
+            )
+            .is_empty()
+        );
+        // Not an object file: nothing; the checks lint.toml disables: nothing.
+        assert!(
+            lint_file(
+                &fs,
+                Path::new(ROOT),
+                &LintConfig::default(),
+                Path::new("/ws/objects/rules/team/n.yaml")
+            )
+            .is_empty()
+        );
+        let off = config("[filenames]\nenabled = false\n[metadata]\nenabled = false\n");
+        assert!(
+            lint_file(
+                &fs,
+                Path::new(ROOT),
+                &off,
+                Path::new("/ws/objects/rules/a-v2.yaml")
+            )
+            .is_empty()
+        );
+    }
+
+    /// The language server's lint (#926): `lint_file`'s findings on the
+    /// files it names, or on every object file, in one run that reads the
+    /// objects from the workspace's own parse.
+    #[test]
+    fn the_editor_lint_reads_the_workspace_s_parse() {
+        use opentide_workspace::lint::lint_file;
+        let fs = Arc::new(workspace());
+        fs.write("/ws/objects/rules/a.yaml", rule(U1, "A"));
+        fs.write(
+            "/ws/objects/rules/a-v2.yaml",
+            format!("name: A\nmetadata:\n  uuid: {U2}\n  author: me\n"),
+        );
+        let workspace = Workspace::open(
+            Arc::clone(&fs) as Arc<dyn FileSystem>,
+            opentide_workspace::Options {
+                roots: RootOptions {
+                    repo: Some(PathBuf::from(ROOT)),
+                    cwd: PathBuf::from(ROOT),
+                    ..RootOptions::default()
+                },
+            },
+        )
+        .unwrap();
+        let v2 = PathBuf::from("/ws/objects/rules/a-v2.yaml");
+        let shown = |found: &[LintFinding]| {
+            found
+                .iter()
+                .map(|f| (f.code().to_owned(), f.path().to_owned()))
+                .collect::<Vec<_>>()
+        };
+        let on_disk = lint_file(fs.as_ref(), Path::new(ROOT), &LintConfig::default(), &v2);
+        let expected = vec![
+            (
+                "metadata_recommended".to_owned(),
+                "objects/rules/a-v2.yaml".to_owned(),
+            ),
+            (
+                "filename_mismatch".to_owned(),
+                "objects/rules/a-v2.yaml".to_owned(),
+            ),
+        ];
+        assert_eq!(shown(&on_disk), expected);
+        assert_eq!(
+            shown(&workspace.editor_lint(Some(std::slice::from_ref(&v2)))),
+            expected
+        );
+        assert_eq!(shown(&workspace.editor_lint(None)), expected);
+        assert!(workspace.editor_lint(Some(&[])).is_empty());
+        // The file fixed on disk, the workspace not told: lint reads it
+        // from the disk, the editor's from the workspace's parse.
+        fs.write("/ws/objects/rules/a-v2.yaml", rule(U2, "A v2"));
+        assert!(lint_file(fs.as_ref(), Path::new(ROOT), &LintConfig::default(), &v2).is_empty());
+        assert_eq!(shown(&workspace.editor_lint(Some(&[v2]))), expected);
+    }
+
+    #[test]
+    fn no_workspace_points_at_setup() {
+        let fs = MemoryFs::new();
+        fs.create_dir("/ws");
+        let report = run(&fs, &LintConfig::default(), &options());
+        assert_eq!(
+            report.outcome.as_deref(),
+            Some("Catalogue lint passed, but found no object files under ./")
+        );
+        assert_eq!(report.next_actions[0].command, "opentide setup");
+    }
+
+    #[test]
+    fn the_workspace_reads_its_lint_toml_and_refuses_one_it_cannot_use() {
+        let fs = Arc::new(workspace());
+        fs.write("/ws/objects/rules/r.yaml", rule(U1, "Other"));
+        fs.write(
+            "/ws/.opentide/configurations/lint.toml",
+            "[filenames]\nstyle = \"none\"\n",
+        );
+        let open = |fs: &Arc<MemoryFs>| {
+            Workspace::open(
+                Arc::clone(fs) as Arc<dyn FileSystem>,
+                opentide_workspace::Options {
+                    roots: RootOptions {
+                        repo: Some(PathBuf::from(ROOT)),
+                        cwd: PathBuf::from(ROOT),
+                        ..RootOptions::default()
+                    },
+                },
+            )
+            .unwrap()
+        };
+        let report = open(&fs).lint(None, &options());
+        assert!(report.findings.is_empty(), "{:?}", codes(&report));
+        fs.write(
+            "/ws/.opentide/configurations/lint.toml",
+            "[filenames]\nstyle = \"camel\"\n",
+        );
+        let refused = open(&fs).lint(None, &options());
+        assert_eq!(refused.exit_code, 2);
+        assert!(
+            refused.message.contains("style must be one of"),
+            "{}",
+            refused.message
+        );
+    }
+
+    /// A queries finding names its rule: the SARIF result's
+    /// `logicalLocations` (and every other report) read the diagnostic's
+    /// `object_uuid`, as 0.28.1's does.
+    #[test]
+    fn an_engine_finding_carries_its_rules_uuid() {
+        let engine = opentide_workspace::Diagnostic::new(
+            "kql_unknown_table",
+            Severity::Warning,
+            "unknown table",
+        );
+        let finding = LintFinding::from_engine("objects/rules/r.yaml", Some(U1), engine.clone());
+        assert_eq!(finding.diagnostic.object_uuid, U1);
+        assert_eq!(entry(&finding)["uuid"], serde_json::json!(U1));
+        let without = LintFinding::from_engine("objects/rules/r.yaml", None, engine);
+        assert_eq!(without.diagnostic.object_uuid, "");
+    }
+
+    /// The queries check's calls: each file's text, and whether lint handed
+    /// the check its parse (`check_parsed`) or left it to parse (`check`).
+    #[derive(Default)]
+    struct Counting {
+        calls: std::sync::Mutex<Vec<(String, bool)>>,
+    }
+
+    impl opentide_workspace::lint::LintQueryCheck for Counting {
+        fn check(
+            &self,
+            _: &Path,
+            relative: &str,
+            _: Option<&str>,
+            _: &str,
+        ) -> Result<Vec<LintFinding>, String> {
+            self.calls
+                .lock()
+                .unwrap()
+                .push((relative.to_owned(), false));
+            Ok(Vec::new())
+        }
+
+        fn check_parsed(
+            &self,
+            _: &Path,
+            relative: &str,
+            _: Option<&str>,
+            text: &str,
+            document: &opentide_schema::node::Document,
+        ) -> Result<Vec<LintFinding>, String> {
+            assert_eq!(document.source(), text, "the parse is the text's");
+            self.calls.lock().unwrap().push((relative.to_owned(), true));
+            Ok(Vec::new())
+        }
+    }
+
+    /// #1233: lint parses each object file once. The queries check gets the
+    /// tree lint read the file into, through [`lint`] and through
+    /// [`Workspace::lint`] (which reads the files as `lint` does); a file
+    /// that does not parse is not checked.
+    #[test]
+    fn the_queries_check_reads_the_parse_lint_made() {
+        let fs = Arc::new(workspace());
+        fs.write("/ws/objects/rules/a.yaml", rule(U1, "A"));
+        fs.write("/ws/objects/rules/b.yaml", rule(U2, "B"));
+        fs.write("/ws/objects/rules/c.yaml", "name: [unclosed\n");
+        let check = Counting::default();
+        let options = LintOptions {
+            checks: vec![LintCheck::Queries],
+            query_check: Some(&check),
+            ..options()
+        };
+        let sorted = |check: &Counting| {
+            let mut calls = std::mem::take(&mut *check.calls.lock().unwrap());
+            calls.sort();
+            calls
+        };
+        let expected = [
+            ("objects/rules/a.yaml".to_owned(), true),
+            ("objects/rules/b.yaml".to_owned(), true),
+        ];
+        run(&fs, &LintConfig::default(), &options);
+        assert_eq!(sorted(&check), expected);
+        let workspace = Workspace::open(
+            Arc::clone(&fs) as Arc<dyn FileSystem>,
+            opentide_workspace::Options {
+                roots: RootOptions {
+                    repo: Some(PathBuf::from(ROOT)),
+                    cwd: PathBuf::from(ROOT),
+                    ..RootOptions::default()
+                },
+            },
+        )
+        .unwrap();
+        workspace.lint(None, &options);
+        assert_eq!(sorted(&check), expected);
+    }
+
+    /// A rule whose `metadata` also holds `extra` (lines under `metadata:`).
+    fn dated_rule(extra: &str) -> String {
+        rule(U1, "Dated").replace("  author: me\n", &format!("  author: me\n{extra}"))
+    }
+
+    fn reviewed_findings(extra: &str, lint_toml: &str) -> Vec<LintFinding> {
+        let fs = workspace();
+        fs.write("/ws/objects/rules/dated.yaml", dated_rule(extra));
+        run(&fs, &config(lint_toml), &options())
+            .findings
+            .into_iter()
+            .filter(|finding| finding.code() == "reviewed_before_modified")
+            .collect()
+    }
+
+    #[test]
+    fn reviewed_before_modified_warns_under_the_metadata_check() {
+        let found = reviewed_findings("  modified: 2026-11-20\n  reviewed: 2026-09-01\n", "");
+        assert_eq!(found.len(), 1);
+        let entry = serde_json::to_value(&found[0]).unwrap();
+        assert_eq!(entry["check"], "metadata");
+        assert_eq!(entry["severity"], "warning");
+        assert_eq!(entry["path"], "objects/rules/dated.yaml");
+        assert_eq!(
+            entry["message"],
+            "metadata.reviewed (2026-09-01) is before metadata.modified (2026-11-20)"
+        );
+        assert_eq!(
+            entry["field_path"],
+            serde_json::json!(["metadata", "reviewed"])
+        );
+        // A datetime counts by its day, as written.
+        let found = reviewed_findings(
+            "  modified: 2026-11-20 08:00:00\n  reviewed: 2026-11-19T23:00:00Z\n",
+            "",
+        );
+        assert_eq!(found.len(), 1);
+    }
+
+    #[test]
+    fn reviewed_on_or_after_modified_is_not_reported() {
+        for extra in [
+            "  modified: 2026-11-20\n  reviewed: 2026-11-20\n",
+            "  modified: 2026-11-20\n  reviewed: 2026-12-01\n",
+            "  modified: 2026-11-20T15:00:00Z\n  reviewed: 2026-11-20\n",
+        ] {
+            assert!(reviewed_findings(extra, "").is_empty(), "{extra}");
+        }
+    }
+
+    #[test]
+    fn reviewed_before_modified_skips_a_missing_or_invalid_date() {
+        for extra in [
+            "  modified: 2026-11-20\n",
+            "  reviewed: 2026-09-01\n",
+            "  modified: 2026-11-20\n  reviewed: soon\n",
+            "  modified: 2026-13-45\n  reviewed: 2026-09-01\n",
+            "  modified: 2026-11-20\n  reviewed: 2026-09-01T10:00:00\n",
+        ] {
+            assert!(reviewed_findings(extra, "").is_empty(), "{extra}");
+        }
+    }
+
+    #[test]
+    fn reviewed_before_modified_follows_lint_toml() {
+        let extra = "  modified: 2026-11-20\n  reviewed: 2026-09-01\n";
+        let off = "[metadata.codes]\nreviewed_before_modified = \"off\"\n";
+        assert!(reviewed_findings(extra, off).is_empty());
+        let info = "[metadata.codes]\nreviewed_before_modified = \"error\"\n";
+        assert_eq!(reviewed_findings(extra, info)[0].severity(), "error");
+        let check = "[metadata]\nseverity = \"info\"\n";
+        assert_eq!(reviewed_findings(extra, check)[0].severity(), "info");
+        // `required = []` stops the key demands, not this comparison.
+        assert_eq!(
+            reviewed_findings(extra, "[metadata]\nrequired = []\n").len(),
+            1
+        );
+        assert!(reviewed_findings(extra, "[metadata]\nenabled = false\n").is_empty());
+    }
+
+    #[test]
+    fn reviewed_before_modified_needs_a_schema_with_reviewed() {
+        let extra = "  modified: 2026-11-20\n  reviewed: 2026-09-01\n";
+        let fs = workspace();
+        // rule::1.0 has no `reviewed`: the schema check refuses the key, lint
+        // does not compare it.
+        fs.write(
+            "/ws/objects/rules/old.yaml",
+            dated_rule(extra).replace("rule::1.1", "rule::1.0"),
+        );
+        let report = run(&fs, &LintConfig::default(), &options());
+        assert!(
+            report
+                .findings
+                .iter()
+                .all(|f| f.code() != "reviewed_before_modified"),
+            "{:?}",
+            codes(&report)
+        );
+    }
+
+    #[test]
+    fn the_editor_shows_reviewed_before_modified_at_the_configured_severity() {
+        use opentide_workspace::lint::lint_file;
+        let fs = workspace();
+        fs.write(
+            "/ws/objects/rules/dated.yaml",
+            dated_rule("  modified: 2026-11-20\n  reviewed: 2026-09-01\n"),
+        );
+        let path = Path::new("/ws/objects/rules/dated.yaml");
+        let found = lint_file(&fs, Path::new(ROOT), &LintConfig::default(), path);
+        let finding = found
+            .iter()
+            .find(|f| f.code() == "reviewed_before_modified")
+            .unwrap();
+        assert_eq!(finding.diagnostic.severity, Severity::Warning);
+        let off = config("[metadata.codes]\nreviewed_before_modified = \"off\"\n");
+        assert!(
+            lint_file(&fs, Path::new(ROOT), &off, path)
+                .iter()
+                .all(|f| f.code() != "reviewed_before_modified")
+        );
+    }
+}

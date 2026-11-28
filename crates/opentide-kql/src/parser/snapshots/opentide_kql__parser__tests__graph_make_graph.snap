@@ -1,0 +1,77 @@
+---
+source: crates/opentide-kql/src/parser/tests.rs
+expression: "show(\"T | make-graph a --> b with N on id, (M | take 1) on id2 partitioned-by p (take 1)\")"
+---
+SOURCE_FILE@0..82
+  QUERY@0..82
+    TABULAR_EXPRESSION@0..82
+      TABULAR_SOURCE@0..1
+        TABLE_REF@0..1
+          IDENT@0..1 "T"
+      WHITESPACE@1..2 " "
+      PIPE@2..3 "|"
+      WHITESPACE@3..4 " "
+      MAKE_GRAPH_OPERATOR@4..82
+        MAKE_GRAPH_KW@4..14 "make-graph"
+        WHITESPACE@14..15 " "
+        NAME_REF@15..16
+          IDENT@15..16 "a"
+        WHITESPACE@16..17 " "
+        MAKE_GRAPH_ARROW@17..20
+          MINUS@17..18 "-"
+          MINUS@18..19 "-"
+          CMP_OP@19..20 ">"
+        WHITESPACE@20..21 " "
+        NAME_REF@21..22
+          IDENT@21..22 "b"
+        WHITESPACE@22..23 " "
+        MAKE_GRAPH_NODES@23..56
+          WITH_KW@23..27 "with"
+          WHITESPACE@27..28 " "
+          MAKE_GRAPH_NODE_TABLE@28..35
+            TABULAR_SOURCE@28..29
+              TABLE_REF@28..29
+                IDENT@28..29 "N"
+            WHITESPACE@29..30 " "
+            ON_KW@30..32 "on"
+            WHITESPACE@32..33 " "
+            NAME_REF@33..35
+              IDENT@33..35 "id"
+          COMMA@35..36 ","
+          WHITESPACE@36..37 " "
+          MAKE_GRAPH_NODE_TABLE@37..56
+            TABULAR_SOURCE@37..49
+              PAREN_TABULAR@37..49
+                L_PAREN@37..38 "("
+                TABULAR_EXPRESSION@38..48
+                  TABULAR_SOURCE@38..39
+                    TABLE_REF@38..39
+                      IDENT@38..39 "M"
+                  WHITESPACE@39..40 " "
+                  PIPE@40..41 "|"
+                  WHITESPACE@41..42 " "
+                  TAKE_OPERATOR@42..48
+                    TAKE_KW@42..46 "take"
+                    WHITESPACE@46..47 " "
+                    NUMBER@47..48 "1"
+                R_PAREN@48..49 ")"
+            WHITESPACE@49..50 " "
+            ON_KW@50..52 "on"
+            WHITESPACE@52..53 " "
+            NAME_REF@53..56
+              IDENT@53..56 "id2"
+        WHITESPACE@56..57 " "
+        MAKE_GRAPH_PARTITION@57..82
+          IDENT@57..68 "partitioned"
+          MINUS@68..69 "-"
+          BY_KW@69..71 "by"
+          WHITESPACE@71..72 " "
+          IDENT@72..73 "p"
+          WHITESPACE@73..74 " "
+          L_PAREN@74..75 "("
+          SUBQUERY@75..81
+            TAKE_OPERATOR@75..81
+              TAKE_KW@75..79 "take"
+              WHITESPACE@79..80 " "
+              NUMBER@80..81 "1"
+          R_PAREN@81..82 ")"

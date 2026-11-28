@@ -1,0 +1,15 @@
+// prod:setup_section valid
+rule r {
+  meta:
+    author = "a"
+  setup:
+    graph_override ($g.graph.entity.ip = %hosts.ip)
+  events:
+    $e.metadata.event_type = "USER_LOGIN"
+    $g.graph.entity.ip = $ip
+    $e.principal.ip = $ip
+  match:
+    $ip over 1h
+  condition:
+    $e and $g
+}

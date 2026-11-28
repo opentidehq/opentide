@@ -1,0 +1,2 @@
+// prod:event_query valid
+process where event.type == "start" and process.name : "cmd.exe"

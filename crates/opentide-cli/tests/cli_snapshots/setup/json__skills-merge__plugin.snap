@@ -1,0 +1,63 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: setup/json/skills-merge/plugin
+---
+args: opentide --json setup --skills claude-code --plugin --yes
+exit: 0
+
+━━━ stdout · json, 1 lines
+{
+  "command": "setup",
+  "duration_ms": 0,
+  "exit_code": 0,
+  "failure": null,
+  "message": "Wrote .claude/settings.json",
+  "next_actions": [],
+  "ok": true,
+  "path": "<WS>",
+  "schema_version": 1,
+  "status": "completed",
+  "steps": [
+    {
+      "advice": "Claude Code offers the opentide plugin to whoever opens this project. The plugin starts opentide mcp start itself: other agents install it with cursor: /add-plugin opentidehq/skills; vscode: Chat: Install Plugin From Source → opentidehq/skills (needs chat.plugins.enabled); copilot-cli: copilot plugin marketplace add opentidehq/skills && copilot plugin install opentide@opentide.",
+      "files": [
+        ".claude/settings.json"
+      ],
+      "message": "Agent skills installed",
+      "path": "<WS>",
+      "plugin": "opentide@opentide",
+      "skills": [],
+      "skipped": [
+        "CLAUDE.md"
+      ],
+      "step": "skills",
+      "warnings": [
+        "Left CLAUDE.md unchanged because the file already exists; point it at .agents/skills/ by hand, or delete it and re-run to write opentide's template."
+      ]
+    }
+  ],
+  "summary": {},
+  "warnings": [
+    "Left CLAUDE.md unchanged because the file already exists; point it at .agents/skills/ by hand, or delete it and re-run to write opentide's template."
+  ]
+}
+
+━━━ stderr · empty
+
+━━━ ws/.claude/settings.json · modified 0644
+{
+  // The team's Claude Code settings.
+  "permissions": {"allow": ["Bash(opentide validate:*)"]},
+  "enabledPlugins": {
+    "other@team": true,
+    "opentide@opentide": true
+  },
+  "extraKnownMarketplaces": {
+    "opentide": {
+      "source": {
+        "source": "github",
+        "repo": "opentidehq/skills"
+      }
+    }
+  }
+}

@@ -1,0 +1,358 @@
+# defender tables. Generated from docs/kql/defender-tables.md
+
+[[tables]]
+name = "DeviceProcessEvents"
+profile = "defender"
+docs = "Process creation"
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceprocessevents-table"
+category = "endpoint"
+
+[[tables]]
+name = "DeviceNetworkEvents"
+profile = "defender"
+docs = "Network connections"
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-devicenetworkevents-table"
+category = "endpoint"
+
+[[tables]]
+name = "DeviceFileEvents"
+profile = "defender"
+docs = "File create/modify/delete"
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-devicefileevents-table"
+category = "endpoint"
+
+[[tables]]
+name = "DeviceRegistryEvents"
+profile = "defender"
+docs = "Registry value/key changes"
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceregistryevents-table"
+category = "endpoint"
+
+[[tables]]
+name = "DeviceLogonEvents"
+profile = "defender"
+docs = "Interactive/network logons"
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-devicelgonevents-table"
+category = "endpoint"
+
+[[tables]]
+name = "DeviceImageLoadEvents"
+profile = "defender"
+docs = "DLL/image loads"
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceimageloadevents-table"
+category = "endpoint"
+
+[[tables]]
+name = "DeviceEvents"
+profile = "defender"
+docs = "Misc."
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceevents-table"
+category = "endpoint"
+
+[[tables]]
+name = "DeviceInfo"
+profile = "defender"
+docs = "Device inventory / OS"
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-deviceinfo-table"
+category = "endpoint"
+
+[[tables]]
+name = "DeviceNetworkInfo"
+profile = "defender"
+docs = "Adapters, IP, MAC, domains"
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-devicenetworkinfo-table"
+category = "endpoint"
+
+[[tables]]
+name = "DeviceFileCertificateInfo"
+profile = "defender"
+docs = "Signer certs for files"
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-devicefilecertificateinfo-table"
+category = "endpoint"
+
+[[tables]]
+name = "AlertInfo"
+profile = "defender"
+docs = "Alert metadata (severity, category, title)"
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-alertinfo-table"
+
+[[tables]]
+name = "AlertEvidence"
+profile = "defender"
+docs = "Entities attached to alerts"
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-alertevidence-table"
+
+[[tables]]
+name = "EmailEvents"
+profile = "defender"
+docs = "Delivery, block, junk"
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-emailevents-table"
+category = "xdr"
+
+[[tables]]
+name = "EmailAttachmentInfo"
+profile = "defender"
+docs = "Attachments"
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-emailattachmentinfo-table"
+category = "xdr"
+
+[[tables]]
+name = "EmailUrlInfo"
+profile = "defender"
+docs = "URLs in mail"
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-emailurlinfo-table"
+category = "xdr"
+
+[[tables]]
+name = "EmailPostDeliveryEvents"
+profile = "defender"
+docs = "ZAP / post-delivery"
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-emailpostdeliveryevents-table"
+category = "xdr"
+
+[[tables]]
+name = "UrlClickEvents"
+profile = "defender"
+docs = "Safe Links clicks"
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-urlclickevents-table"
+
+[[tables]]
+name = "CampaignInfo"
+profile = "defender"
+docs = "Email campaigns (preview)"
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-schema-tables"
+
+[[tables]]
+name = "FileMaliciousContentInfo"
+profile = "defender"
+docs = "MDO-processed files in SPO/OD/Teams (preview)"
+
+[[tables]]
+name = "IdentityLogonEvents"
+profile = "defender"
+docs = "AD and Microsoft online auth"
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-identitylogonevents-table"
+category = "xdr"
+
+[[tables]]
+name = "IdentityQueryEvents"
+profile = "defender"
+docs = "LDAP/AD object queries"
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-identityqueryevents-table"
+category = "xdr"
+
+[[tables]]
+name = "IdentityDirectoryEvents"
+profile = "defender"
+docs = "DC identity & system events"
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-identitydirectoryevents-table"
+category = "xdr"
+
+[[tables]]
+name = "IdentityInfo"
+profile = "defender"
+docs = "Account snapshot (Entra + others)"
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-identityinfo-table"
+category = "xdr"
+
+[[tables]]
+name = "IdentityAccountInfo"
+profile = "defender"
+docs = "Account ↔ identity links"
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-schema-tables"
+category = "xdr"
+
+[[tables]]
+name = "IdentityEvents"
+profile = "defender"
+docs = "Other cloud IdP events (preview)"
+category = "xdr"
+
+[[tables]]
+name = "CloudAppEvents"
+profile = "defender"
+docs = "MDA / SaaS / O365 object events"
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-cloudappevents-table"
+category = "xdr"
+
+[[tables]]
+name = "AADSignInEventsBeta"
+profile = "defender"
+docs = "Entra interactive + non-interactive (XDR)"
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-aadsignineventsbeta-table"
+
+[[tables]]
+name = "AADSpnSignInEventsBeta"
+profile = "defender"
+docs = "SP and MI sign-ins (XDR)"
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-aadspnsignineventsbeta-table"
+
+[[tables]]
+name = "EntraIdSignInEvents"
+profile = "defender"
+docs = "Newer Entra sign-in table"
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-schema-tables"
+
+[[tables]]
+name = "EntraIdSpnSignInEvents"
+profile = "defender"
+docs = "Newer SP/MI table"
+
+[[tables]]
+name = "GraphAPIAuditEvents"
+profile = "defender"
+docs = "Graph API audit"
+
+[[tables]]
+name = "OAuthAppInfo"
+profile = "defender"
+docs = "App governance OAuth apps (preview)"
+
+[[tables]]
+name = "DeviceTvmSoftwareInventory"
+profile = "defender"
+category = "endpoint"
+
+[[tables]]
+name = "DeviceTvmSoftwareVulnerabilities"
+profile = "defender"
+category = "endpoint"
+
+[[tables]]
+name = "DeviceTvmSoftwareVulnerabilitiesKB"
+profile = "defender"
+category = "endpoint"
+
+[[tables]]
+name = "DeviceTvmSoftwareEvidenceBeta"
+profile = "defender"
+category = "endpoint"
+
+[[tables]]
+name = "DeviceTvmSecureConfigurationAssessment"
+profile = "defender"
+category = "endpoint"
+
+[[tables]]
+name = "DeviceTvmSecureConfigurationAssessmentKB"
+profile = "defender"
+category = "endpoint"
+
+[[tables]]
+name = "DeviceTvmInfoGathering"
+profile = "defender"
+category = "endpoint"
+
+[[tables]]
+name = "DeviceTvmInfoGatheringKB"
+profile = "defender"
+category = "endpoint"
+
+[[tables]]
+name = "DeviceTvmHardwareFirmware"
+profile = "defender"
+category = "endpoint"
+
+[[tables]]
+name = "DeviceTvmBrowserExtensions"
+profile = "defender"
+category = "endpoint"
+
+[[tables]]
+name = "DeviceTvmBrowserExtensionsKB"
+profile = "defender"
+category = "endpoint"
+
+[[tables]]
+name = "DeviceTvmCertificateInfo"
+profile = "defender"
+category = "endpoint"
+
+[[tables]]
+name = "DeviceBaselineComplianceAssessment"
+profile = "defender"
+category = "endpoint"
+
+[[tables]]
+name = "DeviceBaselineComplianceAssessmentKB"
+profile = "defender"
+category = "endpoint"
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-devicebaselinecomplianceassessmentkb-table"
+
+[[tables]]
+name = "DeviceBaselineComplianceProfiles"
+profile = "defender"
+category = "endpoint"
+citation = "https://learn.microsoft.com/defender-xdr/advanced-hunting-devicebaselinecomplianceprofiles-table"
+
+[[tables]]
+name = "ExposureGraphNodes"
+profile = "defender"
+
+[[tables]]
+name = "ExposureGraphEdges"
+profile = "defender"
+
+[[tables]]
+name = "CloudAuditEvents"
+profile = "defender"
+
+[[tables]]
+name = "CloudDnsEvents"
+profile = "defender"
+
+[[tables]]
+name = "CloudProcessEvents"
+profile = "defender"
+
+[[tables]]
+name = "CloudStorageAggregatedEvents"
+profile = "defender"
+
+[[tables]]
+name = "CloudPolicyEnforcementEvents"
+profile = "defender"
+
+[[tables]]
+name = "BehaviorInfo"
+profile = "defender"
+
+[[tables]]
+name = "BehaviorEntities"
+profile = "defender"
+
+[[tables]]
+name = "DataSecurityEvents"
+profile = "defender"
+
+[[tables]]
+name = "DataSecurityBehaviors"
+profile = "defender"
+
+[[tables]]
+name = "DisruptionAndResponseEvents"
+profile = "defender"
+
+[[tables]]
+name = "MessageEvents"
+profile = "defender"
+
+[[tables]]
+name = "MessagePostDeliveryEvents"
+profile = "defender"
+
+[[tables]]
+name = "MessageUrlInfo"
+profile = "defender"
+
+[[tables]]
+name = "CallActivityEvents"
+profile = "defender"
+
+[[tables]]
+name = "AgentsInfo"
+profile = "defender"
+
+[[tables]]
+name = "AIAgentsInfo"
+profile = "defender"

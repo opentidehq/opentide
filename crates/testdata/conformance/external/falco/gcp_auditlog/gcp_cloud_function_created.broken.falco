@@ -1,0 +1,1 @@
+is_cloudfunctions_service and proc.name in (oops and (gcp.methodName="google.cloud.functions.v1.CloudFunctionsService.CreateFunction")

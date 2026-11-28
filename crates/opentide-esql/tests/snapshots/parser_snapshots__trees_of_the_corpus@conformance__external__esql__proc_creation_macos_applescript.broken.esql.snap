@@ -1,0 +1,145 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/conformance/external/esql/proc_creation_macos_applescript.broken.esql
+---
+SOURCE_FILE@0..375
+  QUERY@0..374
+    FROM_COMMAND@0..37
+      FROM_KW@0..4 "from"
+      WHITESPACE@4..5 " "
+      INDEX_PATTERN@5..6
+        INDEX_NAME@5..6
+          SOURCE_TEXT@5..6 "*"
+      WHITESPACE@6..7 " "
+      METADATA@7..37
+        METADATA_KW@7..15 "metadata"
+        WHITESPACE@15..16 " "
+        METADATA_FIELD@16..19
+          SOURCE_TEXT@16..19 "_id"
+        COMMA@19..20 ","
+        WHITESPACE@20..21 " "
+        METADATA_FIELD@21..27
+          SOURCE_TEXT@21..27 "_index"
+        COMMA@27..28 ","
+        WHITESPACE@28..29 " "
+        METADATA_FIELD@29..37
+          SOURCE_TEXT@29..37 "_version"
+    WHITESPACE@37..38 " "
+    PIPE@38..39 "|"
+    WHITESPACE@39..40 " "
+    UNKNOWN_COMMAND@40..374
+      COMMAND_NAME@40..50
+        COMMAND_WORD@40..50 "frobnicate"
+      WHITESPACE@50..51 " "
+      UNKNOWN_TEXT@51..67
+        UNKNOWN_WORD@51..67 "ends_with(Image,"
+      WHITESPACE@67..68 " "
+      STRING@68..80
+        STRING_LIT@68..80 "\"/osascript\""
+      UNKNOWN_TEXT@80..81
+        UNKNOWN_WORD@80..81 ")"
+      WHITESPACE@81..82 " "
+      UNKNOWN_TEXT@82..85
+        UNKNOWN_WORD@82..85 "and"
+      WHITESPACE@85..86 " "
+      UNKNOWN_TEXT@86..98
+        UNKNOWN_WORD@86..98 "(CommandLine"
+      WHITESPACE@98..99 " "
+      UNKNOWN_TEXT@99..103
+        UNKNOWN_WORD@99..103 "like"
+      WHITESPACE@103..104 " "
+      STRING@104..112
+        STRING_LIT@104..112 "\"* -e *\""
+      WHITESPACE@112..113 " "
+      UNKNOWN_TEXT@113..115
+        UNKNOWN_WORD@113..115 "or"
+      WHITESPACE@115..116 " "
+      UNKNOWN_TEXT@116..127
+        UNKNOWN_WORD@116..127 "CommandLine"
+      WHITESPACE@127..128 " "
+      UNKNOWN_TEXT@128..132
+        UNKNOWN_WORD@128..132 "like"
+      WHITESPACE@132..133 " "
+      STRING@133..142
+        STRING_LIT@133..142 "\"*.scpt*\""
+      WHITESPACE@142..143 " "
+      UNKNOWN_TEXT@143..145
+        UNKNOWN_WORD@143..145 "or"
+      WHITESPACE@145..146 " "
+      UNKNOWN_TEXT@146..157
+        UNKNOWN_WORD@146..157 "CommandLine"
+      WHITESPACE@157..158 " "
+      UNKNOWN_TEXT@158..162
+        UNKNOWN_WORD@158..162 "like"
+      WHITESPACE@162..163 " "
+      STRING@163..170
+        STRING_LIT@163..170 "\"*.js*\""
+      UNKNOWN_TEXT@170..171
+        UNKNOWN_WORD@170..171 ")"
+      WHITESPACE@171..172 " "
+      UNKNOWN_TEXT@172..175
+        UNKNOWN_WORD@172..175 "and"
+      WHITESPACE@175..176 " "
+      UNKNOWN_TEXT@176..179
+        UNKNOWN_WORD@176..179 "not"
+      WHITESPACE@179..180 " "
+      UNKNOWN_TEXT@180..203
+        UNKNOWN_WORD@180..203 "(ends_with(ParentImage,"
+      WHITESPACE@203..204 " "
+      STRING@204..214
+        STRING_LIT@204..214 "\"opencode\""
+      UNKNOWN_TEXT@214..215
+        UNKNOWN_WORD@214..215 ")"
+      WHITESPACE@215..216 " "
+      UNKNOWN_TEXT@216..219
+        UNKNOWN_WORD@216..219 "and"
+      WHITESPACE@219..220 " "
+      UNKNOWN_TEXT@220..231
+        UNKNOWN_WORD@220..231 "CommandLine"
+      WHITESPACE@231..232 " "
+      UNKNOWN_TEXT@232..236
+        UNKNOWN_WORD@232..236 "like"
+      WHITESPACE@236..237 " "
+      STRING@237..250
+        STRING_LIT@237..250 "\"*osascript*\""
+      WHITESPACE@250..251 " "
+      UNKNOWN_TEXT@251..254
+        UNKNOWN_WORD@251..254 "and"
+      WHITESPACE@254..255 " "
+      UNKNOWN_TEXT@255..266
+        UNKNOWN_WORD@255..266 "CommandLine"
+      WHITESPACE@266..267 " "
+      UNKNOWN_TEXT@267..271
+        UNKNOWN_WORD@267..271 "like"
+      WHITESPACE@271..272 " "
+      STRING@272..280
+        STRING_LIT@272..280 "\"* -e *\""
+      WHITESPACE@280..281 " "
+      UNKNOWN_TEXT@281..284
+        UNKNOWN_WORD@281..284 "and"
+      WHITESPACE@284..285 " "
+      UNKNOWN_TEXT@285..296
+        UNKNOWN_WORD@285..296 "CommandLine"
+      WHITESPACE@296..297 " "
+      UNKNOWN_TEXT@297..301
+        UNKNOWN_WORD@297..301 "like"
+      WHITESPACE@301..302 " "
+      STRING@302..336
+        STRING_LIT@302..336 "\"*set imageData to the clipboard*\""
+      WHITESPACE@336..337 " "
+      UNKNOWN_TEXT@337..340
+        UNKNOWN_WORD@337..340 "and"
+      WHITESPACE@340..341 " "
+      UNKNOWN_TEXT@341..352
+        UNKNOWN_WORD@341..352 "CommandLine"
+      WHITESPACE@352..353 " "
+      UNKNOWN_TEXT@353..357
+        UNKNOWN_WORD@353..357 "like"
+      WHITESPACE@357..358 " "
+      STRING@358..373
+        STRING_LIT@358..373 "\"*set fileRef*\""
+      UNKNOWN_TEXT@373..374
+        UNKNOWN_WORD@373..374 ")"
+  WHITESPACE@374..375 "\n"
+--- errors

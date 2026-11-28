@@ -1,0 +1,13 @@
+{
+  "name": "opentide-npm-local-registry-test",
+  "private": true,
+  "description": "CI-only tools of the npm install test (test.mjs): a throwaway local registry and the TypeScript compiler. Never shipped.",
+  "license": "UNLICENSED",
+  "engines": {
+    "node": ">= 22"
+  },
+  "dependencies": {
+    "typescript": "5.9.3",
+    "verdaccio": "6.11.1"
+  }
+}

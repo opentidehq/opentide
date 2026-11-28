@@ -1,0 +1,94 @@
+// A consumer of the generated declarations (index.d.ts): `npm test` type-checks
+// it with `tsc --noEmit`, so a declaration that stops describing the API fails.
+import { capabilities, Connection, main, platforms, runJson, TenantConfig, VERSION, Workspace } from '@opentide/opentide'
+import type {
+  Canceller,
+  Capabilities,
+  ConnectOptions,
+  DeployOptions,
+  DeployOutcome,
+  DeployPlanOptions,
+  DeployWarning,
+  LintOptions,
+  LiveCheck,
+  QueryOptions,
+  QueryResult,
+  ValidateOptions,
+} from '@opentide/opentide'
+
+const options: ValidateOptions = { check: 'schema', files: ['objects/rules/a.yaml'], strict: true, queries: 'warn' }
+// Opening a workspace on disk is a promise; one in memory is not.
+const opened: Promise<Workspace> = Workspace.open('.', { cwd: '.' })
+const memory: Workspace = Workspace.fromFiles('/ws', { 'objects/rules/a.yaml': 'name: A\n' })
+const ws: Workspace = memory
+const root: string = ws.root
+
+const validation = ws.validate(options)
+const failed: boolean = validation.failed
+const exitCode: number = validation.exitCode
+const status: string = validation.checks['schema'].status
+
+const lintOptions: LintOptions = { checks: ['metadata', 'filenames'], strict: false }
+const lint = memory.lint(lintOptions)
+const lintStatus: 'completed' | 'issues' | 'failed' = lint.status
+const failure: string | null = lint.failureCode
+
+const coverage = ws.coverage('T1059')
+const covering: string[] = coverage.rules
+const rules: any[] = ws.rules()
+const families: number = ws.objectives().length + ws.threats().length
+
+const planOptions: DeployPlanOptions = { strategies: ['PREVIEW'], platform: 'sentinel', keepDeprecated: false }
+const planned = ws.deployPlan(planOptions)
+const ok: Promise<boolean> = planned.then((plan) => plan.ok)
+
+const tree: Promise<any> = runJson(['commands'])
+const code: Promise<number> = main(['--version'])
+const version: string = VERSION
+
+// The tenant operations: synchronous configuration, promises for the network.
+const tenants: TenantConfig[] = ws.tenants('sentinel_one')
+const inCode = new TenantConfig('sentinel_one', 'soc', { url: 'https://s1.example', api_token: '$S1_API_TOKEN' })
+const keys: string[] = inCode.setupKeys
+const connectOptions: ConnectOptions = { environment: { S1_API_TOKEN: 't' }, proxy: 'http://proxy:3128', timeout: 30 }
+const connection: Connection = Connection.open(tenants[0] ?? inCode, connectOptions)
+const can: Capabilities = connection.capabilities
+const live: boolean = can.liveValidation
+const known: string[] = platforms()
+const sysdig: Capabilities | null = capabilities('sysdig')
+const canceller: Canceller = connection.canceller()
+const cancelled: boolean = canceller.isCancelled
+const queryOptions: QueryOptions = { language: 's1ql', start: new Date(0).toISOString(), limit: 10, index: ['logs'], dataView: 'v', timeout: 60 }
+const found: Promise<QueryResult> = connection.query('x', queryOptions)
+const checked: Promise<LiveCheck> = connection.validateQuery('x')
+const deployed: Promise<DeployOutcome> = connection.deploy('id', 'create', new Uint8Array())
+const raised: Promise<DeployWarning[]> = deployed.then((outcome) => outcome.warnings)
+// Dates and RFC 3339 strings for the window; an AbortSignal for one operation.
+const controller = new AbortController()
+const dated: QueryOptions = { start: new Date(0), end: '2026-11-12T10:00:00Z', signal: controller.signal }
+const aborted: Promise<QueryResult> = connection.query('x', dated)
+const timed: Promise<LiveCheck> = connection.validateQuery('x', { end: new Date(), signal: AbortSignal.timeout(1000) })
+const deployOptions: DeployOptions = { signal: controller.signal }
+const abortable: Promise<DeployOutcome> = connection.deploy('id', 'delete', '', deployOptions)
+// A delete takes no body (#1142).
+const deleted: Promise<DeployOutcome> = connection.deploy('id', 'delete')
+async function read(): Promise<[string | null, string | null, string | null, Record<string, any>[]]> {
+  const result = await found
+  const check = await checked
+  const outcome = await deployed
+  return [result.columns[0]?.type ?? null, result.vendorQueryId, outcome.remoteId, check.result?.rows ?? []]
+}
+
+// @ts-expect-error: an operation deploy does not have
+connection.deploy('id', 'upsert', '{}')
+// @ts-expect-error: a window's instant is a Date or a string, not a number
+connection.query('x', { start: 0 })
+// @ts-expect-error: a signal is an AbortSignal
+connection.query('x', { signal: true })
+// @ts-expect-error: a check validate does not have
+ws.validate({ check: 'everything' })
+// @ts-expect-error: queries is error, warn or off
+ws.validate({ queries: 'loud' })
+
+export { aborted, abortable, deleted, cancelled, keys, known, live, read, sysdig, timed }
+export { opened, covering, code, families, rules, exitCode, failed, failure, lintStatus, ok, root, status, tree, version }

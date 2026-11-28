@@ -1,0 +1,4 @@
+(open_read or open_directory)
+ and proc.name in (oops and (user_ssh_directory or fd.name startswith /root/.ssh)
+ and not user_known_read_ssh_information_activities
+ and not proc.name in (ssh_binaries)

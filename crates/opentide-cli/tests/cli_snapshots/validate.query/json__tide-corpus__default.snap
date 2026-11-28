@@ -1,0 +1,153 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: validate.query/json/tide-corpus/default
+---
+args: opentide --json validate query
+exit: 0
+
+━━━ stdout · json, 1 lines
+{
+  "command": "validate query",
+  "diagnostics": [],
+  "duration_ms": 0,
+  "engine": {
+    "engine": "1.1.0"
+  },
+  "exit_code": 0,
+  "failure": null,
+  "message": "8 queries valid",
+  "mode": "offline",
+  "next_actions": [],
+  "ok": true,
+  "platform": null,
+  "platforms": [
+    "carbon_black_cloud",
+    "crowdstrike",
+    "elastic",
+    "microsoft_defender",
+    "sentinel",
+    "splunk",
+    "sysdig"
+  ],
+  "queries": [
+    {
+      "column": 7,
+      "errors": 0,
+      "field_path": [
+        "configurations",
+        "sentinel",
+        "query"
+      ],
+      "language": "kql",
+      "line": 28,
+      "path": "Objects/Detection Rules/rule-0001-sentinel-kql.yaml",
+      "platform": "sentinel"
+    },
+    {
+      "column": 7,
+      "errors": 0,
+      "field_path": [
+        "configurations",
+        "microsoft_defender",
+        "query"
+      ],
+      "language": "kql",
+      "line": 28,
+      "path": "Objects/Detection Rules/rule-0002-defender-kql.yaml",
+      "platform": "microsoft_defender"
+    },
+    {
+      "column": 12,
+      "errors": 0,
+      "field_path": [
+        "configurations",
+        "splunk",
+        "query"
+      ],
+      "language": "spl",
+      "line": 27,
+      "path": "Objects/Detection Rules/rule-0003-splunk-spl.yaml",
+      "platform": "splunk"
+    },
+    {
+      "column": 12,
+      "errors": 0,
+      "field_path": [
+        "configurations",
+        "carbon_black_cloud",
+        "query"
+      ],
+      "language": "lucene",
+      "line": 27,
+      "path": "Objects/Detection Rules/rule-0005-carbon-black-lucene.yaml",
+      "platform": "carbon_black_cloud"
+    },
+    {
+      "column": 12,
+      "errors": 0,
+      "field_path": [
+        "configurations",
+        "crowdstrike",
+        "query"
+      ],
+      "language": "cql",
+      "line": 27,
+      "path": "Objects/Detection Rules/rule-0006-crowdstrike-deploy-only.yaml",
+      "platform": "crowdstrike"
+    },
+    {
+      "column": 7,
+      "errors": 0,
+      "field_path": [
+        "configurations",
+        "sentinel",
+        "query"
+      ],
+      "language": "kql",
+      "line": 28,
+      "path": "Objects/Detection Rules/rule-0008-staging-promote.yaml",
+      "platform": "sentinel"
+    },
+    {
+      "column": 7,
+      "errors": 0,
+      "field_path": [
+        "configurations",
+        "elastic",
+        "query"
+      ],
+      "language": "kuery",
+      "line": 30,
+      "path": "Objects/Detection Rules/rule-0009-elastic-kql.yaml",
+      "platform": "elastic"
+    },
+    {
+      "column": 7,
+      "errors": 0,
+      "field_path": [
+        "configurations",
+        "sysdig",
+        "condition"
+      ],
+      "language": "falco",
+      "line": 29,
+      "path": "Objects/Detection Rules/rule-0013-sysdig-falco.yaml",
+      "platform": "sysdig"
+    }
+  ],
+  "queries_validated": 8,
+  "schema_version": 1,
+  "status": "passed",
+  "summary": {
+    "error_files": 0,
+    "errors": 0,
+    "files": 8,
+    "notes": 0,
+    "queries": 8,
+    "warning_files": 0,
+    "warnings": 0
+  },
+  "supported": true
+}
+
+━━━ stderr · empty

@@ -1,0 +1,1 @@
+index=main | streamstats count by src reset_after="("action==\"success\"")"

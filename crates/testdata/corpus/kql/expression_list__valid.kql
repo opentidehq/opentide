@@ -1,0 +1,2 @@
+// prod:expression_list valid
+SecurityEvent | where EventID in (4624, 4625) and Account !in~ ("SYSTEM", "LOCAL SERVICE")

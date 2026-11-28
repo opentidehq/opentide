@@ -1,0 +1,2 @@
+// prod:member_expression valid
+SigninLogs | extend City = LocationDetails.city, Data = parse_json(AdditionalFields).Detail

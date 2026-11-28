@@ -5,26 +5,32 @@ description: The plan to move every opentide implementation into one Rust worksp
 
 # Unified core
 
-**Status:** proposed, 2026-11-07. **Epic:** [#790](https://github.com/opentidehq/opentide/issues/790). **Companion page:** the "opentide Unified Core" artifact (benchmarks, figures).
+**Status:** the core migration (UC-0 to UC-4) is complete on `integration/unified-core` (2026-11-18); proposed 2026-11-07. **Epic:** [#790](https://github.com/opentidehq/opentide/issues/790). **Companion page:** the "opentide Unified Core" artifact (benchmarks, figures).
 
-opentide is implemented twice today. Python decides in the CLI, the SDK and MCP; the Rust engine from `opentidehq/language-server` decides in the editor, fed a catalog generated from the Pydantic models. This plan moves every implementation into one Rust workspace in this repository. The CLI, the Python SDK, the TypeScript SDK, the language server and the WebAssembly build are all built from that one core. Python becomes the SDK wrapper and the CLI launcher; it does no work of its own.
+When this plan was written, opentide was implemented twice. Python decided in the CLI, the SDK and MCP; the Rust engine from `opentidehq/language-server` decided in the editor, fed a catalog generated from the Pydantic models. This plan moves every implementation into one Rust workspace in this repository. The CLI, the Python SDK, the TypeScript SDK, the language server and the WebAssembly build are all built from that one core. Python becomes the SDK wrapper and the CLI launcher; it does no work of its own.
 
-The plan is written for agents implementing it to extreme correctness. Every step is a strangler step: the user-visible contract does not move, and each step is proven by differential tests against the current Python implementation, which stays the oracle until the step's default flips.
+The plan is written for agents implementing it to extreme correctness. Every step is a strangler step: the user-visible contract does not move, and each step was proven by differential tests against the Python implementation, which stayed the oracle until the step's default flipped.
 
 ## Status
 
-Backlog: epic [#790](https://github.com/opentidehq/opentide/issues/790), with one phase issue each (#791 to #798) and one task per `UC-x.y` item; the epic's index maps every item to its issue and dependencies. Each phase's final PR updates this table (UC-X.3).
+The core migration is done on `integration/unified-core`: every implementation is in the Rust workspace, and the command line, the Python SDK, the TypeScript SDK, the language server and the WebAssembly build are built from it. Python only wraps the compiled core.
 
-| Phase | Issue | Status |
-|-------|-------|--------|
-| UC-0 Foundation | #791 | done on `integration/unified-core` ([Phase 0](#phase-0-on-integrationunified-core)) |
-| UC-1 `opentide-schema` | #792 | UC-1.1 done on `integration/unified-core` (ADR and skeleton); the rest not started |
-| UC-2 `opentide-workspace` | #793 | not started |
-| UC-3 `opentide-compile`, `opentide-cli` | #794 | not started |
-| UC-4 `opentide-connectors` | #795 | not started |
-| UC-5 SDKs and distribution | #796 | not started |
-| UC-6 Adoption and decommission | #797 | not started |
-| UC-X Quality gates | #798 | UC-X.1, UC-X.2 and UC-X.3 done on `integration/unified-core` |
+- **Tree-sitter is gone** ([#1231](https://github.com/opentidehq/opentide/issues/1231)): every query parser is pure Rust on `opentide-parse` (ADR 0012), YARA's reads `yara-x-parser`.
+- **The Python oracle is retired** (#1496, #1512, #1522, #1525, under [#1142](https://github.com/opentidehq/opentide/issues/1142)): the command line is held by its own snapshots (`tests/golden/README.md`), not by a comparison with the Python implementation. Frozen artefacts of it remain as fixtures: `opentide-compile`'s `tests/oracle.rs` payloads and the benchmarks' 0.23.0 baselines.
+- **The crate layout is amended** ([ADR 0016](./adr/0016-tide-into-analysis.md), [#1965](https://github.com/opentidehq/opentide/issues/1965)): `opentide-tide` folds into `opentide-analysis`, not into `opentide-workspace`, which keeps no query engine among its dependencies (§4). The code move is tracked on #1965.
+- **Phases.** UC-0 to UC-4 are closed (#791 to #795). UC-5, UC-6 and UC-X (#796, #797, #798) stay open on the items below.
+
+What remains is tracked in open issues, not in this plan:
+
+| Issue | What |
+|-------|------|
+| [#1511](https://github.com/opentidehq/opentide/issues/1511) | Land `integration/unified-core` in `development` and cut 1.0.0-rc.1 |
+| [#838](https://github.com/opentidehq/opentide/issues/838) | UC-5.3: the npm packages (`@opentide/opentide`, `@opentide/wasm`) and their trusted publishers |
+| [opentidehq/vscode-extension#75](https://github.com/opentidehq/vscode-extension/issues/75) | UC-6.1: the VS Code extension without its CPython bundle |
+| [#842](https://github.com/opentidehq/opentide/issues/842) | UC-6.3: archive language-server and publish the migration guide |
+| [#1513](https://github.com/opentidehq/opentide/issues/1513) | Supply chain: replace or drop `chrono` and `humantime` |
+
+The rest of this page is the plan as it was written, kept for its decisions and its evidence; parts changed as it was carried out (the repository layout of section 9, the golden capture of section 5.1).
 
 ### Phase 0 on `integration/unified-core`
 
@@ -51,7 +57,7 @@ Phase 0 merges into `integration/unified-core`, not `development`. The integrati
 ### Decisions taken during Phase 0
 
 - `engine_not_ported` (exit 2) added for `OPENTIDE_ENGINE=rust` on a command with no Rust implementation; `engine_unavailable` unchanged ([#854](https://github.com/opentidehq/opentide/pull/854)).
-- `opentide-compare` is in the layer table (foundation, tier 0) though the [Crates](#crates) table does not name it; it goes with compare mode (UC-6.2). `OPENTIDE_ENGINE` is appended last to the environment variables of `opentide --json commands`, so the oracle's list is a prefix: an approved addition ([#854](https://github.com/opentidehq/opentide/pull/854)).
+- `opentide-compare` was in the layer table (foundation, tier 0) though the [Crates](#crates) table did not name it; it was deleted with the oracle's recordings (#1142). `OPENTIDE_ENGINE` is appended last to the environment variables of `opentide --json commands`, so the oracle's list is a prefix: an approved addition ([#854](https://github.com/opentidehq/opentide/pull/854)).
 - `crowdstrike_unsupported` is kept as a retired code that `opentide explain` still explains, so the CQL import only adds codes ([#859](https://github.com/opentidehq/opentide/pull/859)).
 - The golden budget is 128 MiB of apparent bytes (`cases/` and `blobs/`); `lsp start` is recorded as `--help` only, as `mcp start` is ([#857](https://github.com/opentidehq/opentide/pull/857)).
 - The language server's 0.1 s first-diagnostics target ([Metrics](#11-metrics)) is waived until UC-2.6 ([#856](https://github.com/opentidehq/opentide/pull/856)).
@@ -62,13 +68,14 @@ Phase 0 merges into `integration/unified-core`, not `development`. The integrati
 
 ### Maintainer steps outstanding
 
+Listed at the end of Phase 0 and not checked again since; the release's own steps are in [#1511](https://github.com/opentidehq/opentide/issues/1511).
+
 - Freeze language-server `main`, and disable its opentide canary or accept that it fails.
-- Branch protection on `integration/unified-core`: the required checks of [`.github/AGENTS.md`](https://github.com/opentidehq/opentide/blob/integration/unified-core/.github/AGENTS.md#required-checks), among them `Golden compare`, `Supply chain (cargo deny)`, every `Fuzz smoke` cell including `Fuzz smoke (cql)`, and `Engine release (dry run) / SBOMs`; add `Rust coverage gates` (#855). The Golden workflow (`golden.yml`) is path-filtered, so requiring it blocks pull requests that do not touch its paths.
+- Branch protection on `development` and `integration/unified-core`: exactly one required check, `PR gate` ([`.github/AGENTS.md`](https://github.com/opentidehq/opentide/blob/integration/unified-core/.github/AGENTS.md#required-checks)), which needs every job a pull request runs (`cargo deny`, the release build and its smoke tests on a release pull request among them). Remove any older required check (`Golden compare`, `Fuzz smoke (…)`, `Engine release (dry run) / SBOMs`, `Rust coverage gates`): those jobs are gone or run in the nightly, and a required check that no longer reports blocks every pull request.
 - Registry steps and trusted publishers ([publishing](https://github.com/opentidehq/opentide/blob/integration/unified-core/docs/internal/publishing.md#maintainer-steps)), including `opentide-cql`'s trusted publisher and second owner.
 - The engine release-candidate tag, and the `opentidehq/vscode-extension` pull request that pins it.
 - The `.claude/settings.json` allow-list.
 - Transfer language-server's 9 open issues to this repository.
-- Run `mutants.yml` once to record the mutation baseline (#855).
 - Optional: set the repository variable `PARITY_COMMIT` (#855).
 - [#788](https://github.com/opentidehq/opentide/pull/788) (CrowdStrike offline checks) needs a repin to engine 0.12.0 when it is scheduled.
 
@@ -95,8 +102,8 @@ Phase 0 merges into `integration/unified-core`, not `development`. The integrati
 | D-3 | The CLI is `opentide-cli` (clap). Python's console script is `opentide = "opentide._native:main"`; npm's `bin` calls the same `main(argv)`; standalone binaries come from the same crate | 11–12 ms end to end through Python in the prototype. maturin cannot ship a PyO3 module and a binary in one wheel (PyO3/maturin#368); its guide recommends this route |
 | D-4 | `opentidehq/language-server` merges into this repository with its history and is archived with a pointer. Every crate keeps its name and is published from here | 11.7% of language-server commits (23 of 197, 13 of them regenerating the Tide catalog) and 28 engine pins in 10 days exist only to keep the repositories in step; its test suite needs this repository's Python package |
 | D-5 | An `opentide` facade crate is the Rust SDK and the only crate with a stability promise. Every binding depends on it alone | One API for Rust, Python and TypeScript. Internal crates are published for the facade's sake, documented as internal, as uv, ruff, polars and biome do |
-| D-6 | npm: `@opentide/opentide` is both the SDK and the CLI (`bin: opentide`), with `@opentide/<platform>` native packages (napi-rs 3) and `@opentide/wasm` for the browser. The plain `opentide` name is an alias | The same shape as PyPI. A split into `sdk` and `cli` would be one native module behind two names |
-| D-7 | `opentidehq/vscode-extension` stays a separate repository and consumes `@opentide/opentide` at one pinned version | Different toolchain, release channel and test harness; its coupling becomes one version number |
+| D-6 | npm: `@opentide/opentide` is both the SDK and the CLI (`bin: opentide`), with `@opentide/opentide-<platform>` native packages (napi-rs 3); it is for Node.js, not for the VS Code extension (D-7). The plain `opentide` name is an alias | The same shape as PyPI. A split into `sdk` and `cli` would be one native module behind two names (amended 2026-11-13, ADR 0006) |
+| D-7 | `opentidehq/vscode-extension` stays a separate repository and is WASI-native: it runs the `opentide` CLI compiled to `wasm32-wasip1` (one `.wasm`, pinned to one release) under VS Code's WASI host, the workspace as preopened folders and `opentide serve`, `opentide lsp start` and `opentide mcp start` on stdio. Tenant operations need the network, which WASI does not give: they fail with a clear error there | Different toolchain, release channel and test harness; its coupling becomes one version number. One light module for every platform, vscode.dev included, with the CLI's own behaviour, held to the goldens under wasmtime (amended 2026-11-13, ADR 0007) |
 | D-8 | Connectors are Rust (tokio + reqwest). Third-party platforms keep a Python plugin hook | Six of nine platforms already use plain `requests`; the other three wrap REST APIs. opentide uses only `ClientSecretCredential`, which `azure_identity` 1.0 covers |
 
 Each decision has an ADR on `integration/unified-core` ([index](https://github.com/opentidehq/opentide/blob/integration/unified-core/docs/internal/adr/index.md)): D-1 0002, D-2 0001, D-3 0003, D-4 0004, D-5 0005, D-6 0006, D-7 0007, D-8 0008 (#849, #853).
@@ -139,14 +146,17 @@ These do not change at any step. A change to one is a separate, explicit decisio
 
 ### Crates
 
-Each crate depends only on crates in rows below it. `xtask check-layers` enforces this in CI, from [`xtask/layers.toml`](https://github.com/opentidehq/opentide/blob/integration/unified-core/xtask/layers.toml), the one place the enforced table is written down. It differs from this table in two ways: the bindings sit above the facade, since they wrap it (ADR 0005), and `opentide-compare` (UC-0.7) is a foundation crate that goes with compare mode (UC-6.2). The query crates include `-cql` since language-server 0.12.0 (#859).
+Each crate depends only on crates in rows below it. `xtask check-layers` enforces this in CI, from [`xtask/layers.toml`](https://github.com/opentidehq/opentide/blob/integration/unified-core/xtask/layers.toml), the one place the enforced table is written down. It differs from this table in one way: the bindings sit above the facade, since they wrap it (ADR 0005). The query crates include `-cql` since language-server 0.12.0 (#859).
+
+**Amended ([ADR 0016](./adr/0016-tide-into-analysis.md), #1965).** As first written, the `opentide-workspace` row named language-server's `opentide-analysis` and `opentide-tide` as sources, which reads as folding both crates into the workspace. Both depend on every query engine, so that fold would make `opentide-compile` and `opentide-connectors`, which build on `opentide-workspace`, compile every parser. The workspace took the Tide object checks only; `opentide-tide` folds into `opentide-analysis`, which already depends on it, and `opentide-compile` and `opentide-connectors` never depend on `opentide-analysis`.
 
 | Layer | Crate | Responsibility | From |
 |-------|-------|----------------|------|
 | Facade | `opentide` | The public Rust API, features `schema`, `workspace`, `compile`, `connectors`, `cli`, `lsp`; re-exports; docs | new |
 | Application | `opentide-cli` | clap command tree, output modes, renderers, envelopes, `serve`, `mcp`, `tui`, `main(argv)` | `src/opentide/cli/`, `mcp_server/` |
 | Application | `opentide-lsp` | LSP host over `opentide-workspace`, incremental | language-server `opentide-lsp` |
-| Domain | `opentide-workspace` | Loading, configuration resolution, index, validate, lint, fixes, catalogue, coverage, chaining | `loading/`, `registry/`, `indexing/`, `validation/`, `core/`; language-server `opentide-analysis`, `opentide-tide` checks |
+| Domain | `opentide-workspace` | Loading, configuration resolution, index, validate, lint, fixes, catalogue, coverage, chaining. No query engine: the query checks plug in through its `QueryCheck` trait | `loading/`, `registry/`, `indexing/`, `validation/`, `core/`; the Tide object checks of language-server `opentide-tide` (the checks only, not the crate) |
+| Domain | `opentide-analysis` | The query engines behind one entry point (analyze, highlight, hover, completion, the `QueryCheck` the workspace runs) and Tide YAML in the editor: query injection, the UUID graph, outline, inlay hints, vocabularies (amended, ADR 0016) | language-server `opentide-analysis`, with `opentide-tide` folded in |
 | Domain | `opentide-compile` | Payload compile per platform, deploy plan, docs, exports, explorer, CI templates (minijinja) | `deployment/` planning, `platforms/*/compile`, `documentation/`, `export/`, `ci/` |
 | Domain | `opentide-connectors` | Tenant clients over tokio + reqwest, deploy, live validation, query runners, MISP, migrate-state | `platforms/*/{client,deployer,runner,validator}`, `sharing/`, `query/` |
 | Foundation | `opentide-schema` (+ `-derive`) | The Tide model as code, revisions, migrations, vocabularies, pins, configuration models, generated artifacts | `models/`, `vocabulary/`, `data/pins/`, `generation/` |
@@ -183,6 +193,8 @@ The Python implementation at a frozen tag is the **oracle**. Nothing is ported w
 
 ### 5.1 Golden capture (`xtask golden`)
 
+> **Status:** retired. Once the Rust-owned snapshots held the command line's behaviour ([#1139](https://github.com/opentidehq/opentide/issues/1139)), the recordings, the ledger and `xtask golden`, `compare` and `mcp` were deleted ([#1142](https://github.com/opentidehq/opentide/issues/1142)).
+
 For every command path in `opentide --json commands`, every output mode (`human` through a pseudo-terminal at fixed width, `plain`, `json`, `agent`), and every fixture workspace: record stdout, stderr, exit code, the JSON document, and every file written (path, bytes, mode). Normalise only what is non-deterministic: `duration_ms`, timestamps, absolute paths, temporary directory names, crash-log paths. Normalisation rules are code, reviewed and tested. Recordings live under `tests/golden/cases/<command>/<mode>/<fixture>/<variant>/` (a command path's words joined by `.`, `_root` for the bare program), a file of 16 KiB or more stored once in `tests/golden/blobs/<sha256>`, with their size and coverage in `tests/golden/COVERAGE.md`; they are reviewed like code ([`tests/golden/README.md`](https://github.com/opentidehq/opentide/blob/integration/unified-core/tests/golden/README.md)).
 
 ### 5.2 Differential runner and shadow mode
@@ -209,7 +221,7 @@ For every command path in `opentide --json commands`, every output mode (`human`
 | HTTP | recorded cassettes | Connectors: method, URL, headers (secrets redacted) and body byte-equal to the Python client's; replayed with wiremock |
 | Payload | byte-equality | Deploy compile output per platform and rule |
 | Conformance | cross-SDK | The same corpus through Rust, Python and Node: identical documents |
-| Strength | cargo-llvm-cov, cargo-mutants | Coverage gates per crate (90% for schema and workspace); mutation score tracked for schema and workspace |
+| Strength | cargo-llvm-cov, cargo-mutants | Coverage gates per crate (90% for schema and workspace); mutation testing of schema and workspace once, as a time-boxed experiment (#844), rerun by hand |
 | API | cargo-semver-checks | The facade |
 | Performance | xtask bench | Budgets in [Metrics](#11-metrics); a regression over 10% fails |
 
@@ -304,7 +316,7 @@ Work items are numbered `UC-<phase>.<n>` and filed as sub-issues of the epic, on
 
 | ID | Item | Exit |
 |----|------|------|
-| UC-6.1 | VS Code extension on `@opentide/opentide` and `@opentide/wasm`; CPython bundle removed (filed in `opentidehq/vscode-extension` #75); licence review of an EUPL-1.2 library loaded in-process by the MIT extension | Packages without CPython, about 12 MiB; the licence review recorded |
+| UC-6.1 | VS Code extension on the WASI build of the `opentide` CLI (`@vscode/wasm-wasi`), not on `@opentide/opentide`; CPython bundle removed (filed in `opentidehq/vscode-extension` #75); licence review of an EUPL-1.2 module run in-process by the MIT extension | One universal `.vsix` without CPython, ≤ 15 MiB; every golden case that needs no network passes against the WASI build; the licence review recorded |
 | UC-6.2 | Default flip and Python implementation removal | No Python implementation left; `compare` removed |
 | UC-6.3 | Archive language-server; docs and migration guide | Pointers in place; crates' repository URLs updated |
 
@@ -313,7 +325,7 @@ Work items are numbered `UC-<phase>.<n>` and filed as sub-issues of the epic, on
 | ID | Item | Exit |
 |----|------|------|
 | UC-X.1 | Supply chain and safety: cargo-deny, unsafe policy, fuzzing in CI, SBOM | Gates required |
-| UC-X.2 | Test strength: coverage gates, mutation testing, parity dashboard | Thresholds met |
+| UC-X.2 | Test strength: coverage gates, mutation testing, parity dashboard | Coverage thresholds met; mutation testing run once, as an experiment ([test-strength.md](test-strength.md#mutation-testing)) |
 | UC-X.3 | ADRs and contributor docs | Every decision in this page has an ADR |
 
 ## 7. Rollout
@@ -322,7 +334,7 @@ Work items are numbered `UC-<phase>.<n>` and filed as sub-issues of the epic, on
 2. The default flips per command with a changelog entry; `OPENTIDE_ENGINE=python` remains for one more release as an escape hatch.
 3. The Python implementation of a command is deleted one release after its flip.
 4. SDK names that change keep a deprecated alias for one minor release.
-5. The extension moves when `@opentide/opentide` passes the conformance suite.
+5. The extension moves when the WASI build passes the command line's snapshot cases that need no network (the oracle's `golden check --runner wasi` was retired with the recordings, #1142).
 
 ## 8. Distribution
 
@@ -330,7 +342,7 @@ Work items are numbered `UC-<phase>.<n>` and filed as sub-issues of the epic, on
 |---------|---------|----------|
 | PyPI | `opentide` | abi3 wheel (CPython 3.10+): `opentide._native` (SDK + `main`), a thin Python layer, `.pyi` |
 | crates.io | `opentide` and internal crates | Lockstep versions; internal crates documented as internal |
-| npm | `@opentide/opentide`, `@opentide/<platform>`, `@opentide/wasm`, `opentide` | napi-rs 3 SDK + CLI, native binaries, browser subset, alias |
+| npm | `@opentide/opentide`, `@opentide/opentide-<platform>`, `@opentide/wasm`, `opentide` | napi-rs 3 SDK + CLI (Node.js), native binaries, browser subset, alias |
 | GitHub Releases | `opentide`, `opentide-lsp` binaries | cargo-dist installers, checksums, attestations |
 | Editors | `opentide-lsp` | Neovim, Helix and Zed configurations under `editors/` |
 

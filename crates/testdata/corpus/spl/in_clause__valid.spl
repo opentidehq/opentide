@@ -1,0 +1,2 @@
+``` prod:in_clause valid, prod:value_list
+index=main app IN ("a" "b", c*)

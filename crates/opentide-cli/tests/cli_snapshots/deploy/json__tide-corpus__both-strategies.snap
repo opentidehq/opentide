@@ -1,0 +1,616 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: deploy/json/tide-corpus/both-strategies
+---
+args: opentide --json deploy --strategy PREVIEW --strategy RELEASE --all --dry-run
+exit: 0
+
+━━━ stdout · json, 1 lines
+{
+  "advice": "add (or uncomment) a [[tenants]] entry in .opentide/configurations/platforms/sentinel.toml; add (or uncomment) a [[tenants]] entry in .opentide/configurations/platforms/microsoft_defender.toml; add (or uncomment) a [[tenants]] entry in .opentide/configurations/platforms/splunk.toml; add (or uncomment) a [[tenants]] entry in .opentide/configurations/platforms/sentinel_one.toml; add (or uncomment) a [[tenants]] entry in .opentide/configurations/platforms/carbon_black_cloud.toml; add (or uncomment) a [[tenants]] entry in .opentide/configurations/platforms/crowdstrike.toml; add (or uncomment) a [[tenants]] entry in .opentide/configurations/platforms/harfanglab.toml",
+  "changes": [
+    {
+      "action": "upsert",
+      "name": "Sentinel KQL Rule",
+      "platform": "sentinel",
+      "status": "STAGING",
+      "tenant": null,
+      "uuid": "00000000-0000-4000-8003-000000000001"
+    },
+    {
+      "action": "upsert",
+      "name": "Staging Promote Rule",
+      "platform": "sentinel",
+      "status": "STAGING",
+      "tenant": null,
+      "uuid": "00000000-0000-4000-8003-000000000008"
+    },
+    {
+      "action": "upsert",
+      "name": "Defender KQL Rule",
+      "platform": "microsoft_defender",
+      "status": "STAGING",
+      "tenant": null,
+      "uuid": "00000000-0000-4000-8003-000000000002"
+    },
+    {
+      "action": "upsert",
+      "name": "Splunk SPL Rule",
+      "platform": "splunk",
+      "status": "STAGING",
+      "tenant": null,
+      "uuid": "00000000-0000-4000-8003-000000000003"
+    },
+    {
+      "action": "create",
+      "name": "SentinelOne S1QL Rule",
+      "platform": "sentinel_one",
+      "status": "STAGING",
+      "tenant": null,
+      "uuid": "00000000-0000-4000-8003-000000000004"
+    },
+    {
+      "action": "upsert",
+      "name": "Carbon Black Lucene Rule",
+      "platform": "carbon_black_cloud",
+      "status": "STAGING",
+      "tenant": null,
+      "uuid": "00000000-0000-4000-8003-000000000005"
+    },
+    {
+      "action": "create",
+      "name": "CrowdStrike Deploy Rule",
+      "platform": "crowdstrike",
+      "status": "STAGING",
+      "tenant": null,
+      "uuid": "00000000-0000-4000-8003-000000000006"
+    },
+    {
+      "action": "upsert",
+      "name": "HarfangLab Deploy Rule",
+      "platform": "harfanglab",
+      "status": "STAGING",
+      "tenant": null,
+      "uuid": "00000000-0000-4000-8003-000000000007"
+    },
+    {
+      "action": "upsert",
+      "name": "Elastic KQL Rule",
+      "platform": "elastic",
+      "status": "STAGING",
+      "tenant": "staging",
+      "uuid": "00000000-0000-4000-8003-000000000009"
+    },
+    {
+      "action": "create",
+      "name": "Sysdig Falco Rule",
+      "platform": "sysdig",
+      "status": "STAGING",
+      "tenant": "staging",
+      "uuid": "00000000-0000-4000-8003-0000005d1a90"
+    }
+  ],
+  "command": "deploy",
+  "deployed": [
+    "elastic",
+    "sysdig"
+  ],
+  "detail": "splunk: once a rule's saved search is written or deleted, any other saved search in the tenant's app whose description ends with the line `opentide rule <uuid>` for the rule (one an earlier name of the rule left) is deleted",
+  "dry_run": true,
+  "duration_ms": 0,
+  "exit_code": 0,
+  "failure": null,
+  "message": "Plan: 3 to create, 0 to update, 7 to create or update, 0 to disable, 0 to delete",
+  "missing_tenants": {
+    "carbon_black_cloud": ".opentide/configurations/platforms/carbon_black_cloud.toml",
+    "crowdstrike": ".opentide/configurations/platforms/crowdstrike.toml",
+    "harfanglab": ".opentide/configurations/platforms/harfanglab.toml",
+    "microsoft_defender": ".opentide/configurations/platforms/microsoft_defender.toml",
+    "sentinel": ".opentide/configurations/platforms/sentinel.toml",
+    "sentinel_one": ".opentide/configurations/platforms/sentinel_one.toml",
+    "splunk": ".opentide/configurations/platforms/splunk.toml"
+  },
+  "next_actions": [],
+  "ok": true,
+  "payloads": {
+    "carbon_black_cloud": [
+      {
+        "api_request": [
+          {
+            "body": {
+              "description": "Simulated Carbon Black rule for CLI E2E corpus.",
+              "iocs_v2": [
+                {
+                  "id": "00000000-0000-4000-8003-000000000005",
+                  "match_type": "query",
+                  "values": [
+                    "process_name:cmd.exe"
+                  ]
+                }
+              ],
+              "severity": 8,
+              "tags": [
+                "STAGING",
+                "00000000-0000-4000-8002-000000000001",
+                "T1059"
+              ],
+              "timestamp": "<send-time:timestamp>",
+              "title": "Carbon Black Lucene Rule"
+            },
+            "method": "POST",
+            "url": "<tenant:url>/threathunter/watchlistmgr/v3/orgs/<tenant:org_key>/reports"
+          },
+          {
+            "body": "<tenant-read:watchlist>",
+            "method": "PUT",
+            "url": "<tenant:url>/threathunter/watchlistmgr/v3/orgs/<tenant:org_key>/watchlists/<tenant-read:watchlist_id>"
+          }
+        ],
+        "name": "Carbon Black Lucene Rule",
+        "unresolved": {
+          "reason": "this run deploys the rule to no carbon_black_cloud tenant: the requests are compiled for a tenant whose setup sets nothing, with no exclusion or modifier scoped to a tenant, and a value a tenant's setup gives is shown as <tenant:KEY>",
+          "setup": [
+            "url",
+            "org_key"
+          ]
+        },
+        "uuid": "00000000-0000-4000-8003-000000000005"
+      }
+    ],
+    "crowdstrike": [
+      {
+        "api_request": [
+          {
+            "body": {
+              "comment": "Updated by opentide Crowdstrike Deployer - Author(s) : ",
+              "customer_id": "<tenant:customer_id>",
+              "description": "Simulated CrowdStrike rule for CLI E2E corpus (deploy-only).\n",
+              "name": "CrowdStrike Deploy Rule",
+              "operation": {
+                "schedule": {
+                  "definition": "@every 1h"
+                }
+              },
+              "search": {
+                "filter": "index=main",
+                "lookback": "2h",
+                "outcome": "detection",
+                "trigger_mode": "verbose"
+              },
+              "severity": 70,
+              "status": "active"
+            },
+            "method": "POST",
+            "url": "<tenant:api>/correlation-rules/entities/rules/v1"
+          }
+        ],
+        "name": "CrowdStrike Deploy Rule",
+        "unresolved": {
+          "reason": "this run deploys the rule to no crowdstrike tenant: the requests are compiled for a tenant whose setup sets nothing, with no exclusion or modifier scoped to a tenant, and a value a tenant's setup gives is shown as <tenant:KEY>",
+          "setup": [
+            "api",
+            "customer_id"
+          ]
+        },
+        "uuid": "00000000-0000-4000-8003-000000000006"
+      }
+    ],
+    "elastic": [
+      {
+        "api_request": {
+          "block": {
+            "building_block": false,
+            "enabled": true,
+            "index": [
+              "logs-*"
+            ],
+            "language": "kuery",
+            "name": "",
+            "query": "process.name: \"powershell.exe\"\n",
+            "scheduling": {
+              "interval": "5m",
+              "lookback": "1m"
+            },
+            "schema": "platform::elastic::1.0",
+            "status": "STAGING",
+            "type": "query"
+          },
+          "payload": {
+            "description": "Simulated Elastic rule for CLI E2E corpus.",
+            "enabled": true,
+            "from": "now-6m",
+            "index": [
+              "logs-*"
+            ],
+            "interval": "5m",
+            "language": "kuery",
+            "name": "Elastic KQL Rule",
+            "query": "process.name: \"powershell.exe\"",
+            "risk_score": 73,
+            "rule_id": "00000000-0000-4000-8003-000000000009",
+            "severity": "high",
+            "tags": [
+              "opentide"
+            ],
+            "threat": [
+              {
+                "framework": "MITRE ATT&CK",
+                "tactic": {
+                  "id": "TA0002",
+                  "name": "Execution",
+                  "reference": "https://attack.mitre.org/tactics/TA0002/"
+                },
+                "technique": [
+                  {
+                    "id": "T1059",
+                    "name": "Command and Scripting Interpreter",
+                    "reference": "https://attack.mitre.org/techniques/T1059"
+                  }
+                ]
+              }
+            ],
+            "to": "now",
+            "type": "query"
+          }
+        },
+        "name": "Elastic KQL Rule",
+        "tenant": "staging",
+        "uuid": "00000000-0000-4000-8003-000000000009"
+      }
+    ],
+    "harfanglab": [
+      {
+        "api_request": [
+          {
+            "body": {
+              "block_on_agent": false,
+              "content": "title: HarfangLab Deploy Rule\nid: 00000000-0000-4000-8003-000000000007\ndescription: |\n    Simulated HarfangLab rule for CLI E2E corpus (deploy-only).\nstatus: experimental\nlogsource:\n    category: process_creation\n    product: windows\ndetection:\n    selection:\n        Image: cmd.exe\n    condition: selection\nlevel: high\n",
+              "enabled": true,
+              "global_state": "alert",
+              "hl_status": "experimental",
+              "name": "HarfangLab Deploy Rule",
+              "overwrite": true,
+              "quarantine_on_agent": false,
+              "rule_confidence_override": "moderate",
+              "rule_level_override": "high",
+              "source_id": "<tenant:source_id>"
+            },
+            "method": "PUT",
+            "url": "<tenant:url>/api/data/threat_intelligence/SigmaRule/00000000-0000-4000-8003-000000000007/"
+          }
+        ],
+        "name": "HarfangLab Deploy Rule",
+        "unresolved": {
+          "reason": "this run deploys the rule to no harfanglab tenant: the requests are compiled for a tenant whose setup sets nothing, with no exclusion or modifier scoped to a tenant, and a value a tenant's setup gives is shown as <tenant:KEY>",
+          "setup": [
+            "url",
+            "source_id"
+          ]
+        },
+        "uuid": "00000000-0000-4000-8003-000000000007"
+      }
+    ],
+    "microsoft_defender": [
+      {
+        "api_request": [
+          {
+            "body": {
+              "description": "Simulated Defender rule for CLI E2E corpus.\n",
+              "detectionAction": {
+                "alertTemplate": {
+                  "description": "Simulated Defender rule for CLI E2E corpus.\n",
+                  "entityMappings": {
+                    "hosts": [
+                      {
+                        "deviceIdColumn": "DeviceId"
+                      }
+                    ]
+                  },
+                  "severity": "high",
+                  "tactics": [
+                    {
+                      "tactic": "Execution",
+                      "techniques": [
+                        {
+                          "technique": "T1059"
+                        }
+                      ]
+                    }
+                  ],
+                  "title": "Defender KQL Rule"
+                }
+              },
+              "displayName": "Defender KQL Rule",
+              "queryCondition": {
+                "queryText": "DeviceProcessEvents\n| take 1\n| project Timestamp, DeviceId, ReportId\n"
+              },
+              "schedule": {
+                "frequency": "PT1H"
+              },
+              "status": "enabled"
+            },
+            "method": "PATCH",
+            "url": "https://graph.microsoft.com/beta/security/rules/detectionRules/opentide-00000000-0000-4000-8003-000000000002"
+          }
+        ],
+        "name": "Defender KQL Rule",
+        "unresolved": {
+          "reason": "this run deploys the rule to no microsoft_defender tenant: the requests are compiled for a tenant whose setup sets nothing, with no exclusion or modifier scoped to a tenant, and a value a tenant's setup gives is shown as <tenant:KEY>"
+        },
+        "uuid": "00000000-0000-4000-8003-000000000002"
+      }
+    ],
+    "sentinel": [
+      {
+        "api_request": {
+          "kind": "Scheduled",
+          "properties": {
+            "alertDetailsOverride": {
+              "alertDisplayNameFormat": "Sentinel KQL Rule"
+            },
+            "description": "Simulated Sentinel rule for CLI E2E corpus.\n",
+            "displayName": "Sentinel KQL Rule",
+            "enabled": true,
+            "eventGroupingSettings": {
+              "aggregationKind": "SingleAlert"
+            },
+            "incidentConfiguration": {
+              "createIncident": true,
+              "groupingConfiguration": {
+                "enabled": false,
+                "lookbackDuration": "PT01H00M00S",
+                "matchingMethod": "AllEntities",
+                "reopenClosedIncident": false
+              }
+            },
+            "query": "SecurityEvent\n| where EventID == 4688\n| take 1\n",
+            "queryFrequency": "PT01H00M00S",
+            "queryPeriod": "PT02H00M00S",
+            "severity": "High",
+            "suppressionDuration": "PT01H00M00S",
+            "suppressionEnabled": false,
+            "tactics": [
+              "Execution"
+            ],
+            "techniques": [
+              "T1059"
+            ]
+          }
+        },
+        "name": "Sentinel KQL Rule",
+        "uuid": "00000000-0000-4000-8003-000000000001"
+      },
+      {
+        "api_request": {
+          "kind": "Scheduled",
+          "properties": {
+            "alertDetailsOverride": {
+              "alertDisplayNameFormat": "Staging Promote Rule"
+            },
+            "description": "Rule with higher metadata.version for mutate/promote E2E tests.\n",
+            "displayName": "Staging Promote Rule",
+            "enabled": true,
+            "eventGroupingSettings": {
+              "aggregationKind": "SingleAlert"
+            },
+            "incidentConfiguration": {
+              "createIncident": true,
+              "groupingConfiguration": {
+                "enabled": false,
+                "lookbackDuration": "PT01H00M00S",
+                "matchingMethod": "AllEntities",
+                "reopenClosedIncident": false
+              }
+            },
+            "query": "SecurityEvent | take 1\n",
+            "queryFrequency": "PT01H00M00S",
+            "queryPeriod": "PT02H00M00S",
+            "severity": "Medium",
+            "suppressionDuration": "PT01H00M00S",
+            "suppressionEnabled": false,
+            "tactics": [
+              "Execution"
+            ],
+            "techniques": [
+              "T1059"
+            ]
+          }
+        },
+        "name": "Staging Promote Rule",
+        "uuid": "00000000-0000-4000-8003-000000000008"
+      }
+    ],
+    "sentinel_one": [
+      {
+        "api_request": [
+          {
+            "body": {
+              "data": {
+                "correlationParams": {
+                  "entity": "host",
+                  "matchInOrder": true,
+                  "subQueries": [
+                    {
+                      "matchesRequired": 1,
+                      "subQuery": "EventType = \"Process Create\""
+                    }
+                  ],
+                  "timeWindow": {
+                    "windowMinutes": 60
+                  }
+                },
+                "description": "Simulated SentinelOne rule for CLI E2E corpus.\n",
+                "expirationMode": "Permanent",
+                "name": "SentinelOne S1QL Rule",
+                "networkQuarantine": false,
+                "queryLang": "2.0",
+                "queryType": "correlation",
+                "severity": "High",
+                "status": "Active",
+                "treatAsThreat": "Malicious"
+              },
+              "filter": {
+                "siteIds": [
+                  "<tenant:site_id>"
+                ]
+              }
+            },
+            "method": "POST",
+            "url": "<tenant:url>/web/api/v2.1/cloud-detection/rules"
+          }
+        ],
+        "name": "SentinelOne S1QL Rule",
+        "unresolved": {
+          "reason": "this run deploys the rule to no sentinel_one tenant: the requests are compiled for a tenant whose setup sets nothing, with no exclusion or modifier scoped to a tenant, and a value a tenant's setup gives is shown as <tenant:KEY>",
+          "setup": [
+            "url",
+            "site_id"
+          ]
+        },
+        "uuid": "00000000-0000-4000-8003-000000000004"
+      }
+    ],
+    "splunk": [
+      {
+        "api_request": [
+          {
+            "body": {
+              "name": "Splunk SPL Rule",
+              "search": "index=main | head 1"
+            },
+            "method": "POST",
+            "url": "https://<tenant:url>:<tenant:port>/servicesNS/nobody/<tenant:app>/saved/searches/"
+          },
+          {
+            "body": {
+              "alert.managedBy": "",
+              "alert.severity": 5,
+              "cron_schedule": "0 * * * *",
+              "description": "Simulated Splunk rule for CLI E2E corpus.\n\nopentide rule 00000000-0000-4000-8003-000000000003",
+              "search": "index=main | head 1"
+            },
+            "method": "POST",
+            "url": "https://<tenant:url>:<tenant:port>/servicesNS/nobody/<tenant:app>/saved/searches/Splunk%20SPL%20Rule"
+          },
+          {
+            "body": {
+              "is_scheduled": 1,
+              "search": "index=main | head 1"
+            },
+            "method": "POST",
+            "url": "https://<tenant:url>:<tenant:port>/servicesNS/nobody/<tenant:app>/saved/searches/Splunk%20SPL%20Rule"
+          }
+        ],
+        "name": "Splunk SPL Rule",
+        "unresolved": {
+          "reason": "this run deploys the rule to no splunk tenant: the requests are compiled for a tenant whose setup sets nothing, with no exclusion or modifier scoped to a tenant, and a value a tenant's setup gives is shown as <tenant:KEY>",
+          "setup": [
+            "url",
+            "port",
+            "app"
+          ]
+        },
+        "uuid": "00000000-0000-4000-8003-000000000003"
+      }
+    ],
+    "sysdig": [
+      {
+        "api_request": {
+          "description": "Simulated Sysdig Secure Falco rule for CLI E2E corpus: a shell spawned in a container.",
+          "details": {
+            "append": false,
+            "condition": {
+              "components": [],
+              "condition": "spawned_process and container and proc.name in ( bash, sh, zsh )"
+            },
+            "output": "Sysdig Falco Rule | evt_type=%evt.type user=%user.name user_uid=%user.uid process=%proc.name proc_exepath=%proc.exepath parent=%proc.pname command=%proc.cmdline terminal=%proc.tty container_id=%container.id container_name=%container.name image=%container.image.repository",
+            "priority": "warning",
+            "ruleType": "FALCO",
+            "source": "syscall"
+          },
+          "name": "Sysdig Falco Rule",
+          "tags": [
+            "container",
+            "shell",
+            "T1059.004",
+            "T1059",
+            "mitre_execution",
+            "maturity_incubating"
+          ]
+        },
+        "name": "Sysdig Falco Rule",
+        "tenant": "staging",
+        "uuid": "00000000-0000-4000-8003-0000005d1a90"
+      }
+    ]
+  },
+  "plan": {
+    "carbon_black_cloud": [
+      "00000000-0000-4000-8003-000000000005"
+    ],
+    "crowdstrike": [
+      "00000000-0000-4000-8003-000000000006"
+    ],
+    "elastic": [
+      "00000000-0000-4000-8003-000000000009"
+    ],
+    "harfanglab": [
+      "00000000-0000-4000-8003-000000000007"
+    ],
+    "microsoft_defender": [
+      "00000000-0000-4000-8003-000000000002"
+    ],
+    "sentinel": [
+      "00000000-0000-4000-8003-000000000001",
+      "00000000-0000-4000-8003-000000000008"
+    ],
+    "sentinel_one": [
+      "00000000-0000-4000-8003-000000000004"
+    ],
+    "splunk": [
+      "00000000-0000-4000-8003-000000000003"
+    ],
+    "sysdig": [
+      "00000000-0000-4000-8003-0000005d1a90"
+    ]
+  },
+  "schema_version": 1,
+  "status": "completed",
+  "strategies": [
+    "PREVIEW",
+    "RELEASE"
+  ],
+  "summary": {
+    "create": 3,
+    "delete": 0,
+    "disable": 0,
+    "platforms": 9,
+    "tenants": 2,
+    "update": 0,
+    "upsert": 7
+  },
+  "tenants": {
+    "elastic": {
+      "staging": [
+        "00000000-0000-4000-8003-000000000009"
+      ]
+    },
+    "sysdig": {
+      "staging": [
+        "00000000-0000-4000-8003-0000005d1a90"
+      ]
+    }
+  },
+  "warnings": [
+    "a real deploy would need $ELASTIC_API_KEY and $SYSDIG_SECURE_API_TOKEN, which are unset",
+    "sentinel has no tenants configured in .opentide/configurations/platforms/sentinel.toml, so a real deploy would stop",
+    "microsoft_defender has no tenants configured in .opentide/configurations/platforms/microsoft_defender.toml, so a real deploy would stop",
+    "splunk has no tenants configured in .opentide/configurations/platforms/splunk.toml, so a real deploy would stop",
+    "sentinel_one has no tenants configured in .opentide/configurations/platforms/sentinel_one.toml, so a real deploy would stop",
+    "carbon_black_cloud has no tenants configured in .opentide/configurations/platforms/carbon_black_cloud.toml, so a real deploy would stop",
+    "crowdstrike has no tenants configured in .opentide/configurations/platforms/crowdstrike.toml, so a real deploy would stop",
+    "harfanglab has no tenants configured in .opentide/configurations/platforms/harfanglab.toml, so a real deploy would stop"
+  ]
+}
+
+━━━ stderr · empty

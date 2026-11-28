@@ -1,0 +1,94 @@
+name: Sentinel Full
+
+metadata:
+  uuid: 00000000-0000-4000-8005-000000000001
+  schema: rule::1.0
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+  author: Detection Team
+  contributors:
+    - Analyst One
+    - Detection Team
+
+description: |
+  Sentinel Full for the compile corpus.
+  Second line.
+techniques:
+  - T1059.001
+detection_model: 00000000-0000-4000-8099-000000000001
+
+response:
+  alert_severity: Critical
+
+configurations:
+  sentinel:
+    status: STAGING
+    query: |
+      SecurityEvent
+      | where EventID == 4688
+    template:
+      uuid: 11111111-2222-4333-8444-555555555555
+      version: 1.0.2
+    scheduling:
+      frequency: 30m
+      lookback: PT2H
+    trigger:
+      operator: GreaterThan
+      threshold: 3
+    alert:
+      title: "Full {{Account}}"
+      description: "Seen on {{Computer}}"
+      suppression: PT5H
+      create_incident: false
+      tactics:
+        - Execution
+      techniques:
+        - T1059.001
+        - T1059
+        - T1003.001
+      custom_details:
+        - key: Account
+          column: TargetUserName
+        - key: Host
+          column: Computer
+      dynamic_properties:
+        - property: Tactics
+          column: TacticColumn
+        - property: Severity
+          column: SeverityColumn
+        - property: AlertLink
+          column: LinkColumn
+    grouping:
+      event: AlertPerResult
+      alert:
+        enabled: true
+        reopen_closed_incidents: true
+        grouping_lookback: 1d
+        matching: Selected
+        group_by_entities:
+          - Account
+        group_by_alert_details: []
+    entities:
+      - entity: Account
+        mappings:
+          - identifier: Name
+            column: TargetUserName
+      - entity: Host
+        mappings:
+          - identifier: HostName
+            column: Computer
+    exclusions:
+      - query: "| where Account !in (allowed)"
+        reason: Tenant one's service accounts
+        tenant: one
+        let:
+          allowed: "svc\\one\t\"x\""
+          limit: 5
+          ratio: 0.5
+          strict: true
+      - query: "| where Computer != \"lab\""
+        reason: Everywhere
+        let:
+          limit: 7

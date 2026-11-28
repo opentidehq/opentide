@@ -1,0 +1,20 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: generate.inflight.prune/json/none/help
+---
+args: opentide --json generate inflight prune --help
+exit: 0
+
+━━━ stdout
+Remove inflight shards superseded by committed objects on the default branch.
+
+Usage: opentide generate inflight prune
+
+Options:
+      --help
+          Print help
+
+Examples:
+  $ opentide generate inflight prune
+
+━━━ stderr · empty

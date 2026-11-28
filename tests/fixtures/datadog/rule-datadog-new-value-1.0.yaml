@@ -1,0 +1,29 @@
+# New value (RFC §5.7): a user logs in from a country not seen for them in
+# the last 30 days.
+name: Okta login from a new country
+metadata:
+  uuid: 00000000-0000-4000-8004-000000000002
+  schema: rule::1.0
+  version: 1
+  created: "2026-11-27"
+  modified: "2026-11-27"
+  tlp: clear
+  author: Detection Engineering
+description: |
+  A user logs in to Okta from a country not seen for them in the last 30 days.
+response:
+  alert_severity: Medium
+configurations:
+  datadog:
+    schema: platform::datadog::1.0
+    status: PRODUCTION
+    queries:
+      - query: source:okta @evt.name:user.session.start @evt.outcome:SUCCESS
+        group_by: ["@usr.email"]
+        new_value: ["@network.client.geoip.country.name"]
+    detection:
+      method: new_value
+      learning: 7d
+      forget_after: 30d
+    cases:
+      - severity: medium

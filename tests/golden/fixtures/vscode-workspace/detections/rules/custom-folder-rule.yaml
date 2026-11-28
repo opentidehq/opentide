@@ -1,0 +1,11 @@
+name: Suspicious LSASS Access
+metadata:
+  uuid: ff8bf67e-64dc-460d-b5df-48db643f3560
+  schema: rule::1.1
+  tlp: amber
+detection_model: 04149254-2a5b-4c1e-9f0e-3c1d2b5a6e7f
+configurations:
+  sentinel:
+    query: |
+      DeviceProcessEvents
+      | where FileName =~ "procdump.exe"

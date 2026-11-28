@@ -1,0 +1,31 @@
+#!/usr/bin/python3 -I
+"""RUSTC_WRAPPER for ci.yml's `build` job (#1141): sccache, without CARGO_PRIMARY_PACKAGE.
+
+sccache keys every compile on each CARGO_* variable, and cargo sets
+CARGO_PRIMARY_PACKAGE only for the packages named on the command line. The
+push's `--workspace` build, which saves the compiler cache, names every crate;
+a pull request names its affected crates, so every other workspace crate it
+compiled missed the cache (measured on a one-line opentide-yara change:
+opentide-schema, 48 s on the critical path). rustc does not read the variable;
+clippy does, and engine-lint does not use this wrapper. No workspace crate
+reads it (pyo3 reads it for its own tests only).
+
+Named `sccache`: the cc crate sends the build scripts' C compiles through
+RUSTC_WRAPPER only when its file is named so (they took 21 s uncached).
+Python, not sh: a POSIX shell drops the variables whose names are no shell
+identifiers, such as CARGO_BIN_EXE_opentide-lsp, which the tests need.
+"""
+
+import os
+import shutil
+import sys
+
+here = os.path.dirname(os.path.abspath(__file__))
+path = os.pathsep.join(
+    d for d in os.environ.get("PATH", "").split(os.pathsep) if os.path.abspath(d or ".") != here
+)
+sccache = shutil.which("sccache", path=path)
+if sccache is None:
+    sys.exit("sccache wrapper: no sccache on PATH")
+env = {key: value for key, value in os.environ.items() if key != "CARGO_PRIMARY_PACKAGE"}
+os.execve(sccache, [sccache, *sys.argv[1:]], env)

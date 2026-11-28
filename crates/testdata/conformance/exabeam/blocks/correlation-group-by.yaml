@@ -1,0 +1,20 @@
+name: Correlation group_by
+metadata:
+  uuid: 00000000-0000-4000-8003-000000000103
+  schema: rule::1.0
+  version: 1
+  created: "2026-01-01"
+  modified: "2026-01-02"
+  tlp: clear
+  author: Detection Engineering
+description: |
+  Block case correlation-group-by.
+configurations:
+  exabeam:
+    enabled: true
+    schema: platform::exabeam::1.0
+    status: STAGING
+    sequences:
+      - query: 'activity_type:"app-login" AND outcome:"fail"'
+      - query: 'activity_type:"process-create"'
+    correlation: {within: 1h, group_by: [a, b, c, d]}

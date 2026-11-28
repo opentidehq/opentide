@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "engine": "rust",
+  "scale": 1,
+  "seed": 20261107,
+  "runs": 5,
+  "warmup": 1,
+  "oracle": null,
+  "host": {
+    "os": "linux",
+    "arch": "x86_64",
+    "cpus": 4,
+    "cpu_model": "AMD EPYC 7763 64-Core Processor",
+    "memory_bytes": 16772177920,
+    "runner_image": "ubuntu24 20261102.1"
+  },
+  "workspace_digest": "5978a2ab7c093587",
+  "git_sha": "4444444444444444444444444444444444444444",
+  "created_unix": 1794268800,
+  "results": [
+    {
+      "id": "validate_clean",
+      "command": "opentide --json validate",
+      "status": "not_implemented",
+      "note": "no Rust yet: the Rust CLI (opentide-cli) is UC-3; the command runs in Python"
+    },
+    {
+      "id": "explain",
+      "command": "opentide --json explain vocab_unknown",
+      "status": "not_implemented",
+      "note": "no Rust yet: the Rust CLI (opentide-cli) is UC-3; the command runs in Python"
+    }
+  ]
+}

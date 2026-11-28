@@ -1,0 +1,21 @@
+---
+source: crates/opentide-datadog/tests/trees.rs
+expression: "debug_tree(&body.join(\"\\n\"))"
+input_file: crates/testdata/corpus/datadog/value_and_expr__valid.datadog
+---
+QUERY@0..21
+  FIELD_CLAUSE@0..21
+    ATTRIBUTE@0..11
+      WORD@0..11 "@user_perms"
+    COLON@11..12 ":"
+    VALUE_GROUP@12..21
+      L_PAREN@12..13 "("
+      VALUE_AND_EXPR@13..20
+        TERM@13..14
+          NUMBER@13..14 "4"
+        WHITESPACE@14..15 " "
+        AND_KW@15..18 "AND"
+        WHITESPACE@18..19 " "
+        TERM@19..20
+          NUMBER@19..20 "6"
+      R_PAREN@20..21 ")"

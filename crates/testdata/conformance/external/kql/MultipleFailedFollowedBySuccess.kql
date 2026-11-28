@@ -1,0 +1,28 @@
+let timeRange = 2h;
+let authenticationWindow = 1h;
+let authenticationThreshold = 5;
+SecurityEvent
+| where TimeGenerated > ago(timeRange)
+| where EventID in (4624, 4625)
+| where IpAddress != "-" and isnotempty(Account)
+| extend Outcome = iff(EventID == 4624, "Success", "Failure")
+// bin outcomes into 10 minute windows to reduce the volume of data
+| summarize OutcomeCount=count() by bin(TimeGenerated, 10m), Account, IpAddress, Computer, Outcome
+| project TimeGenerated, Account, IpAddress, Computer, Outcome, OutcomeCount
+// sort ready for sessionizing - by account and time of the authentication outcome
+| sort by TimeGenerated asc, Account, IpAddress, Computer, Outcome, OutcomeCount
+| serialize
+// sessionize into failure groupings until either the account changes or there is a success
+| extend SessionStartedUtc = row_window_session(TimeGenerated, timeRange, authenticationWindow, Account != prev(Account) or prev(Outcome) == "Success")
+// count the failures in each session
+| summarize FailureCountBeforeSuccess=sumif(OutcomeCount, Outcome == "Failure"), StartTime=min(TimeGenerated), EndTime=max(TimeGenerated), make_list(Outcome, 128), make_set(Computer, 128), make_set(IpAddress, 128) by SessionStartedUtc, Account
+// the session must not start with a success, and must end with one
+| where array_index_of(list_Outcome, "Success") != 0
+| where array_index_of(list_Outcome, "Success") == array_length(list_Outcome) - 1
+| project-away SessionStartedUtc, list_Outcome
+// where the number of failures before the success is above the threshold
+| where FailureCountBeforeSuccess >= authenticationThreshold
+// expand out ip and computer for customer entity assignment
+| mv-expand set_IpAddress, set_Computer
+| extend IpAddress = tostring(set_IpAddress), Computer = tostring(set_Computer)
+| extend timestamp=StartTime, NTDomain = split(Account, '\\', 0)[0], Name = split(Account, '\\', 1)[0], HostName = tostring(split(Computer, '.', 0)[0]), DnsDomain = tostring(strcat_array(array_slice(split(Computer, '.'), 1, -1), '.'))

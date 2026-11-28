@@ -1,0 +1,12 @@
+---
+source: crates/opentide-kql/src/parser/tests.rs
+expression: "show(\".show tables details\")"
+---
+SOURCE_FILE@0..20
+  CONTROL_COMMAND@0..20
+    DOT@0..1 "."
+    IDENT@1..5 "show"
+    WHITESPACE@5..6 " "
+    IDENT@6..12 "tables"
+    WHITESPACE@12..13 " "
+    IDENT@13..20 "details"

@@ -1,0 +1,125 @@
+---
+source: crates/opentide-cql/tests/parser_trees.rs
+expression: debug_parse(query(&file))
+input_file: crates/testdata/corpus/cql/array__valid.cql
+---
+SOURCE_FILE@0..154
+  PIPELINE@0..153
+    FUNCTION_CALL@0..41
+      FUNCTION_NAME@0..2
+        FUNCTION_NAME_TOKEN@0..2 "in"
+      L_PAREN@2..3 "("
+      ARGUMENT_LIST@3..40
+        ARGUMENT@3..11
+          FIELD_NAME@3..11
+            WORD@3..11 "severity"
+        COMMA@11..12 ","
+        WHITESPACE@12..13 " "
+        NAMED_ARGUMENT@13..40
+          ARGUMENT_NAME@13..19
+            WORD@13..19 "values"
+          EQ@19..20 "="
+          ARRAY@20..40
+            L_BRACK@20..21 "["
+            STRING@21..31
+              STRING_TOKEN@21..31 "\"critical\""
+            COMMA@31..32 ","
+            WHITESPACE@32..33 " "
+            STRING@33..39
+              STRING_TOKEN@33..39 "\"high\""
+            R_BRACK@39..40 "]"
+      R_PAREN@40..41 ")"
+    WHITESPACE@41..42 " "
+    PIPE@42..43 "|"
+    WHITESPACE@43..44 " "
+    FUNCTION_CALL@44..120
+      FUNCTION_NAME@44..52
+        FUNCTION_NAME_TOKEN@44..52 "selfJoin"
+      L_PAREN@52..53 "("
+      ARGUMENT_LIST@53..119
+        ARGUMENT@53..61
+          FIELD_NAME@53..61
+            WORD@53..61 "email_id"
+        COMMA@61..62 ","
+        WHITESPACE@62..63 " "
+        NAMED_ARGUMENT@63..100
+          ARGUMENT_NAME@63..68
+            WORD@63..68 "where"
+          EQ@68..69 "="
+          ARRAY@69..100
+            L_BRACK@69..70 "["
+            SUBQUERY@70..84
+              L_BRACE@70..71 "{"
+              PIPELINE@71..83
+                FIELD_FILTER@71..83
+                  FIELD_NAME@71..75
+                    WORD@71..75 "from"
+                  EQ@75..76 "="
+                  UNQUOTED_PATTERN@76..83
+                    PATTERN@76..83 "*peter*"
+              R_BRACE@83..84 "}"
+            COMMA@84..85 ","
+            WHITESPACE@85..86 " "
+            SUBQUERY@86..99
+              L_BRACE@86..87 "{"
+              PIPELINE@87..98
+                FIELD_FILTER@87..98
+                  FIELD_NAME@87..89
+                    WORD@87..89 "to"
+                  EQ@89..90 "="
+                  UNQUOTED_PATTERN@90..98
+                    PATTERN@90..98 "*anders*"
+              R_BRACE@98..99 "}"
+            R_BRACK@99..100 "]"
+        COMMA@100..101 ","
+        WHITESPACE@101..102 " "
+        NAMED_ARGUMENT@102..119
+          ARGUMENT_NAME@102..109
+            WORD@102..109 "collect"
+          EQ@109..110 "="
+          ARRAY@110..119
+            L_BRACK@110..111 "["
+            FIELD_NAME@111..115
+              WORD@111..115 "from"
+            COMMA@115..116 ","
+            FIELD_NAME@116..118
+              WORD@116..118 "to"
+            R_BRACK@118..119 "]"
+      R_PAREN@119..120 ")"
+    WHITESPACE@120..121 " "
+    PIPE@121..122 "|"
+    WHITESPACE@122..123 " "
+    FUNCTION_CALL@123..153
+      FUNCTION_NAME@123..129
+        FUNCTION_NAME_TOKEN@123..129 "rename"
+      L_PAREN@129..130 "("
+      ARGUMENT_LIST@130..152
+        NAMED_ARGUMENT@130..152
+          ARGUMENT_NAME@130..135
+            WORD@130..135 "field"
+          EQ@135..136 "="
+          ARRAY@136..152
+            L_BRACK@136..137 "["
+            ARRAY@137..143
+              L_BRACK@137..138 "["
+              FIELD_NAME@138..139
+                WORD@138..139 "a"
+              COMMA@139..140 ","
+              WHITESPACE@140..141 " "
+              FIELD_NAME@141..142
+                WORD@141..142 "b"
+              R_BRACK@142..143 "]"
+            COMMA@143..144 ","
+            WHITESPACE@144..145 " "
+            ARRAY@145..151
+              L_BRACK@145..146 "["
+              FIELD_NAME@146..147
+                WORD@146..147 "c"
+              COMMA@147..148 ","
+              WHITESPACE@148..149 " "
+              FIELD_NAME@149..150
+                WORD@149..150 "d"
+              R_BRACK@150..151 "]"
+            R_BRACK@151..152 "]"
+      R_PAREN@152..153 ")"
+  WHITESPACE@153..154 "\n"

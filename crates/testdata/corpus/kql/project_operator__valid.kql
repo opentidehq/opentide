@@ -1,0 +1,2 @@
+// prod:project_operator valid
+SecurityEvent | project EventID, Computer

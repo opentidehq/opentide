@@ -128,8 +128,9 @@ Set in the MCP host's server environment block when the catalogue is not discove
 | Variable | Required | Purpose |
 |----------|----------|---------|
 | `OPENTIDE_REPO_ROOT` | When cwd is not the detection repo | Detection content repository root |
-| `OPENTIDE_DATA_ROOT` | No | Override bundled package data |
+| `OPENTIDE_DATA_ROOT` | No | Accepted, and changes nothing in this release: the vocabularies are compiled in |
 | `DEBUG` | No | Verbose logging |
+| `OPENTIDE_FETCH` | No | `stdio` makes the WASI build's server ask its client to make each tenant request; the native server ignores it ([`opentide mcp`](../cli/mcp.md#tenant-requests-over-stdio-opentide_fetch)) |
 
 If `OPENTIDE_REPO_ROOT` is unset, `get_repo_root()` walks up from cwd to the nearest directory holding `.opentide/` or `objects/`, without leaving the enclosing git checkout, and falls back to the git top level. See [Repository root resolution](../cli/global-options.md#repository-root-resolution). A literal unexpanded token such as `${workspaceFolder}` is treated as a path, not interpolated by the server.
 
@@ -177,7 +178,7 @@ An Agent Plugins client starts the server in the plugin's own directory, which i
 2. the plugin directory, when it is itself a detection workspace;
 3. the host's project directory: `CLAUDE_PROJECT_DIR`, else `PWD` (the directory the host was started in), when it lies in a detection workspace.
 
-Otherwise the catalogue tools and resources (`search`, `validation_report`, `opentide://rules`, ...) fail with `workspace_not_found`, naming the plugin directory; `explain` and offline `validate_query` still work. Set `OPENTIDE_REPO_ROOT` in the host's settings for the server, or add the server to the detection repository itself with [`opentide setup mcp`](#automated-setup), whose files name the project directory.
+Otherwise the catalogue tools and resources (`search`, `validation_report`, `opentide://rules`, ...) fail with `workspace_not_found`, naming the plugin directory. They fail the same way wherever the server finds no workspace: started in a folder with no `.opentide/` or `objects/` there or above it, or with `OPENTIDE_REPO_ROOT` naming a folder that does not exist, rather than answering an empty catalogue (`validation_report` would say `ok: true` having checked nothing). The test runs on each call, so a workspace created while the server runs is served; `explain` and offline `validate_query` still work. Set `OPENTIDE_REPO_ROOT` in the host's settings for the server, or add the server to the detection repository itself with [`opentide setup mcp`](#automated-setup), whose files name the project directory.
 
 ## Multi-repo workspaces
 
@@ -185,7 +186,7 @@ When the editor workspace is the **opentide package repo** but content lives els
 
 ## Query validation policy
 
-Agents must treat `validate_query` responses with `supported: false` as **not validated** for CrowdStrike, HarfangLab, Sysdig and Bitdefender. Never infer a pass. HarfangLab's and Bitdefender's YARA and Sysdig's Falco are checked offline (`live: false`). Exabeam's `live: true` checks each sequence filter through Search: a pass says the tenant accepts the filter, not that the rule's condition, windows or grouping are right. Google SecOps's YARA-L is checked by the instance's own compiler with `live: true`; with `live: false` the tool answers `valid: null` and names `live: true`.
+Agents must treat `validate_query` responses with `supported: false` as **not validated**: CrowdStrike, HarfangLab, Sysdig and Bitdefender with `live: true` (they are checked offline only). Never infer a pass.
 
 ## Deploy safety
 

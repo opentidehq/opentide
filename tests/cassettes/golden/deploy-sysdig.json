@@ -1,0 +1,292 @@
+{
+  "format": 1,
+  "scenario": "golden/deploy-sysdig",
+  "recorded_from": [
+    "/bin/sh",
+    "-c",
+    "cp -R tests/golden/fixtures/deploy-tenants \"$HOME/ws\" && exec {oracle}/opentide --repo \"$HOME/ws\" --json deploy --platform sysdig --strategy PREVIEW --strategy RELEASE --all --keep-deprecated"
+  ],
+  "digest": "sha256:8241050255cfac2fc56732093d6954a2ddc941db98f7c150933f3e449cd0395d",
+  "interactions": [
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://sysdig-tenant.invalid/api/secure/rules",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "Bearer REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"name\": \"Sysdig create rule\", \"description\": \"A rule the sysdig stand-in tenant receives in a deploy that sends.\", \"tags\": [\"container\", \"shell\", \"maturity_incubating\"], \"details\": {\"ruleType\": \"FALCO\", \"append\": false, \"source\": \"syscall\", \"condition\": {\"condition\": \"spawned_process and container and proc.name in ( bash, sh, zsh )\", \"components\": []}, \"output\": \"Sysdig create rule | evt_type=%evt.type user=%user.name user_uid=%user.uid process=%proc.name proc_exepath=%proc.exepath parent=%proc.pname command=%proc.cmdline terminal=%proc.tty container_id=%container.id container_name=%container.name image=%container.image.repository\", \"priority\": \"error\"}}"
+      },
+      "response": {
+        "status": 201,
+        "headers": [
+          [
+            "server",
+            "sysdig-stand-in"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"name\": \"Sysdig create rule\", \"description\": \"A rule the sysdig stand-in tenant receives in a deploy that sends.\", \"tags\": [\"container\", \"shell\", \"maturity_incubating\"], \"details\": {\"ruleType\": \"FALCO\", \"append\": false, \"source\": \"syscall\", \"condition\": {\"condition\": \"spawned_process and container and proc.name in ( bash, sh, zsh )\", \"components\": []}, \"output\": \"Sysdig create rule | evt_type=%evt.type user=%user.name user_uid=%user.uid process=%proc.name proc_exepath=%proc.exepath parent=%proc.pname command=%proc.cmdline terminal=%proc.tty container_id=%container.id container_name=%container.name image=%container.image.repository\", \"priority\": \"error\"}, \"id\": 42, \"version\": 1}"
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://sysdig-tenant.invalid/api/v2/policies",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "Bearer REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "sysdig-stand-in"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "[{\"id\": 7, \"name\": \"opentide managed detections\", \"ruleNames\": [\"Other rule\"], \"type\": \"falco\", \"version\": 2}, {\"id\": 8, \"name\": \"\\u00dcn\\u00efcode policy\", \"ruleNames\": [], \"type\": \"falco\", \"version\": 1}]"
+      }
+    },
+    {
+      "request": {
+        "method": "PUT",
+        "url": "https://sysdig-tenant.invalid/api/v2/policies/7",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "Bearer REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"id\": 7, \"name\": \"opentide managed detections\", \"ruleNames\": [\"Other rule\", \"Sysdig create rule\"], \"type\": \"falco\", \"version\": 2}"
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "sysdig-stand-in"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"id\": 7, \"name\": \"opentide managed detections\", \"ruleNames\": [\"Other rule\", \"Sysdig create rule\"], \"type\": \"falco\", \"version\": 3}"
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://sysdig-tenant.invalid/api/secure/rules/99",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "Bearer REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 404,
+        "headers": [
+          [
+            "server",
+            "sysdig-stand-in"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"message\": \"not found\"}"
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://sysdig-tenant.invalid/api/secure/rules",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "Bearer REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"name\": \"Sysdig rule the tenant lost\", \"description\": \"A rule the sysdig stand-in tenant receives in a deploy that sends.\", \"tags\": [\"container\", \"shell\", \"maturity_incubating\"], \"details\": {\"ruleType\": \"FALCO\", \"append\": false, \"source\": \"syscall\", \"condition\": {\"condition\": \"spawned_process and container and proc.name in ( bash, sh, zsh )\", \"components\": []}, \"output\": \"Sysdig rule the tenant lost | evt_type=%evt.type user=%user.name user_uid=%user.uid process=%proc.name proc_exepath=%proc.exepath parent=%proc.pname command=%proc.cmdline terminal=%proc.tty container_id=%container.id container_name=%container.name image=%container.image.repository\", \"priority\": \"error\"}}"
+      },
+      "response": {
+        "status": 201,
+        "headers": [
+          [
+            "server",
+            "sysdig-stand-in"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"name\": \"Sysdig rule the tenant lost\", \"description\": \"A rule the sysdig stand-in tenant receives in a deploy that sends.\", \"tags\": [\"container\", \"shell\", \"maturity_incubating\"], \"details\": {\"ruleType\": \"FALCO\", \"append\": false, \"source\": \"syscall\", \"condition\": {\"condition\": \"spawned_process and container and proc.name in ( bash, sh, zsh )\", \"components\": []}, \"output\": \"Sysdig rule the tenant lost | evt_type=%evt.type user=%user.name user_uid=%user.uid process=%proc.name proc_exepath=%proc.exepath parent=%proc.pname command=%proc.cmdline terminal=%proc.tty container_id=%container.id container_name=%container.name image=%container.image.repository\", \"priority\": \"error\"}, \"id\": 43, \"version\": 1}"
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://sysdig-tenant.invalid/api/v2/policies",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "Bearer REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "sysdig-stand-in"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "[{\"id\": 7, \"name\": \"opentide managed detections\", \"ruleNames\": [\"Other rule\", \"Sysdig create rule\"], \"type\": \"falco\", \"version\": 3}, {\"id\": 8, \"name\": \"\\u00dcn\\u00efcode policy\", \"ruleNames\": [], \"type\": \"falco\", \"version\": 1}]"
+      }
+    },
+    {
+      "request": {
+        "method": "PUT",
+        "url": "https://sysdig-tenant.invalid/api/v2/policies/7",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "Bearer REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"id\": 7, \"name\": \"opentide managed detections\", \"ruleNames\": [\"Other rule\", \"Sysdig create rule\", \"Sysdig rule the tenant lost\"], \"type\": \"falco\", \"version\": 3}"
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "sysdig-stand-in"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"id\": 7, \"name\": \"opentide managed detections\", \"ruleNames\": [\"Other rule\", \"Sysdig create rule\", \"Sysdig rule the tenant lost\"], \"type\": \"falco\", \"version\": 4}"
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://sysdig-tenant.invalid/api/secure/rules/98",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "Bearer REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 404,
+        "headers": [
+          [
+            "server",
+            "sysdig-stand-in"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"message\": \"not found\"}"
+      }
+    }
+  ]
+}

@@ -1,0 +1,3 @@
+// prod:set_command invalid
+SET time_zone = ;
+FROM logs-*

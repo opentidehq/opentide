@@ -1,0 +1,1 @@
+index=main | eval s=case(bytes>1, 1, true(, 0)

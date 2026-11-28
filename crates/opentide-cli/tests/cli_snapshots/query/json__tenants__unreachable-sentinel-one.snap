@@ -1,0 +1,54 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: query/json/tenants/unreachable-sentinel-one
+---
+args: opentide --json query --platform sentinel_one --from 2099-01-01T00:00:00Z --to 2099-01-01T01:00:00Z 'src.process.name = '\''cmd.exe'\'''
+exit: 1
+
+━━━ stdout · json, 1 lines
+{
+  "command": "query",
+  "duration_ms": 0,
+  "error": "1 of 1 queries failed on 1 sentinel_one tenant: lab: Cannot reach sentinel_one tenant 'lab' at https://s1.invalid: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error <ECONNREFUSED>)",
+  "exit_code": 1,
+  "failure": {
+    "argument": null,
+    "code": "command_failed",
+    "crash_log": null,
+    "message": "1 of 1 queries failed on 1 sentinel_one tenant: lab: Cannot reach sentinel_one tenant 'lab' at https://s1.invalid: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error <ECONNREFUSED>)",
+    "suggestion": null
+  },
+  "limit": 100,
+  "message": "1 of 1 queries failed on 1 sentinel_one tenant: lab: Cannot reach sentinel_one tenant 'lab' at https://s1.invalid: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error <ECONNREFUSED>)",
+  "next_actions": [],
+  "ok": false,
+  "platform": "sentinel_one",
+  "query": "src.process.name = 'cmd.exe'",
+  "results": [
+    {
+      "elapsed_ms": 0,
+      "error": "Cannot reach sentinel_one tenant 'lab' at https://s1.invalid: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error <ECONNREFUSED>)",
+      "status": "failed",
+      "tenant": "lab",
+      "warnings": []
+    }
+  ],
+  "row_count": 0,
+  "schema_version": 1,
+  "source": "query",
+  "status": "failed",
+  "summary": {
+    "failed": 1,
+    "rows": 0,
+    "tenants": 1
+  },
+  "tenants": [
+    "lab"
+  ],
+  "window": {
+    "from": "2099-01-01T00:00:00.000Z",
+    "to": "2099-01-01T01:00:00.000Z"
+  }
+}
+
+━━━ stderr · empty

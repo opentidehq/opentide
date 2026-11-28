@@ -1,0 +1,29 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: explain/json/none/typo
+---
+args: opentide --json explain vocab_unknwn
+exit: 2
+
+━━━ stdout · json, 1 lines
+{
+  "command": "explain",
+  "duration_ms": 0,
+  "error": "No diagnostic code \"vocab_unknwn\". Run 'opentide explain' to list them.",
+  "exit_code": 2,
+  "failure": {
+    "argument": "code",
+    "code": "usage_invalid_choice",
+    "crash_log": null,
+    "message": "No diagnostic code \"vocab_unknwn\". Run 'opentide explain' to list them.",
+    "suggestion": "vocab_unknown"
+  },
+  "message": "No diagnostic code \"vocab_unknwn\". Run 'opentide explain' to list them.",
+  "next_actions": [],
+  "ok": false,
+  "schema_version": 1,
+  "status": "failed",
+  "summary": {}
+}
+
+━━━ stderr · empty

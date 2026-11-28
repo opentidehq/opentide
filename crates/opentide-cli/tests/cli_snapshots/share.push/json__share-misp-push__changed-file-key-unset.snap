@@ -1,0 +1,34 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: share.push/json/share-misp-push/changed-file-key-unset
+---
+args: opentide --json share push --changed --file objects/rules/rule-b-update.yaml
+exit: 1
+
+━━━ stdout · json, 1 lines
+{
+  "command": "share push",
+  "duration_ms": 0,
+  "error": "An enabled sharing target has no API key",
+  "exit_code": 1,
+  "failure": {
+    "argument": null,
+    "code": "api_key_unset",
+    "crash_log": null,
+    "message": "An enabled sharing target has no API key",
+    "suggestion": null
+  },
+  "message": "An enabled sharing target has no API key",
+  "next_actions": [],
+  "ok": false,
+  "preflight": "api_key_unset",
+  "records": [],
+  "schema_version": 1,
+  "status": "failed",
+  "summary": {},
+  "warnings": [
+    "[[misp]] block \"misp-lab\" api_key is a literal. Use ${ENV_VAR}. The value was replaced with [REDACTED]."
+  ]
+}
+
+━━━ stderr · empty

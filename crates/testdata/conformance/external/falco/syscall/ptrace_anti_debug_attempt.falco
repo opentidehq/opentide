@@ -1,0 +1,1 @@
+evt.type=ptrace and evt.arg.request contains PTRACE_TRACEME and proc_name_exists

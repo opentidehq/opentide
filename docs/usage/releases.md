@@ -7,6 +7,212 @@ description: Public package versions of opentide on PyPI.
 
 Every version of the [`opentide`](https://pypi.org/project/opentide/) package, newest first. Each opens with what it does for you, then the steps to take after upgrading, then what changed, under the same headings every time: Breaking, Added, Changed, Deprecated, Removed, Fixed and Security. Pin a version in CI. [`CHANGELOG.md`](https://github.com/opentidehq/opentide/blob/development/CHANGELOG.md) records every change in full; GitHub Releases are tagged `v*` and publish to PyPI.
 
+## 1.1.0 — 26 November 2026
+
+Microsoft Defender deploys work for every rule, and `validate` catches Defender blocks that would fail at deploy. Its breaking changes correct 1.0.0 defects.
+
+**Install**
+
+```bash
+pip install opentide==1.1.0
+export OPENTIDE_REPO_ROOT=/path/to/detection-repo
+opentide validate --strict
+```
+
+**Upgrade**
+
+1. If you deploy to Microsoft Defender, delete in the Defender portal the custom detections earlier releases created, or rename both their name and their alert title, before the next deploy. Graph refuses a new rule while another holds either, even a disabled one.
+2. If you deploy to Microsoft Defender, run `opentide validate`. Add `key` (the `RegistryKey` column, returned by the query) to each `registry_values` mapping it reports as `microsoft_defender_entity_identifier`.
+3. For each `microsoft_defender_column_not_in_output` or `microsoft_defender_required_columns` it reports, correct the column the block names, or add it to the query's final `project`.
+4. Run `opentide lint --verbose --check queries` and end each query it reports as `microsoft_defender_unprojected_output` with the `| project` it suggests.
+5. If your CI runs `opentide lint --strict` (the pipeline `opentide setup ci` generates does), fix each `microsoft_defender_impacted_asset_identifier` and `microsoft_defender_column_type` it reports: `validate --strict` passes them, `lint --strict` fails on any warning. To keep the previous result instead, make them notes under `[queries.codes]` in `.opentide/configurations/lint.toml` (`microsoft_defender_column_type = "info"`).
+
+**Breaking**
+
+- **Microsoft Defender rules are deployed as `opentide-<uuid>`.** Graph refuses an id that begins with a digit, so most rules failed with HTTP 400. Rules 1.0.0 deployed are not touched; one that blocks a create fails it with `microsoft_defender_rule_conflict` ([#1886](https://github.com/opentidehq/opentide/issues/1886)).
+- **`validate` refuses a Defender registry value without its `key`.** Graph refused such a rule at deploy; it is now the error `microsoft_defender_entity_identifier` ([#1884](https://github.com/opentidehq/opentide/issues/1884)).
+- **`validate` fails a Defender block whose columns its query does not return.** `microsoft_defender_column_not_in_output` names a column the block maps that the query lacks, and `microsoft_defender_required_columns` a column a custom detection needs ([#1885](https://github.com/opentidehq/opentide/issues/1885)).
+
+**Added**
+
+- **`validate` warns when a Defender device or user has no strong identifier**, as `microsoft_defender_impacted_asset_identifier`. `validate --strict` does not fail on it ([#1884](https://github.com/opentidehq/opentide/issues/1884)).
+- **`lint` flags Defender queries that return columns the rule does not use**, and suggests the `| project` to end them with. It warns about an entity mapped from a `dynamic`, `datetime`, `bool` or `timespan` column ([#1885](https://github.com/opentidehq/opentide/issues/1885)).
+- **Editor quick fixes for Defender columns**: replace a misspelt column, or append the suggested `| project` ([#1885](https://github.com/opentidehq/opentide/issues/1885)).
+
+**Fixed**
+
+- **Defender queries no longer offer Log Analytics columns** such as `TimeGenerated` and `TenantId`, which advanced hunting does not have ([#1885](https://github.com/opentidehq/opentide/issues/1885)).
+
+See the [CHANGELOG](https://github.com/opentidehq/opentide/blob/development/CHANGELOG.md#110--2026-11-26) for every change.
+
+**Links**
+
+- [PyPI](https://pypi.org/project/opentide/1.1.0/)
+- [crates.io](https://crates.io/crates/opentide/1.1.0)
+- [npm](https://www.npmjs.com/package/@opentide/opentide/v/1.1.0)
+- [GitHub Release](https://github.com/opentidehq/opentide/releases/tag/v1.1.0)
+- [CHANGELOG](https://github.com/opentidehq/opentide/blob/development/CHANGELOG.md)
+
+## 1.0.0 — 25 November 2026
+
+opentide runs on one Rust core: a far smaller install, commands that start in about 20 ms, and SDKs for Python, Rust and Node.js.
+
+**Install**
+
+```bash
+pip install opentide==1.0.0
+export OPENTIDE_REPO_ROOT=/path/to/detection-repo
+opentide validate --strict
+```
+
+**Upgrade**
+
+1. If your code imported a library that came with opentide (`requests`, `rich`, `pyyaml`, a vendor SDK, …), add it to your own dependencies: opentide installs none. If you write or run a platform plugin, install `opentide[plugins]`.
+2. Run `opentide validate` and fix what it now refuses: YAML 1.2 values (`enabled: yes`, `"42"` in an integer field, `<<: *base`), a `created` or `modified` that is not a date, a misspelt `threat.chaining` key, a folded (`>-`) query with a `//` line (write it as `|-`), a misspelt Sentinel table (`kql_table_misspelt`), CrowdStrike CQL errors, YARA-X errors, and unknown keys such as `[debug] mdr_test_uuids` or HarfangLab's `[tenants.setup] type`.
+3. If you deploy to Defender for Endpoint, move each `configurations.defender_for_endpoint` block to `configurations.microsoft_defender` in its 1.0 shape. Delete the `defender_for_endpoint` entries of deployment state, and in the portal delete the rules earlier releases created, or rename both their name and their alert title: each rule is created anew under its UUID, and Graph refuses the create while another rule holds its name or alert title, even a disabled one.
+4. Put any job you added to a generated pipeline between `# opentide:user-begin` and `# opentide:user-end`, then run `opentide setup ci <github|gitlab|azure> --yes`. Add each variable its header lists that your CI secret store lacks. The production deploy now retires rules whose file you deleted: pass `--no-prune` to keep only the warning.
+5. If your CI is not GitHub Actions, GitLab or Azure Pipelines, set `CI_COMMIT_BRANCH` and `OPENTIDE_DEFAULT_BRANCH` for `opentide deploy --strategy RELEASE`. If it deploys on pull requests from a shallow checkout, fetch the base branch too (`fetch-depth: 0`).
+6. Run `opentide setup --org "<name>"` once, then put your organisation's UUID in `.opentide/configurations/organisation.toml`: `opentide new` reads it from there only.
+7. If you deploy to Splunk and a dashboard, lookup or alert reads `MDR_UUID`, `MDR_status`, the `soc_macro_auto_mdr_mapping` macro or `alert.managedBy`, give it another source before you deploy: saved searches are now your query as written.
+8. If you filter Elastic rules or alerts on the tag `OpenTide`, filter on `opentide`.
+9. If two HarfangLab tenants point at one manager, one for Sigma and one for YARA, keep one: each tenant now deploys both kinds.
+10. If your Python code uses `Opentide.initialise()`, `opentide.validation` or `opentide.documentation`, move it to `opentide.Workspace` ([Migrating to Workspace](../sdk/migration.md)). Catch `opentide.models.ValidationError` where you caught `pydantic.ValidationError`.
+11. If a script reads `--json`, read the changes under Breaking: deploy rows `unchanged`, `skipped` and `not_attempted`, `create` and `update` where Sentinel and Elastic said `upsert`, and the new exit codes.
+12. If your editor runs an `opentide-lsp` from opentidehq/language-server, run `opentide lsp start` or take the binary from opentide's GitHub Release. Run `opentide --install-completion` again if you installed shell completion.
+13. If an MCP client calls `get_chaining` and needs more than one hop, pass `depth`. Read template resources as YAML.
+14. If you install on Alpine or another musl distribution, install a Rust toolchain first: `pip install opentide` builds from the sdist.
+
+**Breaking**
+
+- **The Python implementation is gone.** Every command, `opentide mcp start`, the language server, `opentide tui` and `opentide serve` run on the Rust core compiled into the package. The deprecated SDK entry points (`Opentide.initialise()`, `run_validation`, the documentation writers) and the undocumented modules are removed, with no shims ([#841](https://github.com/opentidehq/opentide/issues/841)).
+- **`pip install opentide` installs no Python dependency.** Code that used `requests`, `rich`, `pydantic` or a vendor SDK through opentide declares it. A platform plugin needs `opentide[plugins]` ([#1180](https://github.com/opentidehq/opentide/issues/1180)).
+- **Defender for Endpoint is now Microsoft Defender.** The platform is `microsoft_defender`, on the Graph beta custom detection API, and its block is `platform::microsoft_defender::1.0`. `defender_for_endpoint` is an unknown key and platform.
+- **`validate` is stricter.**
+  - Objects are read as YAML 1.2, with field types as declared.
+  - CrowdStrike queries are checked as CQL, and YARA as YARA-X compiles it.
+  - Dates must be dates, and `threat.chaining` keys are checked.
+  - A `//` line in a folded query fails.
+  - A misspelt Sentinel table is the error `kql_table_misspelt`.
+  - CrowdStrike and Defender severities must be `Informational`, `Low`, `Medium`, `High` or `Critical`.
+- **Generated pipelines must be regenerated.** Tenant variables are mapped per step, a 0.28.1 GitLab pipeline loses its Code Quality report, and status promotion happens only on a push to the default branch.
+- **Splunk deploys your SPL as written.** No `MDR_*` eval or mapping macro is appended, and `alert.managedBy` is written empty ([#1657](https://github.com/opentidehq/opentide/issues/1657)).
+- **`opentide deploy --json` reports what happened.**
+  - `unchanged` for a rule the tenant already holds.
+  - `skipped` for a rule no tenant takes.
+  - `not_attempted` when a tenant fails before any rule.
+  - `create` or `update` instead of `upsert` on Sentinel and Elastic.
+  - A dry run's `api_request` is the request a deploy sends.
+- **Exit codes and usage errors.** A repeated `--platform` and an empty `setup --name` exit 2, `--platform` with an `info` section exits 2, and `query` outside a workspace exits 1 with `workspace_not_found`.
+- **Renamed codes.** `filename_slug` is `filename_mismatch`, and `missing_author` and `missing_organisation` are `metadata_recommended`. `validate --file` with a missing path is `file_not_found`.
+- **Elastic rules are tagged `opentide`**, not `OpenTide`.
+- **HarfangLab's `[tenants.setup] type` is removed**: each tenant takes Sigma and YARA rules.
+- **`opentide new` takes the organisation from `organisation.toml` only**, which `setup --org` writes.
+- **`deploy` on a pull request no longer fetches `origin`**: a shallow checkout needs the base branch.
+- **MCP changes.** `get_chaining` returns one hop by default, template resources are YAML, a failed live tool sets `isError: true`, and `opentide://index` no longer lists the Python package's schema sources.
+- **No musl builds and no Windows executables.** Alpine builds from the sdist. Windows installs from PyPI or npm.
+
+**Added**
+
+- **Three SDKs on one core.** Python (`opentide.Workspace`, with `async` tenant methods), Rust (the `opentide` crate) and Node.js (`@opentide/opentide`) open a workspace, validate, lint, plan a deploy, and query, check and deploy on tenants ([SDK](../sdk/index.md)).
+- **One release publishes everywhere.** PyPI, crates.io (`cargo install opentide --features cli`), npm (`npx @opentide/opentide`) and the GitHub Release's Linux and macOS binaries, all at one version, attested and scanned before they publish ([#840](https://github.com/opentidehq/opentide/issues/840)).
+- **`opentide tui`, a new terminal UI**, with the same tabs, keys and object page.
+- **Microsoft Defender custom detections in full.** Entities, automated actions, custom details, device groups, lookback and alert grouping, with techniques sent as a tactics tree.
+- **Retire a rule by deleting its file.** `opentide deploy` warns about deployed rules whose file is gone, and `--prune` removes them from the tenants. The production job `setup ci` generates passes it ([#1855](https://github.com/opentidehq/opentide/pull/1855)).
+- **`opentide doctor --live` checks each tenant's connection** ([#1658](https://github.com/opentidehq/opentide/issues/1658)).
+- **Redeploys skip unchanged rules** on Sentinel, Elastic and Splunk, reported as `unchanged`.
+- **`opentide deploy` deploys everything it can, then reports every failure**, in `--json` and in the CI job summary.
+- **More languages checked offline and in the editor:** CQL, YARA, YARA-L, the Exabeam Query Language and Graylog's Lucene.
+- **Platform plugins.** A package adds a detection platform with `opentide.plugins.PlatformPlugin` ([#835](https://github.com/opentidehq/opentide/issues/835)).
+- **Generated pipelines.** `setup ci --stdout` prints the pipeline, `--app-token` pushes with a GitHub App token, `azure --variable-group` links a Library group, and jobs between `# opentide:user-begin` and `# opentide:user-end` survive a regenerate.
+- **`lint.toml` sets the severity of one code**, and `lint` warns when a rule was modified after its last review.
+- **MCP tools have titles and behaviour hints**, so hosts can tell read-only tools from `deploy_rule`.
+
+**Changed**
+
+- **Commands start in about 20 ms, and large workspaces are several times faster**: a 1,100-object workspace validates in 0.43 s, with 40% less memory.
+- **Every query language is parsed by opentide's own parsers.** Syntax errors say what was expected, and the editor colours queries before the language server answers.
+- **Tenants are reached through opentide's own connectors**, not the vendor SDKs: errors name the platform and the HTTP status, not a Python exception.
+- **Messages, `--help` and progress read differently**, with the same findings, codes and `--json` fields: each difference from 0.28.1 is in the CHANGELOG.
+- **Generated pipelines run one deploy at a time per environment.**
+- **The `att&ck` vocabulary follows ATT&CK 20.1.**
+- **`opentide setup vscode` recommends the VS Code extension**, which runs opentide as WebAssembly.
+
+**Deprecated**
+
+- **`model_fields`, `model_construct`, `model_rebuild` and `model_post_init` warn on the Tide models.** Read `__tide_fields__` for the fields, and call `model_validate` where you called `model_construct`.
+
+**Removed**
+
+- **The `malapi` and `stakeholders` vocabularies.** No field takes their values; objects need no change.
+- **`OPENTIDE_CACHE_DIR`** is no longer read.
+
+**Fixed**
+
+- **More than two hundred fixes since 0.28.1.** Among them:
+  - Azure pushes of several commits deploy all of them.
+  - Files opentide writes are replaced whole, never half-written.
+  - A failed or interrupted `generate` leaves the previous output in place.
+  - Deploys no longer re-send a rule creation on a server error.
+  - `setup` keeps comments, layout and line endings in the files it edits.
+  - KQL `search *`, graph operators and many other forms parse.
+
+**Security**
+
+- **Tenant tokens and API keys go only to the tenant's own host.** A redirect elsewhere fails the call, and debug output never shows them.
+- **`url` is 2.5.9, for RUSTSEC-2026-0592**, and heapless 0.8 is out of the dependency tree (RUSTSEC-2026-0578 to 0582).
+- **A query crafted to collide in a hash table no longer slows the parser down** ([#1616](https://github.com/opentidehq/opentide/issues/1616)).
+
+See the [CHANGELOG](https://github.com/opentidehq/opentide/blob/development/CHANGELOG.md#100--2026-11-25) for every change.
+
+**Links**
+
+- [PyPI](https://pypi.org/project/opentide/1.0.0/)
+- [crates.io](https://crates.io/crates/opentide/1.0.0)
+- [npm](https://www.npmjs.com/package/@opentide/opentide/v/1.0.0)
+- [GitHub Release](https://github.com/opentidehq/opentide/releases/tag/v1.0.0)
+- [CHANGELOG](https://github.com/opentidehq/opentide/blob/development/CHANGELOG.md)
+
+## 0.28.1 — 13 November 2026
+
+Optional fields such as `author` are notes, not warnings: `lint --strict` no longer fails on them, and `--verbose` shows them.
+
+**Install**
+
+```bash
+pip install opentide==0.28.1
+export OPENTIDE_REPO_ROOT=/path/to/detection-repo
+opentide validate --strict
+```
+
+**Upgrade**
+
+1. If your CI runs `opentide lint --strict` to require `author` or `organisation`, set `severity = "warning"` under `[metadata]` in `.opentide/configurations/lint.toml`. Notes no longer fail `--strict`.
+
+**Added**
+
+- **`--verbose` prints notes.** A note is a finding worth knowing that is not wrong, such as a missing optional field. `validate`, `lint` and `validate query` hide notes by default, count them, and suggest the same command with `--verbose`. `--json` and reports always include them ([#1028](https://github.com/opentidehq/opentide/issues/1028)).
+- **`opentide lint` reports a rule without `configurations` or `response` as a note.** The new `recommended` check, configured with `[recommended]` in `lint.toml` ([#1028](https://github.com/opentidehq/opentide/issues/1028)).
+
+**Changed**
+
+- **The analysis engine is [language-server 0.16.1](https://github.com/opentidehq/language-server/releases/tag/v0.16.1).** The editor and `opentide tui` report missing optional fields as information, and warn on Exabeam `activity_type`, `subject` and `outcome` values the CIM lacks.
+- **`lint --strict` fails only on errors and warnings.** Raise a check's `severity` in `lint.toml` to gate on it ([#1028](https://github.com/opentidehq/opentide/issues/1028)).
+- **`setup skills` installs the catalogue's `detection-engineering`**, and falls back to the packaged copy when it cannot download it ([#1015](https://github.com/opentidehq/opentide/pull/1015)).
+
+**Fixed**
+
+- **`opentide lint` reports Graylog and YARA-L query warnings**, which it dropped before ([#1015](https://github.com/opentidehq/opentide/pull/1015)).
+- **The packaged authoring skills have frontmatter**, so agents find them ([#1015](https://github.com/opentidehq/opentide/pull/1015)).
+- **`opentide explain` calls a warning-only YARA code a warning** ([#1015](https://github.com/opentidehq/opentide/pull/1015)).
+
+See the [CHANGELOG](https://github.com/opentidehq/opentide/blob/development/CHANGELOG.md#0281--2026-11-13) for every change.
+
+**Links**
+
+- [PyPI](https://pypi.org/project/opentide/0.28.1/)
+- [GitHub Release](https://github.com/opentidehq/opentide/releases/tag/v0.28.1)
+- [CHANGELOG](https://github.com/opentidehq/opentide/blob/development/CHANGELOG.md)
+
 ## 0.28.0 — 12 November 2026
 
 Google Security Operations support: deploy YARA-L rules to Google SecOps, with their sections checked as you type.
@@ -289,7 +495,7 @@ opentide validate --strict
 - **`opentide --json info` lists each platform's tenants.** Each has its `name`, `description`, `strategies`, `manual` and every `$VAR` its setup references, with whether it is set; a value is never printed ([#754](https://github.com/opentidehq/opentide/issues/754)).
 - **`OPENTIDE_PROGRESS=json` writes progress events on stderr.** `generate`, `validate`, `validate query`, `deploy --dry-run` and `query` write one ASCII JSON object per line as they go, and stdout still holds one document ([#756](https://github.com/opentidehq/opentide/issues/756)).
 - **Every `validate`, `validate query` and `lint` finding carries `end_line`.** SARIF regions carry `endLine` ([#755](https://github.com/opentidehq/opentide/issues/755)).
-- **Windows on Arm installs a wheel.** It has the engine compiled in, and replaces a build from the sdist, which needs Rust ([#748](https://github.com/opentidehq/opentide/issues/748)). Use CPython 3.11 or later and `pip install --only-binary cryptography opentide` ([Installation](./installation.md#windows-and-powershell)).
+- **Windows on Arm installs a wheel.** It has the engine compiled in, and replaces a build from the sdist, which needs Rust ([#748](https://github.com/opentidehq/opentide/issues/748)). Use CPython 3.11 or later and `pip install --only-binary cryptography opentide` ([Installation](./installation.md#windows)).
 
 **Changed**
 

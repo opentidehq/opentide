@@ -1,0 +1,2 @@
+activity_type:"service-create"
+AND (process_path:contains("\\temp\\") OR process_path:WLDi("*\\appdata\\*") OR process_path:WLDi("*\\users\\public\\*"))

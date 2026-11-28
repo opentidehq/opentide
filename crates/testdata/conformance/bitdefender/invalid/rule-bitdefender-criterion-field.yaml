@@ -1,0 +1,25 @@
+# A criterion field that the process target does not have.
+# Expected constraint code: bitdefender_criterion_field.
+name: Bitdefender criterion on an unknown field
+metadata:
+  uuid: 00000000-0000-4000-8003-000000000054
+  schema: rule::1.0
+  version: 1
+  created: "2026-01-01"
+  modified: "2026-01-02"
+  tlp: clear
+  author: Detection Engineering
+description: |
+  Process.Hash is not a GravityZone process field.
+status: STAGING
+severity: Medium
+configurations:
+  bitdefender:
+    enabled: true
+    schema: platform::bitdefender::1.0
+    status: STAGING
+    detection:
+      target: process
+      criteria:
+        - field: Process.Hash
+          is: 44d88612fea8a8f36de82e1278abb02f

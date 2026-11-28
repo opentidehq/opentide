@@ -1,0 +1,53 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/corpus/esql/map_expression__invalid.esql
+---
+SOURCE_FILE@0..101
+  COMMENT@0..30 "// prod:map_expression invalid"
+  WHITESPACE@30..31 "\n"
+  QUERY@31..100
+    FROM_COMMAND@31..55
+      FROM_KW@31..35 "FROM"
+      WHITESPACE@35..36 " "
+      INDEX_PATTERN@36..42
+        INDEX_NAME@36..42
+          SOURCE_TEXT@36..42 "logs-*"
+      WHITESPACE@42..43 " "
+      METADATA@43..55
+        METADATA_KW@43..51 "METADATA"
+        WHITESPACE@51..52 " "
+        METADATA_FIELD@52..55
+          SOURCE_TEXT@52..55 "_id"
+    WHITESPACE@55..56 "\n"
+    PIPE@56..57 "|"
+    WHITESPACE@57..58 " "
+    WHERE_COMMAND@58..100
+      WHERE_KW@58..63 "WHERE"
+      WHITESPACE@63..64 " "
+      FUNCTION_CALL@64..100
+        IDENTIFIER@64..69
+          IDENT@64..69 "MATCH"
+        L_PAREN@69..70 "("
+        QUALIFIED_NAME@70..77
+          IDENTIFIER@70..77
+            IDENT@70..77 "message"
+        COMMA@77..78 ","
+        WHITESPACE@78..79 " "
+        STRING@79..82
+          STRING_LIT@79..82 "\"x\""
+        COMMA@82..83 ","
+        WHITESPACE@83..84 " "
+        MAP_EXPRESSION@84..99
+          L_BRACE@84..85 "{"
+          WHITESPACE@85..86 " "
+          MAP_ENTRY@86..97
+            STRING@86..97
+              STRING_LIT@86..97 "\"fuzziness\""
+          WHITESPACE@97..98 " "
+          R_BRACE@98..99 "}"
+        R_PAREN@99..100 ")"
+  WHITESPACE@100..101 "\n"
+--- errors
+97..98: expected `:` after the key (expected COLON)
+97..98: expected a constant (expected COLON, L_BRACE)

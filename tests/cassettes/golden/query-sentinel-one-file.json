@@ -1,0 +1,84 @@
+{
+  "format": 1,
+  "scenario": "golden/query-sentinel-one-file",
+  "recorded_from": [
+    "{oracle}/opentide",
+    "--repo",
+    "tests/golden/fixtures/live-tenants",
+    "--json",
+    "query",
+    "--platform",
+    "sentinel_one",
+    "--file",
+    "objects/rules/sentinel-one-process.yaml",
+    "--from",
+    "2099-01-01T00:00:00Z",
+    "--to",
+    "2099-01-01T01:00:00Z"
+  ],
+  "digest": "sha256:840921e2ecf57718e9ce1f32e95eb5d17ea936f5bbe66bf6f64db7b03b0080f5",
+  "interactions": [
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://s1.invalid/web/api/v2.1/dv/events/pq",
+        "headers": [
+          [
+            "authorization",
+            "REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"query\": \"EventType = \\\"Process Create\\\"\\n| limit 101\", \"fromDate\": \"2099-01-01T00:00:00.000Z\", \"toDate\": \"2099-01-01T01:00:00.000Z\", \"limit\": 101, \"accountIds\": [\"1001\"]}"
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "s1-tenant"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"data\": {\"queryId\": \"pq-1\", \"status\": \"FINISHED\", \"progress\": 100, \"columns\": [{\"name\": \"src.process.name\", \"type\": \"string\"}, {\"name\": \"endpoint.name\"}], \"data\": [[\"cmd.exe\", \"ws-1\"], [\"powershell.exe\", \"ws-2\"]], \"recommendations\": [\"Add a filter on event.type to speed up the query\"]}}"
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://s1.invalid/web/api/v2.1/dv/events/pq",
+        "headers": [
+          [
+            "authorization",
+            "REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"query\": \"src.process.name = 'cmd.exe'\\n| limit 101\", \"fromDate\": \"2099-01-01T00:00:00.000Z\", \"toDate\": \"2099-01-01T01:00:00.000Z\", \"limit\": 101, \"accountIds\": [\"1001\"]}"
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "s1-tenant"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"data\": {\"queryId\": \"pq-2\", \"status\": \"FINISHED\", \"progress\": 100, \"columns\": [{\"name\": \"src.process.name\", \"type\": \"string\"}, {\"name\": \"endpoint.name\"}], \"data\": [[\"cmd.exe\", \"ws-1\"], [\"powershell.exe\", \"ws-2\"]], \"recommendations\": [\"Add a filter on event.type to speed up the query\"]}}"
+      }
+    }
+  ]
+}

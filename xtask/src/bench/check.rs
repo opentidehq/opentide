@@ -1,0 +1,2535 @@
+//! `cargo xtask bench --check BUDGETS BENCH.json [--previous LAST.json]`:
+//! a report against its budgets and the last result of the base branch.
+//!
+//! A command fails when:
+//!
+//! - its median or peak RSS is more than `policy.regression` (10%) above the
+//!   last result of the base branch (`BASE_BRANCH`) of the same engine, scale and seed
+//!   (`--previous`);
+//! - for the `python` engine, more than `policy.regression` above the oracle
+//!   baseline recorded in the budgets (`baseline_s`, `baseline_rss_mib`), when
+//!   the report is of the baseline's scale and seed;
+//! - for the `rust` engine, above the plan section 11 target (`target_s`,
+//!   `target_rss_mib`), an absolute budget, at scale 1 (a time target with
+//!   `policy.regression` on top: runners of one CPU model differ by that
+//!   much); or, where the budgets
+//!   waive a time target with the work item that will meet it
+//!   (`target_waiver`), more than `policy.regression` above the Rust
+//!   implementation's own CI baseline (`rust_baseline_s`), the summary still
+//!   showing the distance to the target. A rust command the plan names no
+//!   target for is held to the oracle's median on the report's CPU
+//!   (`baseline_s` or a `[[cpu_baseline]]` of the python engine; on a CPU
+//!   recorded nowhere, the slowest + `cross_cpu_regression`): the Rust
+//!   implementation is never slower than the one it replaces.
+//!
+//! A relative regression must also exceed the noise floor (`noise_floor_s`,
+//! `noise_floor_rss_mib`): a 20 ms difference on a 0.2 s command is the
+//! scheduler, not the code. A measured command without a budget entry, a
+//! budget entry the report lacks, or a report of another schema fails too, so
+//! that a new command cannot slip in unbudgeted. A command the engine does
+//! not implement yet ("no Rust yet") is listed, never failed.
+
+use crate::bench::report::{CommandResult, Report, SCHEMA_VERSION, Status};
+use anyhow::{Context, Result, bail};
+use serde::Deserialize;
+use std::collections::BTreeMap;
+use std::fmt::Write as _;
+
+/// Bytes in a MiB: budgets are written in MiB, reports hold bytes.
+const MIB: f64 = 1024.0 * 1024.0;
+
+/// The seed of the heavy workspace the plan section 11 targets are for.
+const SEED_OF_TARGETS: u64 = crate::bench::workspace::SEED;
+
+/// The version of `budgets.toml`'s shape this code reads.
+pub const BUDGETS_SCHEMA_VERSION: u32 = 1;
+
+/// `tests/bench/budgets.toml`.
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Budgets {
+    /// [`BUDGETS_SCHEMA_VERSION`].
+    pub schema_version: u32,
+    /// How a regression is told from noise.
+    pub policy: Policy,
+    /// Where the oracle baseline came from.
+    pub baseline: Baseline,
+    /// One entry per command id.
+    pub commands: BTreeMap<String, CommandBudget>,
+    /// Medians recorded on other CPU models than `baseline.cpu_model` (python)
+    /// and `baseline.rust_cpu_model` (rust): one entry per engine and CPU.
+    #[serde(default)]
+    pub cpu_baseline: Vec<CpuBaseline>,
+}
+
+/// The medians of one engine on one more CPU model, from one CI run.
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CpuBaseline {
+    /// `python` or `rust`.
+    pub engine: String,
+    /// The CPU (`model name`), as a report's `host.cpu_model` names it.
+    pub cpu_model: String,
+    /// The CI run the numbers were copied from.
+    pub source: String,
+    /// Median seconds per command id.
+    pub median_s: BTreeMap<String, f64>,
+}
+
+impl Budgets {
+    /// The time baseline of `id` for `engine` on `cpu`: the recorded median
+    /// on that CPU (`true`), or, on a CPU nothing was recorded on, the
+    /// slowest recorded median of the command (`false`).
+    fn time_reference(&self, engine: &str, id: &str, cpu: Option<&str>) -> Option<(f64, bool)> {
+        let (reference, reference_cpu) = match engine {
+            "rust" => (
+                self.commands.get(id).and_then(|c| c.rust_baseline_s),
+                self.baseline.rust_cpu_model.as_deref(),
+            ),
+            _ => (
+                self.commands.get(id).and_then(|c| c.baseline_s),
+                Some(self.baseline.cpu_model.as_str()),
+            ),
+        };
+        let others = self
+            .cpu_baseline
+            .iter()
+            .filter(|b| b.engine == engine)
+            .filter_map(|b| b.median_s.get(id).map(|s| (*s, b.cpu_model.as_str())));
+        let known: Vec<(f64, Option<&str>)> = reference
+            .map(|s| (s, reference_cpu))
+            .into_iter()
+            .chain(others.map(|(s, c)| (s, Some(c))))
+            .collect();
+        if let Some(cpu) = cpu
+            && let Some((s, _)) = known.iter().find(|(_, c)| *c == Some(cpu))
+        {
+            return Some((*s, true));
+        }
+        known
+            .iter()
+            .map(|(s, _)| *s)
+            .max_by(f64::total_cmp)
+            .map(|s| (s, false))
+    }
+
+    /// The largest ratio, over the commands, between the slowest and the
+    /// fastest median recorded for `engine`: how far apart the recorded CPUs
+    /// are.
+    fn spread(&self, engine: &str) -> Option<f64> {
+        let mut ratios = Vec::new();
+        for id in self.commands.keys() {
+            let reference = match engine {
+                "rust" => self.commands.get(id).and_then(|c| c.rust_baseline_s),
+                _ => self.commands.get(id).and_then(|c| c.baseline_s),
+            };
+            let values: Vec<f64> = reference
+                .into_iter()
+                .chain(
+                    self.cpu_baseline
+                        .iter()
+                        .filter(|b| b.engine == engine)
+                        .filter_map(|b| b.median_s.get(id).copied()),
+                )
+                .collect();
+            let max = values.iter().copied().max_by(f64::total_cmp);
+            let min = values.iter().copied().min_by(f64::total_cmp);
+            if let (Some(max), Some(min)) = (max, min) {
+                ratios.push(max / min);
+            }
+        }
+        ratios.into_iter().max_by(f64::total_cmp)
+    }
+
+    /// Whether any time baseline of `engine` was recorded on `cpu`.
+    fn knows_cpu(&self, engine: &str, cpu: Option<&str>) -> bool {
+        let Some(cpu) = cpu else { return false };
+        let reference = match engine {
+            "rust" => self.baseline.rust_cpu_model.as_deref() == Some(cpu),
+            _ => self.baseline.cpu_model == cpu,
+        };
+        reference
+            || self
+                .cpu_baseline
+                .iter()
+                .any(|b| b.engine == engine && b.cpu_model == cpu)
+    }
+}
+
+/// The regression rule.
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Policy {
+    /// The fraction above a reference that fails: 0.10.
+    pub regression: f64,
+    /// A time difference at or under this many seconds is never a regression.
+    pub noise_floor_s: f64,
+    /// An RSS difference at or under this many MiB is never a regression.
+    pub noise_floor_rss_mib: f64,
+    /// The time tolerance against a baseline measured on another CPU model
+    /// than the report's: generous (0.50), so that a runner on an unrecorded
+    /// CPU still has a ceiling. RSS keeps `regression` on every CPU.
+    pub cross_cpu_regression: f64,
+    /// When the recorded reference ran (seconds since the Unix epoch): a
+    /// last result of the base branch measured before it is not compared
+    /// with. Each CPU model's newest green result is the reference, and one
+    /// model's can be many merges old (the runners come on several), so it
+    /// would hold a run to that whole interval, and a red run never becomes
+    /// the reference: the model would stay red. The run is held to its
+    /// budgets alone, and the first green run since records the reference.
+    #[serde(default)]
+    pub reference_unix: Option<u64>,
+    /// The recorded reference run, as the notes name it; with `reference_unix`.
+    #[serde(default)]
+    pub reference_run: Option<String>,
+}
+
+/// The oracle measurement the `baseline_*` numbers come from.
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Baseline {
+    /// The engine measured: `python`.
+    pub engine: String,
+    /// What ran: `opentide 0.23.0`.
+    pub oracle: String,
+    /// The heavy workspace's scale.
+    pub scale: u32,
+    /// The heavy workspace's seed.
+    pub seed: u64,
+    /// Measured runs per command.
+    pub runs: u32,
+    /// Warm-up runs per command.
+    pub warmup: u32,
+    /// The heavy workspace's digest the baselines were measured on: a report
+    /// of another generator output is not held to them.
+    pub digest: String,
+    /// The platforms the heavy workspace holds, the oracle's
+    /// ([`super::oracle::ORACLE_PLATFORMS`]).
+    pub platforms: Vec<String>,
+    /// The runner class: `ubuntu-24.04, 4 vCPU`.
+    pub runner: String,
+    /// The CPU the commands' `baseline_s` were measured on (`model name`);
+    /// `[[cpu_baseline]]` holds the medians on more CPU models.
+    pub cpu_model: String,
+    /// The CPU the `rust_baseline_s` numbers were measured on.
+    pub rust_cpu_model: Option<String>,
+    /// The CI run the numbers were copied from.
+    pub source: String,
+}
+
+/// One command's budget.
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CommandBudget {
+    /// The label in the summary: `validate, clean`.
+    pub label: String,
+    /// Plan section 2's measurement (opentide 0.22.0), for the record; never
+    /// enforced.
+    pub plan_s: Option<f64>,
+    /// Plan section 2's peak RSS, in MiB, for the record.
+    pub plan_rss_mib: Option<f64>,
+    /// The oracle's median on CI's runner class, in seconds.
+    pub baseline_s: Option<f64>,
+    /// The oracle's peak RSS on CI's runner class, in MiB.
+    pub baseline_rss_mib: Option<f64>,
+    /// Plan section 11's target for the Rust engine, in seconds.
+    pub target_s: Option<f64>,
+    /// Plan section 11's peak RSS target for the Rust engine, in MiB.
+    pub target_rss_mib: Option<f64>,
+    /// Why the rust engine is not held to `target_s` yet: the work item
+    /// that brings the command to its target. While it is set, the rust
+    /// result is held to `rust_baseline_s` (the Rust implementation of today,
+    /// measured on CI's runner class) like the oracle to its baseline, and
+    /// the summary shows how far it is from the target. Remove it when the
+    /// target is met.
+    pub target_waiver: Option<String>,
+    /// The Rust implementation's median on CI's runner class, in seconds;
+    /// the reference while `target_waiver` is set.
+    pub rust_baseline_s: Option<f64>,
+    /// A time miss of the rust engine accepted until an issue closes it:
+    /// `"#123, why"`. A median over the command's absolute time budget (its
+    /// target, its Rust baseline or the oracle's median) but at most
+    /// `waived_s` + `policy.regression` is reported as waived, not failed;
+    /// past that it fails. Remove it when the command meets its budget (the
+    /// summary says so).
+    pub time_waiver: Option<String>,
+    /// The median the time miss was measured at, in seconds.
+    pub waived_s: Option<f64>,
+    /// The same for the rust engine's peak RSS target: `"#123, why"`.
+    pub rss_waiver: Option<String>,
+    /// The peak RSS the miss was measured at, in MiB.
+    pub waived_rss_mib: Option<f64>,
+    /// A change of the command's numbers accepted on purpose: `"#123, why"`.
+    /// For `accepted_engine`'s runs only, a last result of the base branch
+    /// measured before `accepted_unix` is not compared with for this
+    /// command; the run is held to `accepted_s` and `accepted_rss_mib` (the
+    /// numbers the change was measured at) + `policy.regression` instead,
+    /// and its absolute budget still holds. The first run after it records
+    /// the new reference. Older results expire on their own: keep it until a
+    /// later change needs a new one.
+    pub accepted: Option<String>,
+    /// The engine whose numbers changed: `python` or `rust`.
+    pub accepted_engine: Option<String>,
+    /// When the change was accepted, in seconds since the Unix epoch: the
+    /// merge of the change that moved the numbers. Never after the run
+    /// checked, and not before 2020.
+    pub accepted_unix: Option<u64>,
+    /// The median the change was measured at, in seconds.
+    pub accepted_s: Option<f64>,
+    /// The peak RSS the change was measured at, in MiB.
+    pub accepted_rss_mib: Option<f64>,
+}
+
+/// 2020-01-01T00:00:00Z: an `accepted_unix` before it is a typo.
+const ACCEPTED_FLOOR_UNIX: u64 = 1_577_836_800;
+
+impl CommandBudget {
+    /// Whether an accepted change of `engine`'s numbers is recorded.
+    fn accepts(&self, engine: &str) -> bool {
+        self.accepted.is_some() && self.accepted_engine.as_deref() == Some(engine)
+    }
+
+    /// Whether `previous` was measured before the accepted change of
+    /// `engine`'s numbers.
+    fn predates_acceptance(&self, engine: &str, previous: &Report) -> bool {
+        self.accepts(engine)
+            && self
+                .accepted_unix
+                .is_some_and(|accepted| previous.created_unix < accepted)
+    }
+}
+
+/// Whether a waiver names the issue that closes it (`#123`).
+fn names_an_issue(waiver: &str) -> bool {
+    waiver
+        .split('#')
+        .skip(1)
+        .any(|after| after.chars().next().is_some_and(|c| c.is_ascii_digit()))
+}
+
+/// How one metric's absolute misses stand against its waiver ([`settle`]).
+#[derive(Debug, PartialEq)]
+enum Settled {
+    /// No miss; a note when a waiver is no longer needed.
+    Met(Option<String>),
+    /// Every miss within the waiver: the notes say so.
+    Waived(Vec<String>),
+    /// Failures: no waiver, or a miss past the waived value.
+    Missed(Vec<String>),
+}
+
+/// Settles the absolute `misses` of one metric (`value`, in `unit`) against
+/// its `waiver` and the `accepted` value it was measured at: within
+/// `accepted` + `regression` the misses are reported, not failed.
+fn settle(
+    misses: &[String],
+    waiver: Option<&str>,
+    accepted: Option<f64>,
+    value: f64,
+    unit: &str,
+    regression: f64,
+) -> Settled {
+    let key = if unit == "s" {
+        "time_waiver"
+    } else {
+        "rss_waiver"
+    };
+    match (waiver, accepted) {
+        (Some(waiver), Some(_)) if misses.is_empty() => Settled::Met(Some(format!(
+            "meets its budget: remove its {key} ({waiver})"
+        ))),
+        (Some(waiver), Some(accepted)) if value <= accepted * (1.0 + regression) => {
+            Settled::Waived(
+                misses
+                    .iter()
+                    .map(|why| format!("{why}; waived until {waiver} (measured {accepted} {unit})"))
+                    .collect(),
+            )
+        }
+        (Some(waiver), Some(accepted)) => {
+            let mut whys = misses.to_vec();
+            whys.push(format!(
+                "{value:.3} {unit} is more than {:.0}% over the {accepted} {unit} the {key} \
+                 ({waiver}) accepts",
+                regression * 100.0
+            ));
+            Settled::Missed(whys)
+        }
+        _ if misses.is_empty() => Settled::Met(None),
+        _ => Settled::Missed(misses.to_vec()),
+    }
+}
+
+impl Budgets {
+    /// Parses `budgets.toml` and checks its version and its numbers.
+    #[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
+    pub fn parse(text: &str) -> Result<Self> {
+        let budgets: Self = toml::from_str(text)?;
+        if budgets.schema_version != BUDGETS_SCHEMA_VERSION {
+            bail!(
+                "schema_version {} (this xtask reads {BUDGETS_SCHEMA_VERSION})",
+                budgets.schema_version
+            );
+        }
+        let policy = &budgets.policy;
+        for (name, value) in [
+            ("policy.regression", policy.regression),
+            ("policy.noise_floor_s", policy.noise_floor_s),
+            ("policy.noise_floor_rss_mib", policy.noise_floor_rss_mib),
+            ("policy.cross_cpu_regression", policy.cross_cpu_regression),
+        ] {
+            if !(value.is_finite() && value >= 0.0) {
+                bail!("{name} must be a number >= 0, not {value}");
+            }
+        }
+        if policy.reference_unix.is_some() != policy.reference_run.is_some() {
+            bail!("policy.reference_unix and policy.reference_run go together");
+        }
+        if let Some(unix) = policy.reference_unix
+            && unix < ACCEPTED_FLOOR_UNIX
+        {
+            bail!(
+                "policy.reference_unix {unix} is before 2020: seconds since the Unix epoch, \
+                 the reference report's created_unix"
+            );
+        }
+        for (id, budget) in &budgets.commands {
+            for (name, value) in [
+                ("baseline_s", budget.baseline_s),
+                ("baseline_rss_mib", budget.baseline_rss_mib),
+                ("target_s", budget.target_s),
+                ("target_rss_mib", budget.target_rss_mib),
+                ("rust_baseline_s", budget.rust_baseline_s),
+            ] {
+                if let Some(value) = value
+                    && !(value.is_finite() && value > 0.0)
+                {
+                    bail!("commands.{id}.{name} must be a number > 0, not {value}");
+                }
+            }
+            for (name, value) in [
+                ("waived_s", budget.waived_s),
+                ("waived_rss_mib", budget.waived_rss_mib),
+            ] {
+                if let Some(value) = value
+                    && !(value.is_finite() && value > 0.0)
+                {
+                    bail!("commands.{id}.{name} must be a number > 0, not {value}");
+                }
+            }
+            for (name, waiver) in [
+                ("target_waiver", &budget.target_waiver),
+                ("time_waiver", &budget.time_waiver),
+                ("rss_waiver", &budget.rss_waiver),
+                ("accepted", &budget.accepted),
+            ] {
+                if let Some(waiver) = waiver
+                    && !names_an_issue(waiver)
+                {
+                    bail!(
+                        "commands.{id}.{name} must name the issue that closes it (#123), \
+                         not `{waiver}`"
+                    );
+                }
+            }
+            for (waiver, waived, names) in [
+                (
+                    &budget.time_waiver,
+                    budget.waived_s,
+                    "time_waiver and waived_s",
+                ),
+                (
+                    &budget.rss_waiver,
+                    budget.waived_rss_mib,
+                    "rss_waiver and waived_rss_mib",
+                ),
+            ] {
+                if waiver.is_some() != waived.is_some() {
+                    bail!("commands.{id}: {names} go together");
+                }
+            }
+            let acceptance = [
+                budget.accepted.is_some(),
+                budget.accepted_engine.is_some(),
+                budget.accepted_unix.is_some(),
+                budget.accepted_s.is_some(),
+                budget.accepted_rss_mib.is_some(),
+            ];
+            if acceptance.contains(&true) && acceptance.contains(&false) {
+                bail!(
+                    "commands.{id}: accepted, accepted_engine, accepted_unix, accepted_s and \
+                     accepted_rss_mib go together"
+                );
+            }
+            if let Some(engine) = &budget.accepted_engine
+                && !matches!(engine.as_str(), "python" | "rust")
+            {
+                bail!("commands.{id}.accepted_engine is python or rust, not {engine}");
+            }
+            if let Some(unix) = budget.accepted_unix
+                && unix < ACCEPTED_FLOOR_UNIX
+            {
+                bail!(
+                    "commands.{id}.accepted_unix {unix} is before 2020: seconds since the \
+                     Unix epoch, the change's merge"
+                );
+            }
+            for (name, value) in [
+                ("accepted_s", budget.accepted_s),
+                ("accepted_rss_mib", budget.accepted_rss_mib),
+            ] {
+                if let Some(value) = value
+                    && !(value.is_finite() && value > 0.0)
+                {
+                    bail!("commands.{id}.{name} must be a number > 0, not {value}");
+                }
+            }
+            if budget.target_waiver.is_some()
+                && (budget.target_s.is_none() || budget.rust_baseline_s.is_none())
+            {
+                bail!(
+                    "commands.{id}.target_waiver needs the target_s it waives and the \
+                     rust_baseline_s that holds the rust engine meanwhile"
+                );
+            }
+        }
+        for (index, entry) in budgets.cpu_baseline.iter().enumerate() {
+            if !matches!(entry.engine.as_str(), "python" | "rust") {
+                bail!(
+                    "cpu_baseline[{index}].engine is python or rust, not {}",
+                    entry.engine
+                );
+            }
+            if budgets.cpu_baseline[..index]
+                .iter()
+                .any(|b| b.engine == entry.engine && b.cpu_model == entry.cpu_model)
+            {
+                bail!(
+                    "cpu_baseline[{index}]: {} on {} twice",
+                    entry.engine,
+                    entry.cpu_model
+                );
+            }
+            for (id, value) in &entry.median_s {
+                if !budgets.commands.contains_key(id) {
+                    bail!("cpu_baseline[{index}].median_s.{id}: no such command");
+                }
+                if !(value.is_finite() && *value > 0.0) {
+                    bail!("cpu_baseline[{index}].median_s.{id} must be a number > 0, not {value}");
+                }
+            }
+        }
+        Ok(budgets)
+    }
+}
+
+/// Parses a report and refuses a schema this code does not know.
+pub fn parse_report(text: &str) -> Result<Report> {
+    let raw: serde_json::Value = serde_json::from_str(text)?;
+    // `seed` is null for a workspace of one's own; a report without the key
+    // is not one this tool wrote.
+    if raw.get("seed").is_none() {
+        bail!("the report has no `seed` (null for a workspace of its own)");
+    }
+    let report: Report = serde_json::from_value(raw)?;
+    if report.schema_version != SCHEMA_VERSION {
+        bail!(
+            "schema_version {} (this xtask reads {SCHEMA_VERSION})",
+            report.schema_version
+        );
+    }
+    if report.runs == 0 {
+        bail!("the report measured no run (runs = 0)");
+    }
+    for result in &report.results {
+        let id = &result.id;
+        let times = result.median_s.iter().chain(&result.samples_s);
+        if let Some(bad) = times.copied().find(|s| !(s.is_finite() && *s >= 0.0)) {
+            bail!("{id}: a time of {bad} s");
+        }
+        match result.status {
+            Status::Measured if result.median_s.is_none() || result.peak_rss_bytes.is_none() => {
+                bail!("{id}: measured, but without a median time and RSS");
+            }
+            Status::Measured => {}
+            // The oracle's start is not measured (`startup` measures the
+            // console script, under the rust engine): nothing else may be missing.
+            Status::NotImplemented
+                if report.engine != "rust"
+                    && !crate::bench::ORACLE_UNMEASURED.contains(&id.as_str()) =>
+            {
+                bail!("{id}: not implemented in the {} engine", report.engine);
+            }
+            Status::NotImplemented => {}
+        }
+    }
+    Ok(report)
+}
+
+/// The verdict on one command.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Verdict {
+    /// Within every budget that applies.
+    Pass,
+    /// Over a budget or a regression.
+    Fail,
+    /// Over an absolute budget, within a waiver that names its issue:
+    /// reported, not failed.
+    Waived,
+    /// Not measured: the engine has no implementation yet.
+    NotImplemented,
+}
+
+/// One row of the summary.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Row {
+    /// The command id.
+    pub id: String,
+    /// Its label from the budgets, or its id.
+    pub label: String,
+    /// The report's median, in seconds.
+    pub median_s: Option<f64>,
+    /// The report's peak RSS, in bytes.
+    pub peak_rss_bytes: Option<u64>,
+    /// The time budget that applies, in seconds.
+    pub budget_s: Option<f64>,
+    /// The RSS budget that applies, in bytes.
+    pub budget_rss_bytes: Option<f64>,
+    /// The median against the reference (the oracle baseline for `python`,
+    /// the plan target for `rust`), as a fraction: 0.05 is 5% slower.
+    pub delta_reference: Option<f64>,
+    /// The median against the base branch's last result, as a fraction.
+    pub delta_previous: Option<f64>,
+    /// The verdict.
+    pub verdict: Verdict,
+    /// Why it failed, or the note it carries.
+    pub reasons: Vec<String>,
+}
+
+/// The outcome of a check.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Outcome {
+    /// One row per command, in the report's order, then budgets the report
+    /// lacks.
+    pub rows: Vec<Row>,
+    /// Problems that are not a command's: a report of another engine or
+    /// seed than the previous one, a budget entry the report lacks.
+    pub notes: Vec<String>,
+    /// Every failure, one line each.
+    pub failures: Vec<String>,
+    /// What the reference column compares with.
+    pub reference: String,
+    /// What the previous column compares with, if anything.
+    pub previous: Option<String>,
+}
+
+impl Outcome {
+    /// Whether every command passed.
+    pub fn passed(&self) -> bool {
+        self.failures.is_empty()
+    }
+}
+
+/// Whether `value` exceeds `reference` by more than the fraction `regression`
+/// and by more than the absolute `floor`.
+pub fn regressed(value: f64, reference: f64, regression: f64, floor: f64) -> bool {
+    value - reference > (reference * regression).max(floor)
+}
+
+fn fraction(value: f64, reference: f64) -> Option<f64> {
+    (reference > 0.0).then(|| value / reference - 1.0)
+}
+
+/// Why `previous` cannot be compared with `report`, if it cannot.
+fn incomparable(report: &Report, previous: &Report) -> Option<String> {
+    if previous.engine != report.engine {
+        return Some(format!("engine {} != {}", previous.engine, report.engine));
+    }
+    if previous.scale != report.scale {
+        return Some(format!("scale {} != {}", previous.scale, report.scale));
+    }
+    if previous.seed != report.seed || report.seed.is_none() {
+        return Some(format!(
+            "workspace {} != {}",
+            workspace_name(previous.seed),
+            workspace_name(report.seed)
+        ));
+    }
+    if previous.workspace_digest != report.workspace_digest {
+        return Some(format!(
+            "workspace digest {} != {}",
+            previous.workspace_digest.as_deref().unwrap_or("none"),
+            report.workspace_digest.as_deref().unwrap_or("none")
+        ));
+    }
+    if previous.oracle != report.oracle {
+        return Some(format!(
+            "oracle {} != {}",
+            previous.oracle.as_deref().unwrap_or("none"),
+            report.oracle.as_deref().unwrap_or("none")
+        ));
+    }
+    if (previous.runs, previous.warmup) != (report.runs, report.warmup) {
+        return Some(format!(
+            "{} runs after {} warm-up != {} after {}",
+            previous.runs, previous.warmup, report.runs, report.warmup
+        ));
+    }
+    // GitHub's 4-vCPU runners come on more than one CPU generation; a 10%
+    // rule between two of them measures the hardware, not the change.
+    if previous.host.cpu_model != report.host.cpu_model {
+        return Some(format!(
+            "CPU {} != {}",
+            previous.host.cpu_model.as_deref().unwrap_or("unknown"),
+            report.host.cpu_model.as_deref().unwrap_or("unknown")
+        ));
+    }
+    None
+}
+
+/// The branch whose last result `--previous` is: bench.yml's `BASE_BRANCH`
+/// (integration/unified-core until the Unified Core merges into development).
+fn base_branch() -> String {
+    std::env::var("BASE_BRANCH")
+        .ok()
+        .map(|branch| branch.trim().to_owned())
+        .filter(|branch| !branch.is_empty())
+        .unwrap_or_else(|| "base-branch".to_owned())
+}
+
+/// The previous report, as the messages name it.
+fn last_result() -> String {
+    format!("the last {} result", base_branch())
+}
+
+/// Checks `report` against `budgets` and, when given, the last result of the
+/// base branch (bench.yml's `BASE_BRANCH`).
+pub fn check(budgets: &Budgets, report: &Report, previous: Option<&Report>) -> Outcome {
+    check_with(budgets, report, previous, false)
+}
+
+/// [`check`], and with `require_reference` (CI) a failure for every measured
+/// command that no reference applies to (no baseline, no target, no
+/// comparable previous result), and for a report that names no CPU: a gate
+/// that compares with nothing must not pass.
+pub fn check_with(
+    budgets: &Budgets,
+    report: &Report,
+    previous: Option<&Report>,
+    require_reference: bool,
+) -> Outcome {
+    let mut outcome = check_against(budgets, report, previous);
+    if require_reference {
+        if report.host.cpu_model.is_none() {
+            outcome
+                .failures
+                .push("the report names no CPU model: no time baseline can apply to it".to_owned());
+        }
+        for row in &mut outcome.rows {
+            let measured = row.median_s.is_some();
+            if measured && row.budget_s.is_none() && row.delta_previous.is_none() {
+                let why = "no reference applies (no baseline, target or comparable previous \
+                           result): see the notes"
+                    .to_owned();
+                outcome.failures.push(format!("{}: {why}", row.id));
+                row.reasons.push(why);
+                row.verdict = Verdict::Fail;
+            }
+        }
+    }
+    outcome
+}
+
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
+fn check_against(budgets: &Budgets, report: &Report, previous: Option<&Report>) -> Outcome {
+    let policy = &budgets.policy;
+    let mut notes = Vec::new();
+    let mut failures = Vec::new();
+
+    let baseline_applies = report.engine == budgets.baseline.engine
+        && report.scale == budgets.baseline.scale
+        && report.seed == Some(budgets.baseline.seed)
+        && report.oracle.as_deref() == Some(budgets.baseline.oracle.as_str())
+        && (report.runs, report.warmup) == (budgets.baseline.runs, budgets.baseline.warmup)
+        && report.workspace_digest.as_deref() == Some(budgets.baseline.digest.as_str());
+    let cpu = report.host.cpu_model.as_deref();
+    let other_cpu = !budgets.knows_cpu(&report.engine, cpu);
+    if other_cpu && (baseline_applies || report.engine == "rust") {
+        notes.push(format!(
+            "no {} baseline was recorded on {}: its times are held to the slowest recorded \
+             CPU's + {:.0}% (RSS + {:.0}%), a ceiling of up to {:.2}x the fastest recorded \
+             median; add a [[cpu_baseline]] for it from a CI run",
+            report.engine,
+            cpu.unwrap_or("an unknown CPU"),
+            policy.cross_cpu_regression * 100.0,
+            policy.regression * 100.0,
+            budgets.spread(&report.engine).unwrap_or(1.0) * (1.0 + policy.cross_cpu_regression)
+        ));
+    }
+    let heavy = report.seed == Some(SEED_OF_TARGETS);
+    let reference = match report.engine.as_str() {
+        "rust" if report.scale == 1 && heavy => format!(
+            "plan section 11 target (time budget = target + {:.0}%, runners of one CPU \
+             model differ by that much)",
+            policy.regression * 100.0
+        ),
+        "rust" if !heavy => {
+            notes.push(
+                "the plan section 11 targets are for the heavy workspace; this report \
+                 measured a workspace of its own: no absolute budget applies"
+                    .to_owned(),
+            );
+            "none (not the heavy workspace)".to_owned()
+        }
+        "rust" => {
+            notes.push(format!(
+                "the plan section 11 targets are for scale 1; this report is scale {}: \
+                 no absolute budget applies",
+                report.scale
+            ));
+            "none (targets are for scale 1)".to_owned()
+        }
+        _ if baseline_applies && other_cpu => format!(
+            "oracle baseline of the slowest recorded CPU (budget = baseline + {:.0}%)",
+            policy.cross_cpu_regression * 100.0
+        ),
+        _ if baseline_applies => format!(
+            "oracle baseline ({}, {}; budget = baseline + {:.0}%)",
+            budgets.baseline.oracle,
+            budgets.baseline.runner,
+            policy.regression * 100.0
+        ),
+        _ => {
+            notes.push(format!(
+                "the oracle baseline is {} ({}) at scale {}, seed {}, {} runs after {} \
+                 warm-up; this report is {} ({}) at scale {}, {}, {} runs after {}: no \
+                 baseline applies",
+                budgets.baseline.engine,
+                budgets.baseline.oracle,
+                budgets.baseline.scale,
+                budgets.baseline.seed,
+                budgets.baseline.runs,
+                budgets.baseline.warmup,
+                report.engine,
+                report.oracle.as_deref().unwrap_or("no oracle"),
+                report.scale,
+                workspace_name(report.seed),
+                report.runs,
+                report.warmup
+            ));
+            "none (another engine, scale or seed than the baseline)".to_owned()
+        }
+    };
+
+    let previous = previous.and_then(|previous| match incomparable(report, previous) {
+        Some(why) => {
+            notes.push(format!(
+                "{} is not comparable ({why}); no regression check against it",
+                last_result()
+            ));
+            None
+        }
+        None => Some(previous),
+    });
+    if let Some(unix) = policy.reference_unix
+        && unix > report.created_unix
+    {
+        // A typo'd or future time would turn the relative gate off for as
+        // long as it stays.
+        failures.push(format!(
+            "policy.reference_unix {unix} is after this run ({}): refused",
+            report.created_unix
+        ));
+    }
+    let previous = previous.and_then(|previous| match policy.reference_unix {
+        Some(unix) if previous.created_unix < unix => {
+            notes.push(format!(
+                "{} predates the recorded reference ({}): no regression check against it; \
+                 held to the budgets",
+                last_result(),
+                policy.reference_run.as_deref().unwrap_or_default()
+            ));
+            None
+        }
+        _ => Some(previous),
+    });
+    let previous_label = previous.map(|previous| {
+        let sha = previous.git_sha.as_deref().unwrap_or("unknown commit");
+        format!("commit {}", short(sha))
+    });
+
+    let mut rows = Vec::new();
+    for result in &report.results {
+        let budget = budgets.commands.get(&result.id);
+        if let Some(budget) = budget
+            && budget.accepts(&report.engine)
+            && let Some(unix) = budget.accepted_unix
+            && unix > report.created_unix
+        {
+            // A typo'd or future time would turn the relative gate off for
+            // as long as it stays.
+            failures.push(format!(
+                "{}: accepted_unix {unix} is after this run ({}): refused",
+                result.id, report.created_unix
+            ));
+        }
+        let accepted = budget.filter(|budget| {
+            previous.is_some_and(|previous| budget.predates_acceptance(&report.engine, previous))
+        });
+        if let Some(budget) = accepted {
+            notes.push(format!(
+                "{}: {} predates an accepted change ({}); held to the accepted numbers",
+                result.id,
+                last_result(),
+                budget.accepted.as_deref().unwrap_or_default()
+            ));
+        }
+        let prior = previous
+            .filter(|_| accepted.is_none())
+            .and_then(|p| p.results.iter().find(|r| r.id == result.id));
+        let mut row = check_one(
+            report,
+            result,
+            budget,
+            prior,
+            policy,
+            Applies {
+                baseline: baseline_applies,
+                time: budgets.time_reference(&report.engine, &result.id, cpu),
+                oracle_time: budgets.time_reference(&budgets.baseline.engine, &result.id, cpu),
+            },
+            &mut failures,
+        );
+        if let Some(budget) = accepted {
+            hold_to_accepted(budget, result, policy, &mut row, &mut failures);
+        }
+        rows.push(row);
+    }
+    for (id, budget) in &budgets.commands {
+        if !report.results.iter().any(|r| &r.id == id) {
+            let why = format!("{id}: has a budget but is not in the report");
+            failures.push(why.clone());
+            rows.push(Row {
+                id: id.clone(),
+                label: budget.label.clone(),
+                median_s: None,
+                peak_rss_bytes: None,
+                budget_s: None,
+                budget_rss_bytes: None,
+                delta_reference: None,
+                delta_previous: None,
+                verdict: Verdict::Fail,
+                reasons: vec![why],
+            });
+        }
+    }
+
+    Outcome {
+        rows,
+        notes,
+        failures,
+        reference,
+        previous: previous_label,
+    }
+}
+
+/// While a stale last result is skipped ([`CommandBudget::accepted`]), the
+/// run is held to the numbers the change was accepted at: more than
+/// `policy.regression` over them (and the noise floor) fails.
+#[expect(
+    clippy::cast_precision_loss,
+    reason = "peak RSS in bytes, far below 2^52"
+)]
+fn hold_to_accepted(
+    budget: &CommandBudget,
+    result: &CommandResult,
+    policy: &Policy,
+    row: &mut Row,
+    failures: &mut Vec<String>,
+) {
+    let mut fail = |why: String| {
+        failures.push(format!("{}: {why}", result.id));
+        row.reasons.push(why);
+        row.verdict = Verdict::Fail;
+    };
+    if let (Some(median), Some(accepted)) = (result.median_s, budget.accepted_s)
+        && regressed(median, accepted, policy.regression, policy.noise_floor_s)
+    {
+        fail(format!(
+            "median {median:.3} s is more than {:.0}% over the {accepted:.3} s the change \
+             was accepted at",
+            policy.regression * 100.0
+        ));
+    }
+    if let (Some(rss), Some(accepted)) = (result.peak_rss_bytes, budget.accepted_rss_mib) {
+        let rss = rss as f64 / MIB;
+        if regressed(rss, accepted, policy.regression, policy.noise_floor_rss_mib) {
+            fail(format!(
+                "peak RSS {rss:.1} MiB is more than {:.0}% over the {accepted:.1} MiB the \
+                 change was accepted at",
+                policy.regression * 100.0
+            ));
+        }
+    }
+}
+
+/// Which recorded baselines a report is held to.
+#[derive(Clone, Copy)]
+struct Applies {
+    /// The oracle baseline (same engine, oracle, workspace and run count).
+    baseline: bool,
+    /// The command's time baseline for the report's engine and CPU, and
+    /// whether it was recorded on that CPU (`regression`) or is the slowest
+    /// recorded one (`cross_cpu_regression`).
+    time: Option<(f64, bool)>,
+    /// The oracle's time baseline of the command on the report's CPU, as
+    /// [`Applies::time`]: what a rust command without a plan target is held to.
+    oracle_time: Option<(f64, bool)>,
+}
+
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
+fn check_one(
+    report: &Report,
+    result: &CommandResult,
+    budget: Option<&CommandBudget>,
+    prior: Option<&CommandResult>,
+    policy: &Policy,
+    applies: Applies,
+    failures: &mut Vec<String>,
+) -> Row {
+    let Applies {
+        baseline: baseline_applies,
+        time,
+        oracle_time,
+    } = applies;
+    let tolerance = |same_cpu: bool| {
+        if same_cpu {
+            policy.regression
+        } else {
+            policy.cross_cpu_regression
+        }
+    };
+    let id = &result.id;
+    let mut row = Row {
+        id: id.clone(),
+        label: budget.map_or_else(|| id.clone(), |b| b.label.clone()),
+        median_s: result.median_s,
+        peak_rss_bytes: result.peak_rss_bytes,
+        budget_s: None,
+        budget_rss_bytes: None,
+        delta_reference: None,
+        delta_previous: None,
+        verdict: Verdict::Pass,
+        reasons: Vec::new(),
+    };
+    let mut fail = |row: &mut Row, why: String| {
+        failures.push(format!("{id}: {why}"));
+        row.reasons.push(why);
+        row.verdict = Verdict::Fail;
+    };
+
+    if result.status == Status::NotImplemented {
+        row.verdict = Verdict::NotImplemented;
+        row.reasons.push(
+            result
+                .note
+                .clone()
+                .unwrap_or_else(|| "not implemented".into()),
+        );
+        return row;
+    }
+    let (Some(median), Some(rss)) = (result.median_s, result.peak_rss_bytes) else {
+        fail(&mut row, "measured, but the report has no median".into());
+        return row;
+    };
+    #[expect(
+        clippy::cast_precision_loss,
+        reason = "an RSS in bytes is far below 2^52"
+    )]
+    let rss = rss as f64;
+    let Some(budget) = budget else {
+        fail(
+            &mut row,
+            "no budget: add [commands.<id>] to the budgets file".into(),
+        );
+        return row;
+    };
+
+    let floor_rss = policy.noise_floor_rss_mib * MIB;
+    if report.engine == "rust" {
+        if report.scale == 1 && report.seed == Some(SEED_OF_TARGETS) {
+            // The absolute misses, settled against the command's waivers below.
+            let mut time_misses: Vec<String> = Vec::new();
+            let mut rss_misses: Vec<String> = Vec::new();
+            row.budget_s = budget.target_s;
+            row.budget_rss_bytes = budget.target_rss_mib.map(|mib| mib * MIB);
+            if let Some(target) = budget.target_s {
+                row.delta_reference = fraction(median, target);
+                match (&budget.target_waiver, time) {
+                    (Some(waiver), Some((baseline, same_cpu))) => {
+                        let rust_time_tolerance = tolerance(same_cpu);
+                        row.budget_s = Some(
+                            baseline + (baseline * rust_time_tolerance).max(policy.noise_floor_s),
+                        );
+                        if rust_time_tolerance > policy.regression {
+                            row.reasons.push(format!(
+                                "the Rust baseline is from another CPU: held to + {:.0}%",
+                                rust_time_tolerance * 100.0
+                            ));
+                        }
+                        if regressed(median, baseline, rust_time_tolerance, policy.noise_floor_s) {
+                            time_misses.push(format!(
+                                "median {median:.3} s is {:+.1}% against the Rust baseline \
+                                     {baseline:.3} s (more than {:.0}%)",
+                                (median / baseline - 1.0) * 100.0,
+                                rust_time_tolerance * 100.0
+                            ));
+                        }
+                        // Met as the unwaived check below would meet it: within the
+                        // target + policy.regression.
+                        row.reasons
+                            .push(if median > target * (1.0 + policy.regression) {
+                                format!("over the plan target {target:.3} s, waived until {waiver}")
+                            } else {
+                                format!(
+                                    "meets the plan target {target:.3} s: remove its target_waiver"
+                                )
+                            });
+                    }
+                    _ => {
+                        // The target is a fixed line, but the median it is held to is
+                        // not: two runners with one CPU model differ by up to about
+                        // 10% (see the budgets' [[cpu_baseline]] notes), so a command
+                        // a few percent under its target failed on the slower one with
+                        // no change at all (validate_file, 0.088 s and 0.100 s against
+                        // 0.100 s on two EPYC 7763 runners one hour apart). A miss is a
+                        // median more than policy.regression above the target, the
+                        // relative tolerance of the other time budgets; one within it
+                        // passes and says so. Without their noise floor: a 20 ms floor
+                        // would more than double the 20 and 30 ms start targets.
+                        let ceiling = target * (1.0 + policy.regression);
+                        row.budget_s = Some(ceiling);
+                        if median > ceiling {
+                            time_misses.push(format!(
+                                "median {median:.3} s is over the target {target:.3} s + {:.0}%",
+                                policy.regression * 100.0
+                            ));
+                        } else if median > target {
+                            row.reasons.push(format!(
+                                "{:+.1}% over the target {target:.3} s, within the {:.0}% \
+                                 between runners",
+                                (median / target - 1.0) * 100.0,
+                                policy.regression * 100.0
+                            ));
+                        }
+                    }
+                }
+            } else if let Some((oracle, same_cpu)) = oracle_time {
+                // No plan target: never slower than the oracle on this CPU.
+                let ceiling = if same_cpu {
+                    oracle
+                } else {
+                    oracle * (1.0 + policy.cross_cpu_regression)
+                };
+                row.budget_s = Some(ceiling);
+                row.delta_reference = fraction(median, oracle);
+                row.reasons.push(if same_cpu {
+                    format!("no plan target: held to the oracle's median {oracle:.3} s")
+                } else {
+                    format!(
+                        "no plan target: held to the slowest recorded oracle median \
+                         {oracle:.3} s + {:.0}%",
+                        policy.cross_cpu_regression * 100.0
+                    )
+                });
+                if median > ceiling {
+                    time_misses.push(format!(
+                        "median {median:.3} s is over the oracle's {ceiling:.3} s: \
+                         slower than the implementation it replaces"
+                    ));
+                }
+            }
+            if let Some(target) = row.budget_rss_bytes
+                && rss > target
+            {
+                rss_misses.push(format!(
+                    "peak RSS {:.1} MiB is over the target {:.1} MiB",
+                    rss / MIB,
+                    target / MIB
+                ));
+            }
+            for (misses, waiver, waived, value, unit) in [
+                (
+                    time_misses,
+                    budget.time_waiver.as_deref(),
+                    budget.waived_s,
+                    median,
+                    "s",
+                ),
+                (
+                    rss_misses,
+                    budget.rss_waiver.as_deref(),
+                    budget.waived_rss_mib,
+                    rss / MIB,
+                    "MiB",
+                ),
+            ] {
+                match settle(&misses, waiver, waived, value, unit, policy.regression) {
+                    Settled::Met(Some(note)) => row.reasons.push(note),
+                    Settled::Met(None) => {}
+                    Settled::Waived(notes) => {
+                        row.reasons.extend(notes);
+                        if row.verdict == Verdict::Pass {
+                            row.verdict = Verdict::Waived;
+                        }
+                    }
+                    Settled::Missed(whys) => {
+                        for why in whys {
+                            fail(&mut row, why);
+                        }
+                    }
+                }
+            }
+        }
+    } else if baseline_applies {
+        match time {
+            Some((baseline, same_cpu)) => {
+                let time_tolerance = tolerance(same_cpu);
+                row.budget_s =
+                    Some(baseline + (baseline * time_tolerance).max(policy.noise_floor_s));
+                row.delta_reference = fraction(median, baseline);
+                if regressed(median, baseline, time_tolerance, policy.noise_floor_s) {
+                    fail(
+                        &mut row,
+                        format!(
+                            "median {median:.3} s is {:+.1}% against the oracle baseline \
+                             {baseline:.3} s (more than {:.0}%)",
+                            (median / baseline - 1.0) * 100.0,
+                            time_tolerance * 100.0
+                        ),
+                    );
+                }
+            }
+            None => fail(&mut row, "the budgets record no baseline_s".into()),
+        }
+        match budget.baseline_rss_mib.map(|mib| mib * MIB) {
+            Some(baseline) => {
+                row.budget_rss_bytes =
+                    Some(baseline + (baseline * policy.regression).max(floor_rss));
+                if regressed(rss, baseline, policy.regression, floor_rss) {
+                    fail(
+                        &mut row,
+                        format!(
+                            "peak RSS {:.1} MiB is {:+.1}% against the oracle baseline \
+                             {:.1} MiB (more than {:.0}%)",
+                            rss / MIB,
+                            (rss / baseline - 1.0) * 100.0,
+                            baseline / MIB,
+                            policy.regression * 100.0
+                        ),
+                    );
+                }
+            }
+            None => fail(&mut row, "the budgets record no baseline_rss_mib".into()),
+        }
+    }
+
+    if let Some(prior) = prior
+        && prior.status == Status::Measured
+        && let (Some(prior_median), Some(prior_rss)) = (prior.median_s, prior.peak_rss_bytes)
+    {
+        #[expect(
+            clippy::cast_precision_loss,
+            reason = "an RSS in bytes is far below 2^52"
+        )]
+        let prior_rss = prior_rss as f64;
+        row.delta_previous = fraction(median, prior_median);
+        if regressed(
+            median,
+            prior_median,
+            policy.regression,
+            policy.noise_floor_s,
+        ) {
+            fail(
+                &mut row,
+                format!(
+                    "median {median:.3} s is {:+.1}% against {} {prior_median:.3} s \
+                     (more than {:.0}%)",
+                    (median / prior_median - 1.0) * 100.0,
+                    last_result(),
+                    policy.regression * 100.0
+                ),
+            );
+        }
+        if regressed(rss, prior_rss, policy.regression, floor_rss) {
+            fail(
+                &mut row,
+                format!(
+                    "peak RSS {:.1} MiB is {:+.1}% against {} {:.1} MiB (more than {:.0}%)",
+                    rss / MIB,
+                    (rss / prior_rss - 1.0) * 100.0,
+                    last_result(),
+                    prior_rss / MIB,
+                    policy.regression * 100.0
+                ),
+            );
+        }
+    }
+    row
+}
+
+/// How a report names its workspace.
+fn workspace_name(seed: Option<u64>) -> String {
+    seed.map_or_else(
+        || "a workspace of its own".to_owned(),
+        |seed| format!("seed {seed}"),
+    )
+}
+
+fn short(sha: &str) -> &str {
+    sha.get(..12).unwrap_or(sha)
+}
+
+fn seconds(value: Option<f64>) -> String {
+    value.map_or_else(|| "–".to_owned(), |s| format!("{s:.3} s"))
+}
+
+fn mib(value: Option<f64>) -> String {
+    value.map_or_else(|| "–".to_owned(), |b| format!("{:.1} MiB", b / MIB))
+}
+
+fn percent(value: Option<f64>) -> String {
+    value.map_or_else(|| "–".to_owned(), |f| format!("{:+.1}%", f * 100.0))
+}
+
+/// The job summary: a table with a row per command (median, RSS, budget and
+/// deltas), the failures, and a chart of the medians against their budgets.
+pub fn summary_markdown(outcome: &Outcome, report: &Report) -> String {
+    let mut out = String::new();
+    let verdict = if outcome.passed() { "passed" } else { "FAILED" };
+    let base = base_branch();
+    let _ = writeln!(
+        out,
+        "### Benchmarks: {} engine, scale {}: {verdict}\n",
+        report.engine, report.scale
+    );
+    let _ = writeln!(
+        out,
+        "Median of {} cold process runs (after {} warm-up) and the median peak RSS \
+         (`wait4`), on {} ({} CPUs{}). Reference: {}. Last `{base}` result: {}.\n",
+        report.runs,
+        report.warmup,
+        report
+            .host
+            .runner_image
+            .as_deref()
+            .unwrap_or(report.host.os.as_str()),
+        report.host.cpus,
+        report
+            .host
+            .cpu_model
+            .as_deref()
+            .map(|m| format!(", {m}"))
+            .unwrap_or_default(),
+        outcome.reference,
+        outcome.previous.as_deref().unwrap_or("none found")
+    );
+    let _ = writeln!(
+        out,
+        "| Command | Median | Peak RSS | Budget (time) | Budget (RSS) | Δ reference | \
+         Δ last `{base}` | Result |",
+    );
+    out.push_str("|---|---:|---:|---:|---:|---:|---:|---|\n");
+    for row in &outcome.rows {
+        let result = match row.verdict {
+            Verdict::Pass if row.reasons.is_empty() => "✅ pass".to_owned(),
+            Verdict::Pass => format!("✅ pass ({})", row.reasons.join("; ")),
+            Verdict::Fail => format!("❌ {}", row.reasons.join("; ")),
+            Verdict::Waived => format!("⚠️ waived: {}", row.reasons.join("; ")),
+            Verdict::NotImplemented => format!("➖ {}", row.reasons.join("; ")),
+        };
+        #[expect(
+            clippy::cast_precision_loss,
+            reason = "an RSS in bytes is far below 2^52"
+        )]
+        let rss = row.peak_rss_bytes.map(|b| b as f64);
+        let _ = writeln!(
+            out,
+            "| {} (`{}`) | {} | {} | {} | {} | {} | {} | {} |",
+            row.label.replace('|', "\\|"),
+            row.id,
+            seconds(row.median_s),
+            mib(rss),
+            seconds(row.budget_s),
+            mib(row.budget_rss_bytes),
+            percent(row.delta_reference),
+            percent(row.delta_previous),
+            result.replace('|', "\\|"),
+        );
+    }
+    if !outcome.notes.is_empty() {
+        out.push('\n');
+        for note in &outcome.notes {
+            let _ = writeln!(out, "- {note}");
+        }
+    }
+    let charted: Vec<&Row> = outcome
+        .rows
+        .iter()
+        .filter(|row| row.median_s.is_some())
+        .collect();
+    if !charted.is_empty() {
+        // Tildes, not backticks: the same Markdown sits inside the
+        // backtick-fenced console blocks of tests/cmd/bench.trycmd.
+        out.push_str("\n~~~mermaid\nxychart-beta\n");
+        let _ = writeln!(
+            out,
+            "    title \"Median seconds (bars) against the budget (line)\""
+        );
+        let labels: Vec<String> = charted.iter().map(|r| format!("\"{}\"", r.id)).collect();
+        let _ = writeln!(out, "    x-axis [{}]", labels.join(", "));
+        let _ = writeln!(out, "    y-axis \"seconds\"");
+        let medians: Vec<String> = charted
+            .iter()
+            .map(|r| format!("{:.3}", r.median_s.unwrap_or_default()))
+            .collect();
+        let _ = writeln!(out, "    bar [{}]", medians.join(", "));
+        if charted.iter().all(|r| r.budget_s.is_some()) {
+            let budgets: Vec<String> = charted
+                .iter()
+                .map(|r| format!("{:.3}", r.budget_s.unwrap_or_default()))
+                .collect();
+            let _ = writeln!(out, "    line [{}]", budgets.join(", "));
+        }
+        out.push_str("~~~\n");
+    }
+    out
+}
+
+/// Reads and checks the files of `--check`; the I/O half of [`check`].
+pub fn check_files(
+    budgets_path: &std::path::Path,
+    report_path: &std::path::Path,
+    previous_path: Option<&std::path::Path>,
+    require_reference: bool,
+) -> Result<(Outcome, Report)> {
+    let read = |path: &std::path::Path| {
+        std::fs::read_to_string(path).with_context(|| format!("read {}", path.display()))
+    };
+    let budgets = Budgets::parse(&read(budgets_path)?)
+        .with_context(|| format!("parse {}", budgets_path.display()))?;
+    let report = parse_report(&read(report_path)?)
+        .with_context(|| format!("parse {}", report_path.display()))?;
+    let previous = match previous_path {
+        Some(path) => {
+            Some(parse_report(&read(path)?).with_context(|| format!("parse {}", path.display()))?)
+        }
+        None => None,
+    };
+    let outcome = check_with(&budgets, &report, previous.as_ref(), require_reference);
+    Ok((outcome, report))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::bench::report::{Host, Sample};
+
+    const BUDGETS: &str = r#"
+schema_version = 1
+
+[policy]
+regression = 0.10
+noise_floor_s = 0.03
+noise_floor_rss_mib = 2.0
+cross_cpu_regression = 0.50
+
+[baseline]
+engine = "python"
+oracle = "opentide 0.23.0"
+scale = 1
+seed = 20261107
+runs = 5
+warmup = 1
+digest = "5978a2ab7c093587"
+platforms = ["sentinel", "microsoft_defender", "splunk", "sentinel_one", "carbon_black_cloud", "crowdstrike", "harfanglab", "elastic", "sysdig"]
+runner = "ubuntu-24.04, 4 vCPU"
+cpu_model = "AMD EPYC 9V45 96-Core Processor"
+rust_cpu_model = "AMD EPYC 9V45 96-Core Processor"
+source = "test"
+
+[commands.validate_clean]
+label = "validate, clean"
+baseline_s = 3.0
+baseline_rss_mib = 170.0
+target_s = 0.7
+target_rss_mib = 100.0
+
+[commands.explain]
+label = "explain"
+baseline_s = 0.2
+baseline_rss_mib = 33.0
+target_s = 0.03
+"#;
+
+    fn budgets() -> Budgets {
+        Budgets::parse(BUDGETS).unwrap()
+    }
+
+    fn measured(id: &str, seconds: f64, rss_mib: f64) -> CommandResult {
+        #[expect(
+            clippy::cast_possible_truncation,
+            clippy::cast_sign_loss,
+            reason = "test values"
+        )]
+        let rss = (rss_mib * MIB) as u64;
+        let samples = vec![
+            Sample {
+                wall_s: seconds,
+                peak_rss_bytes: rss,
+            };
+            5
+        ];
+        CommandResult::measured(id, id, &samples, None)
+    }
+
+    fn report(engine: &str, results: Vec<CommandResult>) -> Report {
+        Report {
+            schema_version: SCHEMA_VERSION,
+            engine: engine.into(),
+            scale: 1,
+            seed: Some(20_261_107),
+            runs: 5,
+            warmup: 1,
+            oracle: (engine == "python").then(|| "opentide 0.23.0".to_owned()),
+            host: Host {
+                cpu_model: Some("AMD EPYC 9V45 96-Core Processor".into()),
+                ..Host::default()
+            },
+            workspace_digest: Some("5978a2ab7c093587".into()),
+            git_sha: Some("0123456789abcdef".into()),
+            created_unix: 0,
+            results,
+        }
+    }
+
+    #[test]
+    fn the_baseline_itself_passes() {
+        let r = report(
+            "python",
+            vec![
+                measured("validate_clean", 3.0, 170.0),
+                measured("explain", 0.2, 33.0),
+            ],
+        );
+        let outcome = check(&budgets(), &r, None);
+        assert!(outcome.passed(), "{:?}", outcome.failures);
+        assert_eq!(outcome.rows[0].delta_reference, Some(0.0));
+    }
+
+    #[test]
+    fn eleven_percent_over_the_baseline_fails_and_nine_passes() {
+        let slow = report(
+            "python",
+            vec![
+                measured("validate_clean", 3.33, 170.0),
+                measured("explain", 0.2, 33.0),
+            ],
+        );
+        let outcome = check(&budgets(), &slow, None);
+        assert!(!outcome.passed());
+        assert!(
+            outcome.failures[0].contains("oracle baseline"),
+            "{:?}",
+            outcome.failures
+        );
+        assert_eq!(outcome.rows[0].verdict, Verdict::Fail);
+
+        let ok = report(
+            "python",
+            vec![
+                measured("validate_clean", 3.27, 170.0),
+                measured("explain", 0.2, 33.0),
+            ],
+        );
+        assert!(check(&budgets(), &ok, None).passed());
+    }
+
+    #[test]
+    fn the_noise_floor_absorbs_a_small_absolute_difference() {
+        // 0.2 s -> 0.225 s is +12.5% but 25 ms, under the 30 ms floor.
+        let r = report(
+            "python",
+            vec![
+                measured("validate_clean", 3.0, 170.0),
+                measured("explain", 0.225, 33.0),
+            ],
+        );
+        assert!(check(&budgets(), &r, None).passed());
+        // 0.2 s -> 0.24 s is 40 ms: over the floor and over 10%.
+        let r = report(
+            "python",
+            vec![
+                measured("validate_clean", 3.0, 170.0),
+                measured("explain", 0.24, 33.0),
+            ],
+        );
+        assert!(!check(&budgets(), &r, None).passed());
+    }
+
+    #[test]
+    fn an_rss_regression_fails() {
+        let r = report(
+            "python",
+            vec![
+                measured("validate_clean", 3.0, 190.0),
+                measured("explain", 0.2, 33.0),
+            ],
+        );
+        let outcome = check(&budgets(), &r, None);
+        assert!(!outcome.passed());
+        assert!(
+            outcome.failures[0].contains("peak RSS"),
+            "{:?}",
+            outcome.failures
+        );
+    }
+
+    /// `validate_clean`'s change of the rust numbers, accepted at 2026-11-14.
+    const ACCEPTED: &str = "[commands.validate_clean]\n\
+        accepted = \"#1, more checks\"\n\
+        accepted_engine = \"rust\"\n\
+        accepted_unix = 1794680173\n\
+        accepted_s = 0.6\n\
+        accepted_rss_mib = 90.0\n";
+
+    fn accepted_budgets() -> Budgets {
+        Budgets::parse(&BUDGETS.replace("[commands.validate_clean]\n", ACCEPTED)).unwrap()
+    }
+
+    /// A rust run of `validate_clean` at `seconds` and `mib`, measured at `unix`.
+    fn rust_at(seconds: f64, mib: f64, unix: u64) -> Report {
+        let mut r = report(
+            "rust",
+            vec![
+                measured("validate_clean", seconds, mib),
+                measured("explain", 0.02, 20.0),
+            ],
+        );
+        r.created_unix = unix;
+        r
+    }
+
+    const AFTER: u64 = 1_794_700_000;
+    const BEFORE: u64 = 1_794_600_000;
+
+    fn referenced_budgets(unix: u64) -> Budgets {
+        Budgets::parse(&BUDGETS.replace(
+            "cross_cpu_regression = 0.50\n",
+            &format!(
+                "cross_cpu_regression = 0.50\nreference_unix = {unix}\nreference_run = \"run 7\"\n"
+            ),
+        ))
+        .unwrap()
+    }
+
+    /// A last result measured before the recorded reference is not compared
+    /// with (the run is held to its budgets); one measured at or after it is.
+    #[test]
+    fn a_last_result_older_than_the_recorded_reference_is_not_compared() {
+        let budgets = referenced_budgets(AFTER - 10);
+        let stale = rust_at(0.4, 80.0, BEFORE);
+        let outcome = check(&budgets, &rust_at(0.6, 90.0, AFTER), Some(&stale));
+        assert!(outcome.passed(), "{:?}", outcome.failures);
+        assert!(outcome.rows[0].delta_previous.is_none());
+        assert!(
+            outcome
+                .notes
+                .iter()
+                .any(|n| n.contains("predates the recorded reference (run 7)")),
+            "{:?}",
+            outcome.notes
+        );
+        // Still held to its absolute budget (the 0.7 s target).
+        assert!(!check(&budgets, &rust_at(0.8, 90.0, AFTER), Some(&stale)).passed());
+        for since in [AFTER - 10, AFTER - 5] {
+            let recorded = rust_at(0.4, 80.0, since);
+            let outcome = check(&budgets, &rust_at(0.6, 90.0, AFTER), Some(&recorded));
+            assert!(!outcome.passed(), "{since}");
+            assert!(outcome.rows[0].delta_previous.is_some());
+        }
+    }
+
+    /// A reference time after the run, or before 2020, is refused; the two
+    /// keys go together.
+    #[test]
+    fn the_reference_time_is_checked() {
+        let budgets = referenced_budgets(AFTER + 1);
+        let outcome = check(&budgets, &rust_at(0.6, 90.0, AFTER), None);
+        assert!(
+            outcome
+                .failures
+                .iter()
+                .any(|f| f.contains("policy.reference_unix") && f.contains("refused")),
+            "{:?}",
+            outcome.failures
+        );
+        let early = BUDGETS.replace(
+            "cross_cpu_regression = 0.50\n",
+            "cross_cpu_regression = 0.50\nreference_unix = 1000\nreference_run = \"x\"\n",
+        );
+        let error = Budgets::parse(&early).unwrap_err().to_string();
+        assert!(
+            error.contains("reference_unix 1000 is before 2020"),
+            "{error}"
+        );
+        let alone = BUDGETS.replace(
+            "cross_cpu_regression = 0.50\n",
+            "cross_cpu_regression = 0.50\nreference_unix = 1794700000\n",
+        );
+        let error = Budgets::parse(&alone).unwrap_err().to_string();
+        assert!(error.contains("go together"), "{error}");
+    }
+
+    /// An accepted change is not held to a last result measured before it,
+    /// but to the numbers it was accepted at; one measured after it is.
+    #[test]
+    fn an_accepted_change_is_not_held_to_an_older_last_result() {
+        let budgets = accepted_budgets();
+        let previous = rust_at(0.4, 80.0, BEFORE);
+        let outcome = check(&budgets, &rust_at(0.6, 90.0, AFTER), Some(&previous));
+        assert!(outcome.passed(), "{:?}", outcome.failures);
+        assert!(outcome.rows[0].delta_previous.is_none());
+        assert!(
+            outcome
+                .notes
+                .iter()
+                .any(|n| n.contains("validate_clean") && n.contains("#1, more checks")),
+            "{:?}",
+            outcome.notes
+        );
+        let newer = rust_at(0.4, 80.0, AFTER - 1);
+        let outcome = check(&budgets, &rust_at(0.6, 90.0, AFTER), Some(&newer));
+        assert!(!outcome.passed());
+        assert!(
+            outcome.failures[0].contains(&last_result()),
+            "{:?}",
+            outcome.failures
+        );
+    }
+
+    /// While the stale result is skipped, the run is held to the accepted
+    /// numbers + policy.regression, and to its absolute budget.
+    #[test]
+    fn an_accepted_change_holds_to_its_numbers_and_the_budget() {
+        let budgets = accepted_budgets();
+        let previous = rust_at(0.4, 80.0, BEFORE);
+        // 0.65 s is within 10% of 0.6 s, 0.67 s is not.
+        assert!(check(&budgets, &rust_at(0.65, 90.0, AFTER), Some(&previous)).passed());
+        let slower = check(&budgets, &rust_at(0.67, 90.0, AFTER), Some(&previous));
+        assert!(
+            slower
+                .failures
+                .iter()
+                .any(|f| f.contains("0.600 s the change was accepted at")),
+            "{:?}",
+            slower.failures
+        );
+        let bigger = check(&budgets, &rust_at(0.6, 100.0, AFTER), Some(&previous));
+        assert!(
+            bigger
+                .failures
+                .iter()
+                .any(|f| f.contains("90.0 MiB the change was accepted at")),
+            "{:?}",
+            bigger.failures
+        );
+        // Accepted at 0.8 s, the run is still held to the 0.7 s target (+ 10%: 0.77 s).
+        let generous = Budgets::parse(&BUDGETS.replace(
+            "[commands.validate_clean]\n",
+            &ACCEPTED.replace("accepted_s = 0.6", "accepted_s = 0.8"),
+        ))
+        .unwrap();
+        // (0.78 s: past the target + 10%, under the accepted 0.8 s + 10%.)
+        let over = check(&generous, &rust_at(0.78, 90.0, AFTER), Some(&previous));
+        assert!(!over.passed());
+        assert!(
+            over.failures.iter().all(|f| !f.contains("accepted at")),
+            "{:?}",
+            over.failures
+        );
+    }
+
+    /// The acceptance is the rust engine's: a python run is still held to
+    /// its last result.
+    #[test]
+    fn an_accepted_change_applies_to_its_engine_only() {
+        let budgets = accepted_budgets();
+        let mut previous = report(
+            "python",
+            vec![
+                measured("validate_clean", 2.5, 170.0),
+                measured("explain", 0.2, 33.0),
+            ],
+        );
+        previous.created_unix = BEFORE;
+        let mut current = report(
+            "python",
+            vec![
+                measured("validate_clean", 3.0, 170.0),
+                measured("explain", 0.2, 33.0),
+            ],
+        );
+        current.created_unix = AFTER;
+        let outcome = check(&budgets, &current, Some(&previous));
+        assert!(!outcome.passed());
+        assert!(
+            outcome.failures[0].contains(&last_result()),
+            "{:?}",
+            outcome.failures
+        );
+    }
+
+    /// An acceptance after the run checked is refused: a typo'd or future
+    /// time would turn the relative gate off for as long as it stays.
+    #[test]
+    fn an_acceptance_after_the_run_is_refused() {
+        let outcome = check(&accepted_budgets(), &rust_at(0.6, 90.0, BEFORE), None);
+        assert!(
+            outcome
+                .failures
+                .iter()
+                .any(|f| f.contains("accepted_unix 1794680173 is after")),
+            "{:?}",
+            outcome.failures
+        );
+    }
+
+    #[test]
+    fn an_acceptance_needs_all_its_keys_an_issue_an_engine_and_a_plausible_time() {
+        let with = |from: &str, to: &str| {
+            Budgets::parse(
+                &BUDGETS.replace("[commands.validate_clean]\n", &ACCEPTED.replace(from, to)),
+            )
+        };
+        assert!(with("accepted_unix = 1794680173\n", "").is_err());
+        assert!(with("accepted_s = 0.6\n", "").is_err());
+        assert!(with("accepted_rss_mib = 90.0\n", "").is_err());
+        assert!(with("accepted_engine = \"rust\"\n", "").is_err());
+        assert!(with("#1, more checks", "more checks").is_err());
+        assert!(with("\"rust\"", "\"go\"").is_err());
+        assert!(with("1794680173", "100").is_err());
+        assert!(with("accepted_s = 0.6", "accepted_s = 0.0").is_err());
+        assert!(with("", "").is_ok());
+    }
+
+    #[test]
+    fn a_regression_against_the_last_base_branch_result_fails() {
+        let previous = report(
+            "python",
+            vec![
+                measured("validate_clean", 2.5, 170.0),
+                measured("explain", 0.2, 33.0),
+            ],
+        );
+        // Within the baseline budget, but 20% slower than the base branch.
+        let current = report(
+            "python",
+            vec![
+                measured("validate_clean", 3.0, 170.0),
+                measured("explain", 0.2, 33.0),
+            ],
+        );
+        let outcome = check(&budgets(), &current, Some(&previous));
+        assert!(!outcome.passed());
+        assert!(
+            outcome.failures[0].contains(&last_result()),
+            "{:?}",
+            outcome.failures
+        );
+        let delta = outcome.rows[0].delta_previous.unwrap();
+        assert!((delta - 0.2).abs() < 1e-9, "{delta}");
+        assert!(
+            outcome
+                .previous
+                .as_deref()
+                .unwrap_or("")
+                .contains("0123456789ab")
+        );
+    }
+
+    #[test]
+    fn another_oracle_or_run_count_is_held_to_neither_baseline_nor_previous() {
+        let mut r = report(
+            "python",
+            vec![
+                measured("validate_clean", 9.0, 170.0),
+                measured("explain", 0.2, 33.0),
+            ],
+        );
+        let previous = r.clone();
+        r.oracle = Some("opentide 0.24.0".into());
+        let outcome = check(&budgets(), &r, Some(&previous));
+        assert!(outcome.passed(), "{:?}", outcome.failures);
+        assert!(
+            outcome
+                .notes
+                .iter()
+                .any(|n| n.contains("no baseline applies")),
+            "{:?}",
+            outcome.notes
+        );
+        assert!(
+            outcome
+                .notes
+                .iter()
+                .any(|n| n.contains("oracle opentide 0.23.0 != opentide 0.24.0")),
+            "{:?}",
+            outcome.notes
+        );
+        let mut r = previous.clone();
+        r.runs = 1;
+        r.warmup = 0;
+        let outcome = check(&budgets(), &r, Some(&previous));
+        assert!(
+            outcome.notes.iter().any(|n| n.contains("1 runs after 0")),
+            "{:?}",
+            outcome.notes
+        );
+        assert!(outcome.passed());
+    }
+
+    #[test]
+    fn a_previous_result_on_another_cpu_is_not_compared() {
+        let mut previous = report(
+            "python",
+            vec![
+                measured("validate_clean", 2.0, 170.0),
+                measured("explain", 0.2, 33.0),
+            ],
+        );
+        previous.host.cpu_model = Some("AMD EPYC 7763".into());
+        let mut current = report(
+            "python",
+            vec![
+                measured("validate_clean", 3.0, 170.0),
+                measured("explain", 0.2, 33.0),
+            ],
+        );
+        current.host.cpu_model = Some("AMD EPYC 9V74".into());
+        let outcome = check(&budgets(), &current, Some(&previous));
+        assert!(outcome.passed(), "{:?}", outcome.failures);
+        assert!(
+            outcome
+                .notes
+                .iter()
+                .any(|n| n.contains("CPU AMD EPYC 7763 != AMD EPYC 9V74")),
+            "{:?}",
+            outcome.notes
+        );
+    }
+
+    #[test]
+    fn another_cpu_than_the_baselines_gets_the_generous_ceiling() {
+        let on_xeon = |validate_s: f64, explain_rss: f64| {
+            let mut r = report(
+                "python",
+                vec![
+                    measured("validate_clean", validate_s, 170.0),
+                    measured("explain", 0.2, explain_rss),
+                ],
+            );
+            r.host.cpu_model = Some("INTEL(R) XEON(R) PLATINUM 8573C".into());
+            r
+        };
+        // +40% on another CPU: within the 50% ceiling.
+        let outcome = check(&budgets(), &on_xeon(4.2, 33.0), None);
+        assert!(outcome.passed(), "{:?}", outcome.failures);
+        assert!(
+            outcome.notes[0].contains("no python baseline was recorded on INTEL(R) XEON(R)"),
+            "{:?}",
+            outcome.notes
+        );
+        // +60% fails; RSS keeps the 10% rule on every CPU.
+        assert!(!check(&budgets(), &on_xeon(4.8, 33.0), None).passed());
+        assert!(!check(&budgets(), &on_xeon(3.0, 40.0), None).passed());
+
+        let text = BUDGETS.replace(
+            "target_s = 0.03\n",
+            "target_s = 0.03\ntarget_waiver = \"UC-3.6 (#999)\"\nrust_baseline_s = 0.16\n",
+        );
+        let budgets = Budgets::parse(&text).unwrap();
+        let rust = |explain_s: f64| {
+            let mut r = report(
+                "rust",
+                vec![
+                    CommandResult::not_implemented("validate_clean", "v", "no Rust yet"),
+                    measured("explain", explain_s, 20.0),
+                ],
+            );
+            r.host.cpu_model = Some("INTEL(R) XEON(R) PLATINUM 8573C".into());
+            r
+        };
+        let outcome = check(&budgets, &rust(0.2), None);
+        assert!(outcome.passed(), "{:?}", outcome.failures);
+        assert!(
+            outcome.rows[1].reasons[0].contains("another CPU"),
+            "{:?}",
+            outcome.rows[1].reasons
+        );
+        assert!(!check(&budgets, &rust(0.3), None).passed());
+    }
+
+    #[test]
+    fn a_cpu_with_its_own_baseline_is_held_to_it_at_ten_percent() {
+        let text = format!(
+            "{BUDGETS}\n[[cpu_baseline]]\nengine = \"python\"\ncpu_model = \"AMD EPYC 7763\"\n\
+             source = \"test\"\nmedian_s = {{ validate_clean = 5.0, explain = 0.3 }}\n"
+        );
+        let budgets = Budgets::parse(&text).unwrap();
+        let on_7763 = |validate_s: f64| {
+            let mut r = report(
+                "python",
+                vec![
+                    measured("validate_clean", validate_s, 170.0),
+                    measured("explain", 0.3, 33.0),
+                ],
+            );
+            r.host.cpu_model = Some("AMD EPYC 7763".into());
+            r
+        };
+        // 5.4 s is +8% on its own CPU's 5.0 s (and +80% on the reference's 3.0 s).
+        let outcome = check(&budgets, &on_7763(5.4), None);
+        assert!(outcome.passed(), "{:?}", outcome.failures);
+        assert!(outcome.notes.is_empty(), "{:?}", outcome.notes);
+        // 5.6 s is +12%: fails at 10%.
+        assert!(!check(&budgets, &on_7763(5.6), None).passed());
+        assert!((budgets.spread("python").unwrap() - 5.0 / 3.0).abs() < 1e-9);
+        // An unrecorded CPU is held to the slowest recorded (5.0 s) + 50%.
+        let mut r = on_7763(7.4);
+        r.host.cpu_model = Some("Some Future CPU".into());
+        assert!(check(&budgets, &r, None).passed());
+        r.results[0] = measured("validate_clean", 7.6, 170.0);
+        assert!(!check(&budgets, &r, None).passed());
+        // Unknown commands, duplicates and bad numbers are refused.
+        assert!(Budgets::parse(&text.replace("explain = 0.3", "nonesuch = 0.3")).is_err());
+        assert!(Budgets::parse(&text.replace("explain = 0.3", "explain = 0.0")).is_err());
+        let twice = format!(
+            "{text}\n[[cpu_baseline]]\nengine = \"python\"\ncpu_model = \"AMD EPYC 7763\"\nsource = \"x\"\nmedian_s = {{}}\n"
+        );
+        assert!(Budgets::parse(&twice).is_err());
+    }
+
+    #[test]
+    fn with_require_reference_a_report_compared_with_nothing_fails() {
+        // Another oracle: no baseline, and no previous result.
+        let mut r = report(
+            "python",
+            vec![
+                measured("validate_clean", 9.0, 170.0),
+                measured("explain", 0.2, 33.0),
+            ],
+        );
+        r.oracle = Some("opentide 0.24.0".into());
+        assert!(check(&budgets(), &r, None).passed(), "locally it is a note");
+        let outcome = check_with(&budgets(), &r, None, true);
+        assert_eq!(outcome.failures.len(), 2, "{:?}", outcome.failures);
+        assert!(
+            outcome.failures[0].contains("no reference applies"),
+            "{:?}",
+            outcome.failures
+        );
+        // Another run count, another seed: the same.
+        for edit in [
+            |r: &mut Report| r.runs = 3,
+            |r: &mut Report| r.seed = None,
+            |r: &mut Report| r.workspace_digest = Some("0000".into()),
+        ] {
+            let mut r = report("python", vec![measured("validate_clean", 9.0, 170.0)]);
+            edit(&mut r);
+            assert!(!check_with(&budgets(), &r, None, true).passed());
+        }
+        // A comparable previous result is a reference.
+        let mut r = report("python", vec![measured("validate_clean", 3.0, 170.0)]);
+        r.oracle = Some("opentide 0.24.0".into());
+        let previous = r.clone();
+        let outcome = check_with(&budgets(), &r, Some(&previous), true);
+        assert!(
+            !outcome.failures.iter().any(|f| f.contains("no reference")),
+            "{:?}",
+            outcome.failures
+        );
+        // No CPU model fails on CI; the baseline report itself passes.
+        let mut r = report(
+            "python",
+            vec![
+                measured("validate_clean", 3.0, 170.0),
+                measured("explain", 0.2, 33.0),
+            ],
+        );
+        assert!(check_with(&budgets(), &r, None, true).passed());
+        r.host.cpu_model = None;
+        let outcome = check_with(&budgets(), &r, None, true);
+        assert!(
+            outcome.failures.iter().any(|f| f.contains("no CPU model")),
+            "{:?}",
+            outcome.failures
+        );
+    }
+
+    #[test]
+    fn another_workspace_digest_is_held_to_neither_baseline_nor_previous() {
+        let previous = report("python", vec![measured("validate_clean", 2.0, 170.0)]);
+        let mut r = report("python", vec![measured("validate_clean", 9.0, 170.0)]);
+        r.workspace_digest = Some("ffffffffffffffff".into());
+        let outcome = check(&budgets(), &r, Some(&previous));
+        assert!(
+            outcome.notes.iter().any(|n| n.contains("workspace digest")),
+            "{:?}",
+            outcome.notes
+        );
+        assert!(
+            outcome
+                .failures
+                .iter()
+                .all(|f| !f.contains("validate_clean: median")),
+            "{:?}",
+            outcome.failures
+        );
+    }
+
+    #[test]
+    fn a_report_that_measures_nothing_is_refused() {
+        let good = report("python", vec![measured("explain", 0.2, 33.0)]);
+        let text = |r: &Report| serde_json::to_string(r).unwrap();
+        assert!(parse_report(&text(&good)).is_ok());
+        let mut r = good.clone();
+        r.results[0] = CommandResult::not_implemented("explain", "e", "no Rust yet");
+        assert!(
+            parse_report(&text(&r)).is_err(),
+            "python cannot be not_implemented"
+        );
+        // ...but for the oracle's start, which no run of it measures.
+        let mut r = good.clone();
+        r.results.push(CommandResult::not_implemented(
+            "startup",
+            "--version",
+            "not held",
+        ));
+        assert!(parse_report(&text(&r)).is_ok());
+        let mut r = good.clone();
+        r.results[0].median_s = Some(-1.0);
+        assert!(parse_report(&text(&r)).is_err());
+        let mut r = good.clone();
+        r.results[0].peak_rss_bytes = None;
+        assert!(parse_report(&text(&r)).is_err());
+        let mut r = good.clone();
+        r.runs = 0;
+        assert!(parse_report(&text(&r)).is_err());
+        let mut raw: serde_json::Value = serde_json::from_str(&text(&good)).unwrap();
+        raw.as_object_mut().unwrap().remove("seed");
+        assert!(parse_report(&raw.to_string()).is_err());
+    }
+
+    #[test]
+    fn a_previous_result_of_another_scale_is_not_compared() {
+        let mut previous = report(
+            "python",
+            vec![
+                measured("validate_clean", 1.0, 100.0),
+                measured("explain", 0.1, 20.0),
+            ],
+        );
+        previous.scale = 10;
+        let current = report(
+            "python",
+            vec![
+                measured("validate_clean", 3.0, 170.0),
+                measured("explain", 0.2, 33.0),
+            ],
+        );
+        let outcome = check(&budgets(), &current, Some(&previous));
+        assert!(outcome.passed(), "{:?}", outcome.failures);
+        assert!(
+            outcome.notes[0].contains("not comparable"),
+            "{:?}",
+            outcome.notes
+        );
+        assert_eq!(outcome.previous, None);
+    }
+
+    #[test]
+    fn rust_is_held_to_the_plan_target_and_no_rust_yet_is_listed_not_failed() {
+        let r = report(
+            "rust",
+            vec![
+                measured("validate_clean", 0.69, 90.0),
+                CommandResult::not_implemented("explain", "explain", "no Rust yet"),
+            ],
+        );
+        let outcome = check(&budgets(), &r, None);
+        assert!(outcome.passed(), "{:?}", outcome.failures);
+        assert_eq!(outcome.rows[1].verdict, Verdict::NotImplemented);
+
+        let r = report(
+            "rust",
+            vec![
+                measured("validate_clean", 0.78, 90.0),
+                CommandResult::not_implemented("explain", "explain", "no Rust yet"),
+            ],
+        );
+        let outcome = check(&budgets(), &r, None);
+        assert!(!outcome.passed());
+        assert!(
+            outcome.failures[0].contains("target"),
+            "{:?}",
+            outcome.failures
+        );
+    }
+
+    #[test]
+    fn a_median_within_the_runner_tolerance_of_its_target_passes_and_says_so() {
+        // validate_file on two EPYC 7763 runners: 0.088 s, then 0.100 s with no
+        // change. Exactly on the target + 10% passes; past it fails.
+        for (seconds, passes) in [(0.70, true), (0.75, true), (0.77, true), (0.771, false)] {
+            let r = report(
+                "rust",
+                vec![
+                    measured("validate_clean", seconds, 90.0),
+                    CommandResult::not_implemented("explain", "e", "no Rust yet"),
+                ],
+            );
+            let outcome = check(&budgets(), &r, None);
+            assert_eq!(
+                outcome.passed(),
+                passes,
+                "{seconds}: {:?}",
+                outcome.failures
+            );
+            let row = &outcome.rows[0];
+            assert!(
+                (row.budget_s.unwrap() - 0.77).abs() < 1e-9,
+                "{:?}",
+                row.budget_s
+            );
+            let noted = row
+                .reasons
+                .iter()
+                .any(|r| r.contains("within the 10% between runners"));
+            assert_eq!(
+                noted,
+                seconds > 0.70 && passes,
+                "{seconds}: {:?}",
+                row.reasons
+            );
+        }
+    }
+
+    #[test]
+    fn rust_without_a_plan_target_is_held_to_the_oracle_median() {
+        let text = BUDGETS.replace("target_s = 0.03\n", "");
+        let budgets = Budgets::parse(&text).unwrap();
+        let rust = |explain_s: f64, cpu: &str| {
+            let mut r = report(
+                "rust",
+                vec![
+                    CommandResult::not_implemented("validate_clean", "v", "no Rust yet"),
+                    measured("explain", explain_s, 20.0),
+                ],
+            );
+            r.host.cpu_model = Some(cpu.into());
+            r
+        };
+        let same = "AMD EPYC 9V45 96-Core Processor";
+        // At the oracle's 0.2 s: passes, a reference applies (CI's gate).
+        let outcome = check_with(&budgets, &rust(0.2, same), None, true);
+        assert!(outcome.passed(), "{:?}", outcome.failures);
+        assert_eq!(outcome.rows[1].budget_s, Some(0.2));
+        // Slower than the oracle on its CPU: fails, whatever the noise floor.
+        let outcome = check_with(&budgets, &rust(0.205, same), None, true);
+        assert!(!outcome.passed());
+        assert!(
+            outcome.failures[0].contains("slower than the implementation it replaces"),
+            "{:?}",
+            outcome.failures
+        );
+        // On a CPU recorded nowhere: the slowest recorded + cross_cpu_regression
+        // (50% in these budgets).
+        let outcome = check_with(&budgets, &rust(0.29, "Some Other CPU"), None, true);
+        assert!(outcome.passed(), "{:?}", outcome.failures);
+        let outcome = check_with(&budgets, &rust(0.31, "Some Other CPU"), None, true);
+        assert!(!outcome.passed(), "{:?}", outcome.rows[1].reasons);
+    }
+
+    #[test]
+    fn a_waived_target_holds_rust_to_its_own_baseline_and_says_so() {
+        let text = BUDGETS.replace(
+            "target_s = 0.03\n",
+            "target_s = 0.03\ntarget_waiver = \"UC-3.6 (#999)\"\nrust_baseline_s = 0.16\n",
+        );
+        let budgets = Budgets::parse(&text).unwrap();
+        let rust = |explain_s: f64| {
+            report(
+                "rust",
+                vec![
+                    CommandResult::not_implemented("validate_clean", "v", "no Rust yet"),
+                    measured("explain", explain_s, 20.0),
+                ],
+            )
+        };
+        // Over the target, within 10% of the Rust baseline: passes, and says so.
+        let outcome = check(&budgets, &rust(0.17), None);
+        assert!(outcome.passed(), "{:?}", outcome.failures);
+        assert_eq!(
+            outcome.rows[1].reasons,
+            ["over the plan target 0.030 s, waived until UC-3.6 (#999)"]
+        );
+        let text = summary_markdown(&outcome, &rust(0.17));
+        assert!(
+            text.contains("✅ pass (over the plan target 0.030 s, waived until UC-3.6 (#999))"),
+            "{text}"
+        );
+        // Over the target but within its 10%, as the check without the waiver
+        // would pass it: the waiver can go (0.032 s against 0.030 s).
+        let near = Budgets::parse(&BUDGETS.replace(
+            "target_s = 0.03\n",
+            "target_s = 0.03\ntarget_waiver = \"UC-3.6 (#999)\"\nrust_baseline_s = 0.031\n",
+        ))
+        .unwrap();
+        let outcome = check(&near, &rust(0.032), None);
+        assert!(outcome.passed(), "{:?}", outcome.failures);
+        assert_eq!(
+            outcome.rows[1].reasons,
+            ["meets the plan target 0.030 s: remove its target_waiver"]
+        );
+        // A regression against the Rust baseline still fails.
+        let outcome = check(&budgets, &rust(0.2), None);
+        assert!(!outcome.passed());
+        assert!(
+            outcome.failures[0].contains("against the Rust baseline"),
+            "{:?}",
+            outcome.failures
+        );
+        // A waiver without the baseline that replaces it is refused.
+        assert!(
+            Budgets::parse(&BUDGETS.replace(
+                "target_s = 0.03\n",
+                "target_s = 0.03\ntarget_waiver = \"#1 x\"\n"
+            ))
+            .is_err()
+        );
+    }
+
+    #[test]
+    fn a_waived_miss_is_reported_not_failed_and_a_regression_past_it_fails() {
+        // validate_clean: target 0.7 s and 100 MiB; the miss measured 0.9 s and 140 MiB.
+        let text = BUDGETS.replace(
+            "target_rss_mib = 100.0\n",
+            "target_rss_mib = 100.0\ntime_waiver = \"#1072, the start\"\nwaived_s = 0.9\n\
+             rss_waiver = \"#1071, the catalogs\"\nwaived_rss_mib = 140.0\n",
+        );
+        let waived = Budgets::parse(&text).unwrap();
+        let rust = |seconds: f64, mib: f64| {
+            report(
+                "rust",
+                vec![
+                    measured("validate_clean", seconds, mib),
+                    CommandResult::not_implemented("explain", "e", "no Rust yet"),
+                ],
+            )
+        };
+        // Over both targets, within both waivers: waived, and the gate passes.
+        let outcome = check_with(&waived, &rust(0.9, 140.0), None, true);
+        assert!(outcome.passed(), "{:?}", outcome.failures);
+        assert_eq!(outcome.rows[0].verdict, Verdict::Waived);
+        assert!(
+            outcome.rows[0]
+                .reasons
+                .iter()
+                .any(|r| r.contains("over the target 0.700 s + 10%; waived until #1072")),
+            "{:?}",
+            outcome.rows[0].reasons
+        );
+        assert!(
+            outcome.rows[0]
+                .reasons
+                .iter()
+                .any(|r| r.contains("waived until #1071, the catalogs (measured 140 MiB)")),
+            "{:?}",
+            outcome.rows[0].reasons
+        );
+        let summary = summary_markdown(&outcome, &rust(0.9, 140.0));
+        assert!(summary.contains("⚠️ waived: "), "{summary}");
+        // Within 10% of the waived values: still waived.
+        assert!(check(&waived, &rust(0.98, 150.0), None).passed());
+        // Past the waived time + 10%: fails, and says the waiver does not cover it.
+        let outcome = check(&waived, &rust(1.0, 140.0), None);
+        assert!(!outcome.passed());
+        assert_eq!(outcome.rows[0].verdict, Verdict::Fail);
+        assert!(
+            outcome
+                .failures
+                .iter()
+                .any(|f| f.contains("the time_waiver (#1072")),
+            "{:?}",
+            outcome.failures
+        );
+        // Past the waived RSS + 10%: fails.
+        assert!(!check(&waived, &rust(0.9, 160.0), None).passed());
+        // A regression against the last result is never waived.
+        let last = rust(0.6, 140.0);
+        let outcome = check(&waived, &rust(0.9, 140.0), Some(&last));
+        assert!(!outcome.passed());
+        assert!(
+            outcome.failures.iter().any(|f| f.contains(&last_result())),
+            "{:?}",
+            outcome.failures
+        );
+        // Meeting the budget: passes and says the waivers can go.
+        let outcome = check(&waived, &rust(0.6, 90.0), None);
+        assert!(outcome.passed());
+        assert_eq!(outcome.rows[0].verdict, Verdict::Pass);
+        assert!(
+            outcome.rows[0]
+                .reasons
+                .iter()
+                .any(|r| r.contains("remove its time_waiver"))
+                && outcome.rows[0]
+                    .reasons
+                    .iter()
+                    .any(|r| r.contains("remove its rss_waiver")),
+            "{:?}",
+            outcome.rows[0].reasons
+        );
+        // Without the waivers the same miss fails.
+        assert!(!check(&budgets(), &rust(0.9, 140.0), None).passed());
+    }
+
+    #[test]
+    fn a_waiver_must_name_its_issue_and_its_measured_value() {
+        for (bad, why) in [
+            (
+                "time_waiver = \"later\"\nwaived_s = 0.9\n",
+                "names no issue",
+            ),
+            (
+                "rss_waiver = \"UC-2.2\"\nwaived_rss_mib = 140.0\n",
+                "names no issue",
+            ),
+            ("time_waiver = \"#1072\"\n", "no measured value"),
+            ("waived_rss_mib = 140.0\n", "no waiver"),
+            ("time_waiver = \"#1072\"\nwaived_s = 0.0\n", "a zero value"),
+        ] {
+            let text = BUDGETS.replace(
+                "target_rss_mib = 100.0\n",
+                &format!("target_rss_mib = 100.0\n{bad}"),
+            );
+            assert!(Budgets::parse(&text).is_err(), "{why}: {bad}");
+        }
+        // The plan target's waiver too.
+        let text = BUDGETS.replace(
+            "target_s = 0.03\n",
+            "target_s = 0.03\ntarget_waiver = \"UC-3.6\"\nrust_baseline_s = 0.16\n",
+        );
+        assert!(Budgets::parse(&text).is_err());
+        assert!(names_an_issue("#926, the load"));
+        assert!(names_an_issue("UC-2.6 (#821) rebuilds it"));
+        assert!(!names_an_issue("# 12"));
+        assert!(!names_an_issue("C# rewrite"));
+        assert!(names_an_issue("é#😀 then #12é"));
+        assert!(!names_an_issue("é#😀 #é"));
+    }
+
+    #[test]
+    fn an_unbudgeted_command_and_a_missing_one_both_fail() {
+        let r = report(
+            "python",
+            vec![
+                measured("validate_clean", 3.0, 170.0),
+                measured("brand_new", 1.0, 10.0),
+            ],
+        );
+        let outcome = check(&budgets(), &r, None);
+        assert_eq!(outcome.failures.len(), 2, "{:?}", outcome.failures);
+        assert!(outcome.failures[0].starts_with("brand_new: no budget"));
+        assert!(outcome.failures[1].starts_with("explain: has a budget but is not in the report"));
+    }
+
+    #[test]
+    fn a_workspace_of_its_own_is_compared_with_nothing() {
+        let mut r = report(
+            "python",
+            vec![
+                measured("validate_clean", 30.0, 900.0),
+                measured("explain", 9.0, 33.0),
+            ],
+        );
+        r.seed = None;
+        let previous = r.clone();
+        let outcome = check(&budgets(), &r, Some(&previous));
+        assert!(outcome.passed(), "{:?}", outcome.failures);
+        assert!(
+            outcome
+                .notes
+                .iter()
+                .any(|n| n.contains("a workspace of its own")),
+            "{:?}",
+            outcome.notes
+        );
+        r.engine = "rust".into();
+        let outcome = check(&budgets(), &r, None);
+        assert!(outcome.passed(), "{:?}", outcome.failures);
+    }
+
+    #[test]
+    fn another_scale_than_the_baseline_has_no_python_budget() {
+        let mut r = report(
+            "python",
+            vec![
+                measured("validate_clean", 30.0, 900.0),
+                measured("explain", 0.2, 33.0),
+            ],
+        );
+        r.scale = 10;
+        let outcome = check(&budgets(), &r, None);
+        assert!(outcome.passed(), "{:?}", outcome.failures);
+        assert!(outcome.notes[0].contains("no baseline applies"));
+    }
+
+    #[test]
+    fn the_summary_has_a_row_per_command_with_median_rss_budget_and_delta() {
+        let r = report(
+            "python",
+            vec![
+                measured("validate_clean", 3.4, 170.0),
+                measured("explain", 0.2, 33.0),
+            ],
+        );
+        let outcome = check(&budgets(), &r, None);
+        let text = summary_markdown(&outcome, &r);
+        assert!(text.contains("FAILED"), "{text}");
+        assert!(
+            text.contains(
+                "| Command | Median | Peak RSS | Budget (time) | Budget (RSS) | Δ reference"
+            ),
+            "{text}"
+        );
+        assert!(text.contains("| validate, clean (`validate_clean`) | 3.400 s | 170.0 MiB | 3.300 s | 187.0 MiB | +13.3% |"), "{text}");
+        assert!(text.contains("xychart-beta"), "{text}");
+    }
+
+    #[test]
+    fn bad_budgets_and_reports_are_refused() {
+        assert!(
+            Budgets::parse(&BUDGETS.replace("schema_version = 1", "schema_version = 2")).is_err()
+        );
+        assert!(
+            Budgets::parse(&BUDGETS.replace("regression = 0.10", "regression = -1.0")).is_err()
+        );
+        assert!(Budgets::parse(&BUDGETS.replace("baseline_s = 0.2", "baseline_s = 0.0")).is_err());
+        assert!(Budgets::parse(&format!("{BUDGETS}\nunknown = 1\n")).is_err());
+        let mut r = report("python", vec![]);
+        r.schema_version = 99;
+        assert!(parse_report(&serde_json::to_string(&r).unwrap()).is_err());
+    }
+}

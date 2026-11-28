@@ -1,0 +1,107 @@
+---
+source: crates/opentide-cql/tests/parser_trees.rs
+expression: debug_parse(query(&file))
+input_file: crates/testdata/corpus/cql/match_statement__valid.cql
+---
+SOURCE_FILE@0..159
+  PIPELINE@0..158
+    MATCH_STATEMENT@0..158
+      FIELD_NAME@0..7
+        WORD@0..7 "logtype"
+      WHITESPACE@7..8 " "
+      MATCH_KW@8..13 "match"
+      WHITESPACE@13..14 " "
+      L_BRACE@14..15 "{"
+      WHITESPACE@15..18 "\n  "
+      MATCH_BRANCH@18..52
+        STRING@18..29
+          STRING_TOKEN@18..29 "\"accesslog\""
+        WHITESPACE@29..30 " "
+        FAT_ARROW@30..32 "=>"
+        WHITESPACE@32..33 " "
+        PIPELINE@33..52
+          ASSIGNMENT@33..52
+            FIELD_NAME@33..37
+              WORD@33..37 "time"
+            COLON_EQ@37..39 ":="
+            FIELD_NAME@39..52
+              WORD@39..52 "response_time"
+      WHITESPACE@52..53 " "
+      SEMI@53..54 ";"
+      WHITESPACE@54..57 "\n  "
+      MATCH_BRANCH@57..95
+        REGEX@57..69
+          SLASH@57..58 "/"
+          REGEX_PATTERN@58..68
+            REGEX_PATTERN_TOKEN@58..68 "server_\\d+"
+          SLASH@68..69 "/"
+        WHITESPACE@69..70 " "
+        FAT_ARROW@70..72 "=>"
+        WHITESPACE@72..73 " "
+        PIPELINE@73..95
+          ASSIGNMENT@73..95
+            FIELD_NAME@73..77
+              WORD@73..77 "time"
+            COLON_EQ@77..79 ":="
+            BINARY_EXPRESSION@79..95
+              FIELD_NAME@79..90
+                WORD@79..90 "server_time"
+              STAR@90..91 "*"
+              NUMBER@91..95
+                NUMBER_TOKEN@91..95 "1000"
+      WHITESPACE@95..96 " "
+      SEMI@96..97 ";"
+      WHITESPACE@97..100 "\n  "
+      MATCH_BRANCH@100..143
+        FUNCTION_CALL@100..123
+          FUNCTION_NAME@100..102
+            FUNCTION_NAME_TOKEN@100..102 "in"
+          L_PAREN@102..103 "("
+          ARGUMENT_LIST@103..122
+            NAMED_ARGUMENT@103..122
+              ARGUMENT_NAME@103..109
+                WORD@103..109 "values"
+              EQ@109..110 "="
+              ARRAY@110..122
+                L_BRACK@110..111 "["
+                NUMBER@111..112
+                  NUMBER_TOKEN@111..112 "5"
+                COMMA@112..113 ","
+                WHITESPACE@113..114 " "
+                NUMBER@114..116
+                  NUMBER_TOKEN@114..116 "56"
+                COMMA@116..117 ","
+                WHITESPACE@117..118 " "
+                NUMBER@118..121
+                  NUMBER_TOKEN@118..121 "567"
+                R_BRACK@121..122 "]"
+          R_PAREN@122..123 ")"
+        WHITESPACE@123..124 " "
+        FAT_ARROW@124..126 "=>"
+        WHITESPACE@126..127 " "
+        PIPELINE@127..143
+          ASSIGNMENT@127..143
+            FIELD_NAME@127..131
+              WORD@127..131 "kind"
+            WHITESPACE@131..132 " "
+            COLON_EQ@132..134 ":="
+            WHITESPACE@134..135 " "
+            STRING@135..143
+              STRING_TOKEN@135..143 "\"listed\""
+      SEMI@143..144 ";"
+      WHITESPACE@144..147 "\n  "
+      MATCH_BRANCH@147..154
+        UNQUOTED_PATTERN@147..149
+          PATTERN@147..149 "**"
+        WHITESPACE@149..150 " "
+        FAT_ARROW@150..152 "=>"
+        WHITESPACE@152..153 " "
+        PIPELINE@153..154
+          FREE_TEXT@153..154
+            UNQUOTED_PATTERN@153..154
+              PATTERN@153..154 "*"
+      WHITESPACE@154..155 " "
+      SEMI@155..156 ";"
+      WHITESPACE@156..157 "\n"
+      R_BRACE@157..158 "}"
+  WHITESPACE@158..159 "\n"

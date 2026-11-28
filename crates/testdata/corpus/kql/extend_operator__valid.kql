@@ -1,0 +1,2 @@
+// prod:extend_operator valid
+SecurityEvent | extend x = 1

@@ -1,0 +1,2 @@
+// prod:field invalid
+process where process.?name == null

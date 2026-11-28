@@ -1,0 +1,35 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: validate.query/json/vscode/file
+---
+args: opentide --json validate query --file objects/rules/suspicious-lsass-access.yaml --queries warn
+exit: 1
+
+━━━ stdout · json, 1 lines
+{
+  "command": "validate query",
+  "duration_ms": 0,
+  "error": "No rule file directly in detections/rules matched: objects/rules/suspicious-lsass-access.yaml",
+  "exit_code": 1,
+  "failure": {
+    "argument": null,
+    "code": "command_failed",
+    "crash_log": null,
+    "message": "No rule file directly in detections/rules matched: objects/rules/suspicious-lsass-access.yaml",
+    "suggestion": null
+  },
+  "message": "No rule file directly in detections/rules matched: objects/rules/suspicious-lsass-access.yaml",
+  "mode": "offline",
+  "next_actions": [],
+  "ok": false,
+  "platform": null,
+  "schema_version": 1,
+  "status": "failed",
+  "summary": {},
+  "supported": true,
+  "unmatched": [
+    "objects/rules/suspicious-lsass-access.yaml"
+  ]
+}
+
+━━━ stderr · empty

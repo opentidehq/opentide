@@ -1,0 +1,1 @@
+open_write and (python_pth_file or python_customize_file) and not proc.name in (package_mgmt_binaries) and not python_pth_installers and not containerd_activities and not user_known_python_pth_modifiers

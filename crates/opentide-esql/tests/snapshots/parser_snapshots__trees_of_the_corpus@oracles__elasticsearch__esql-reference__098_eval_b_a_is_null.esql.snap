@@ -1,0 +1,36 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/oracles/elasticsearch/esql-reference/098_eval_b_a_is_null.esql
+---
+SOURCE_FILE@0..31
+  QUERY@0..30
+    FROM_COMMAND@0..9
+      FROM_KW@0..4 "FROM"
+      WHITESPACE@4..5 " "
+      INDEX_PATTERN@5..9
+        INDEX_NAME@5..9
+          SOURCE_TEXT@5..9 "logs"
+    WHITESPACE@9..10 " "
+    PIPE@10..11 "|"
+    WHITESPACE@11..12 " "
+    EVAL_COMMAND@12..30
+      EVAL_KW@12..16 "EVAL"
+      WHITESPACE@16..17 " "
+      FIELD_ASSIGNMENT_OR_EXPRESSION@17..30
+        QUALIFIED_NAME@17..18
+          IDENTIFIER@17..18
+            IDENT@17..18 "b"
+        WHITESPACE@18..19 " "
+        EQ@19..20 "="
+        WHITESPACE@20..21 " "
+        IS_NULL_EXPRESSION@21..30
+          QUALIFIED_NAME@21..22
+            IDENTIFIER@21..22
+              IDENT@21..22 "a"
+          WHITESPACE@22..23 " "
+          IS_KW@23..25 "IS"
+          WHITESPACE@25..26 " "
+          NULL_KW@26..30 "NULL"
+  WHITESPACE@30..31 "\n"
+--- errors

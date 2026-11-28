@@ -1,0 +1,15 @@
+---
+source: crates/opentide-yaral/src/parser/tests.rs
+expression: "show(\"if($a)\")"
+---
+SOURCE_FILE@0..6
+  SEARCH_QUERY@0..6
+    SEARCH_EVENTS@0..6
+      IF_EXPR@0..6
+        IF_KW@0..2 "if"
+        L_PAREN@2..3 "("
+        VARIABLE@3..5
+          VAR_TOKEN@3..5 "$a"
+        R_PAREN@5..6 ")"
+errors:
+5..5: expected `,` (expected `,`)

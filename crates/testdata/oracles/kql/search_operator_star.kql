@@ -1,0 +1,1 @@
+SigninLogs | search kind=case_insensitive * has "admin"

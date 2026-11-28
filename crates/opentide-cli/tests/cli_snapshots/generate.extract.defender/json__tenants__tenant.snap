@@ -1,0 +1,151 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: generate.extract.defender/json/tenants/tenant
+---
+args: opentide --json generate extract defender
+exit: 0
+
+━━━ stdout · json, 1 lines
+{
+  "command": "generate extract defender",
+  "duration_ms": 0,
+  "exit_code": 0,
+  "failure": null,
+  "import": "defender",
+  "message": "Imported 3 rules from defender · 1 skipped",
+  "next_actions": [],
+  "ok": true,
+  "schema_version": 1,
+  "skipped": [
+    {
+      "name": "Suspicious PowerShell: \"encoded\" command (1.0.0)",
+      "reason": "rule 8d7c6b5a-0000-4000-8000-000000000201 names the same uuid as rule opentide-8d7c6b5a-0000-4000-8000-000000000201, which the file holds: it is most likely the copy an earlier opentide release left; delete it in the portal, or rename both its name and its alert title"
+    }
+  ],
+  "status": "completed",
+  "summary": {
+    "imported": 3,
+    "skipped": 1
+  }
+}
+
+━━━ stderr
+{"rule":"Suspicious PowerShell: \"encoded\" command (1.0.0)","reason":"rule 8d7c6b5a-0000-4000-8000-000000000201 names the same uuid as rule opentide-8d7c6b5a-0000-4000-8000-000000000201, which the file holds: it is most likely the copy an earlier opentide release left; delete it in the portal, or rename both its name and its alert title","event":"defender_import_rule_skipped","level":"warning","timestamp":"0000-00-00 00:00:00"}
+{"rule":"Office spawns PowerShell","uuid":"8d7c6b5a-0000-4000-8000-000000000202","detail":"the tenant's rule id 8d7c6b5a-0000-4000-8000-000000000202 is not the id deploy addresses a rule by (opentide-<uuid>): deploying the file creates opentide-8d7c6b5a-0000-4000-8000-000000000202; first delete the original in the portal, or rename both its name and its alert title","event":"defender_import_new_uuid","level":"warning","timestamp":"0000-00-00 00:00:00"}
+{"rule":"office spawns powershell","uuid":"8d7c6b5a-0000-4000-8000-000000000203","detail":"the tenant's rule id 8d7c6b5a-0000-4000-8000-000000000203 is not the id deploy addresses a rule by (opentide-<uuid>): deploying the file creates opentide-8d7c6b5a-0000-4000-8000-000000000203; first delete the original in the portal, or rename both its name and its alert title","event":"defender_import_new_uuid","level":"warning","timestamp":"0000-00-00 00:00:00"}
+
+━━━ ws/Imported/ · created 0755
+
+━━━ ws/Imported/Office spawns PowerShell.yaml · created 0644
+name: Office spawns PowerShell
+metadata:
+  uuid: 8d7c6b5a-0000-4000-8000-000000000202
+  schema: rule::1.0
+  version: 1
+  created: "2026-01-02"
+  modified: "2026-02-03"
+  tlp: amber+strict
+  author: alice@contoso.example
+description: PowerShell started by an Office application.
+response:
+  alert_severity: High
+configurations:
+  microsoft_defender:
+    schema: platform::microsoft_defender::1.0
+    status: DISABLED
+    tenants:
+      - lab
+    query: |
+      DeviceProcessEvents
+        | where FileName == "powershell.exe"
+    schedule:
+      frequency: NRT
+    alert:
+      title: Office spawns PowerShell
+    entities:
+      hosts:
+        - device_id: DeviceId
+
+━━━ ws/Imported/Suspicious PowerShell   encoded  command.yaml · created 0644
+name: "Suspicious PowerShell: \"encoded\" command"
+metadata:
+  uuid: 8d7c6b5a-0000-4000-8000-000000000201
+  schema: rule::1.0
+  version: 1
+  created: "2026-01-02"
+  modified: "2026-02-03"
+  tlp: amber+strict
+  author: alice@contoso.example
+description: PowerShell started by an Office application.
+response:
+  alert_severity: Medium
+configurations:
+  microsoft_defender:
+    schema: platform::microsoft_defender::1.0
+    status: PRODUCTION
+    tenants:
+      - lab
+    contributors:
+      - bob@contoso.example
+    query: |
+      DeviceProcessEvents
+        | where FileName == "powershell.exe"
+    schedule:
+      frequency: 1H
+      lookback: 4H
+    alert:
+      title: Encoded PowerShell
+      recommendation: |-
+        Isolate the device.
+          Collect the investigation package.
+      techniques:
+        - T1059.001
+        - T1027
+      custom_details:
+        CommandLine: ProcessCommandLine
+      grouping: single_alert
+    entities:
+      hosts:
+        - device_id: DeviceId
+          name: DeviceName
+      accounts:
+        - upn: AccountUpn
+    actions:
+      isolate_devices:
+        - device_id: DeviceId
+          isolation_type: full
+    scope:
+      device_groups:
+        - Tier 0
+    incident:
+      exclude_from_correlation: true
+
+━━━ ws/Imported/office spawns powershell 8d7c6b5a.yaml · created 0644
+name: office spawns powershell
+metadata:
+  uuid: 8d7c6b5a-0000-4000-8000-000000000203
+  schema: rule::1.0
+  version: 1
+  created: "2026-01-02"
+  modified: "2026-02-03"
+  tlp: amber+strict
+  author: alice@contoso.example
+description: PowerShell started by an Office application.
+response:
+  alert_severity: High
+configurations:
+  microsoft_defender:
+    schema: platform::microsoft_defender::1.0
+    status: PRODUCTION
+    tenants:
+      - lab
+    query: |
+      DeviceProcessEvents
+        | where FileName == "powershell.exe"
+    schedule:
+      frequency: 1H
+    alert:
+      title: office spawns powershell
+    entities:
+      hosts:
+        - device_id: DeviceId

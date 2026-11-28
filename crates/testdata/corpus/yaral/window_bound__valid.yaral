@@ -1,0 +1,15 @@
+// prod:window_bound valid
+rule r {
+  meta:
+    author = "a"
+  events:
+    $e.metadata.event_type = "USER_LOGIN"
+    $user = $e.target.user.userid
+  match:
+    $user over 10m
+  outcome:
+    $first = window_start
+    $last = window_end
+  condition:
+    $e
+}

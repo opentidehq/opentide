@@ -1,0 +1,81 @@
+---
+source: crates/opentide-eql/tests/parser_trees.rs
+expression: "parser::debug(source)"
+---
+SOURCE_FILE@0..97
+  SEQUENCE@0..97
+    SEQUENCE_KW@0..8 "sequence"
+    WHITESPACE@8..9 " "
+    SEQUENCE_PARAMS@9..23
+      WITH_KW@9..13 "with"
+      WHITESPACE@13..14 " "
+      MAXSPAN_KW@14..21 "maxspan"
+      EQ@21..22 "="
+      TIME_UNIT@22..23
+        NUMBER@22..23
+          NUMBER_TOKEN@22..23 "5"
+    WHITESPACE@23..24 " "
+    JOIN_KEYS@24..28
+      BY_KW@24..26 "by"
+      WHITESPACE@26..27 " "
+      FIELD@27..28
+        IDENTIFIER@27..28
+          WORD@27..28 "k"
+    WHITESPACE@28..29 " "
+    SEQUENCE_TERM@29..56
+      SUBQUERY@29..44
+        MISSING_EVENT_OPEN@29..31
+          BANG_L_BRACK@29..31 "!["
+        EVENT_CATEGORY@31..32
+          IDENTIFIER@31..32
+            WORD@31..32 "x"
+        WHITESPACE@32..33 " "
+        WHERE_KW@33..38 "where"
+        WHITESPACE@38..39 " "
+        BOOLEAN@39..43
+          TRUE_KW@39..43 "true"
+        R_BRACK@43..44 "]"
+      WHITESPACE@44..45 " "
+      TERM_OPTION@45..56
+        WITH_KW@45..49 "with"
+        WHITESPACE@49..50 " "
+        IDENTIFIER@50..54
+          WORD@50..54 "runs"
+        EQ@54..55 "="
+        NUMBER@55..56
+          NUMBER_TOKEN@55..56 "3"
+    WHITESPACE@56..57 " "
+    SEQUENCE_TERM@57..76
+      SUBQUERY@57..71
+        L_BRACK@57..58 "["
+        EVENT_CATEGORY@58..59
+          IDENTIFIER@58..59
+            WORD@58..59 "y"
+        WHITESPACE@59..60 " "
+        WHERE_KW@60..65 "where"
+        WHITESPACE@65..66 " "
+        BOOLEAN@66..70
+          TRUE_KW@66..70 "true"
+        R_BRACK@70..71 "]"
+      WHITESPACE@71..72 " "
+      JOIN_KEYS@72..76
+        BY_KW@72..74 "by"
+        WHITESPACE@74..75 " "
+        FIELD@75..76
+          IDENTIFIER@75..76
+            WORD@75..76 "j"
+    WHITESPACE@76..77 " "
+    UNTIL_KW@77..82 "until"
+    WHITESPACE@82..83 " "
+    SEQUENCE_TERM@83..97
+      SUBQUERY@83..97
+        L_BRACK@83..84 "["
+        EVENT_CATEGORY@84..85
+          IDENTIFIER@84..85
+            WORD@84..85 "z"
+        WHITESPACE@85..86 " "
+        WHERE_KW@86..91 "where"
+        WHITESPACE@91..92 " "
+        BOOLEAN@92..96
+          TRUE_KW@92..96 "true"
+        R_BRACK@96..97 "]"

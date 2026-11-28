@@ -1,0 +1,22 @@
+---
+source: crates/opentide-datadog/tests/trees.rs
+expression: "debug_tree(&body.join(\"\\n\"))"
+input_file: crates/testdata/corpus/datadog/or_expr__valid.datadog
+---
+QUERY@0..27
+  OR_EXPR@0..27
+    FIELD_CLAUSE@0..11
+      TAG_KEY@0..6
+        WORD@0..6 "source"
+      COLON@6..7 ":"
+      TERM@7..11
+        WORD@7..11 "okta"
+    WHITESPACE@11..12 " "
+    OR_KW@12..14 "OR"
+    WHITESPACE@14..15 " "
+    FIELD_CLAUSE@15..27
+      TAG_KEY@15..21
+        WORD@15..21 "source"
+      COLON@21..22 ":"
+      TERM@22..27
+        WORD@22..27 "auth0"

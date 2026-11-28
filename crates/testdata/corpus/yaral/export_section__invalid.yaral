@@ -1,0 +1,5 @@
+// prod:export_section invalid
+rule r {
+  export:
+    %logins.write_row(user: )
+}

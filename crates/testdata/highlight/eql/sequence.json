@@ -1,0 +1,828 @@
+{
+  "language_id": "eql",
+  "tokens": [
+    {
+      "span": {
+        "start": 0,
+        "end": 8
+      },
+      "range": {
+        "start": {
+          "line": 0,
+          "character": 0
+        },
+        "end": {
+          "line": 0,
+          "character": 8
+        }
+      },
+      "capture": "keyword",
+      "token_type": 1
+    },
+    {
+      "span": {
+        "start": 9,
+        "end": 11
+      },
+      "range": {
+        "start": {
+          "line": 0,
+          "character": 9
+        },
+        "end": {
+          "line": 0,
+          "character": 11
+        }
+      },
+      "capture": "keyword",
+      "token_type": 1
+    },
+    {
+      "span": {
+        "start": 12,
+        "end": 16
+      },
+      "range": {
+        "start": {
+          "line": 0,
+          "character": 12
+        },
+        "end": {
+          "line": 0,
+          "character": 16
+        }
+      },
+      "capture": "property",
+      "token_type": 8
+    },
+    {
+      "span": {
+        "start": 16,
+        "end": 17
+      },
+      "range": {
+        "start": {
+          "line": 0,
+          "character": 16
+        },
+        "end": {
+          "line": 0,
+          "character": 17
+        }
+      },
+      "capture": "punctuation.delimiter",
+      "token_type": 15
+    },
+    {
+      "span": {
+        "start": 17,
+        "end": 19
+      },
+      "range": {
+        "start": {
+          "line": 0,
+          "character": 17
+        },
+        "end": {
+          "line": 0,
+          "character": 19
+        }
+      },
+      "capture": "property",
+      "token_type": 8
+    },
+    {
+      "span": {
+        "start": 20,
+        "end": 24
+      },
+      "range": {
+        "start": {
+          "line": 0,
+          "character": 20
+        },
+        "end": {
+          "line": 0,
+          "character": 24
+        }
+      },
+      "capture": "keyword",
+      "token_type": 1
+    },
+    {
+      "span": {
+        "start": 25,
+        "end": 32
+      },
+      "range": {
+        "start": {
+          "line": 0,
+          "character": 25
+        },
+        "end": {
+          "line": 0,
+          "character": 32
+        }
+      },
+      "capture": "keyword",
+      "token_type": 1
+    },
+    {
+      "span": {
+        "start": 32,
+        "end": 33
+      },
+      "range": {
+        "start": {
+          "line": 0,
+          "character": 32
+        },
+        "end": {
+          "line": 0,
+          "character": 33
+        }
+      },
+      "capture": "operator",
+      "token_type": 2
+    },
+    {
+      "span": {
+        "start": 33,
+        "end": 35
+      },
+      "range": {
+        "start": {
+          "line": 0,
+          "character": 33
+        },
+        "end": {
+          "line": 0,
+          "character": 35
+        }
+      },
+      "capture": "number",
+      "token_type": 10
+    },
+    {
+      "span": {
+        "start": 35,
+        "end": 36
+      },
+      "range": {
+        "start": {
+          "line": 0,
+          "character": 35
+        },
+        "end": {
+          "line": 0,
+          "character": 36
+        }
+      },
+      "capture": "constant",
+      "token_type": 12
+    },
+    {
+      "span": {
+        "start": 39,
+        "end": 40
+      },
+      "range": {
+        "start": {
+          "line": 1,
+          "character": 2
+        },
+        "end": {
+          "line": 1,
+          "character": 3
+        }
+      },
+      "capture": "punctuation.bracket",
+      "token_type": 14
+    },
+    {
+      "span": {
+        "start": 40,
+        "end": 47
+      },
+      "range": {
+        "start": {
+          "line": 1,
+          "character": 3
+        },
+        "end": {
+          "line": 1,
+          "character": 10
+        }
+      },
+      "capture": "type",
+      "token_type": 6
+    },
+    {
+      "span": {
+        "start": 48,
+        "end": 53
+      },
+      "range": {
+        "start": {
+          "line": 1,
+          "character": 11
+        },
+        "end": {
+          "line": 1,
+          "character": 16
+        }
+      },
+      "capture": "keyword",
+      "token_type": 1
+    },
+    {
+      "span": {
+        "start": 54,
+        "end": 61
+      },
+      "range": {
+        "start": {
+          "line": 1,
+          "character": 17
+        },
+        "end": {
+          "line": 1,
+          "character": 24
+        }
+      },
+      "capture": "property",
+      "token_type": 8
+    },
+    {
+      "span": {
+        "start": 61,
+        "end": 62
+      },
+      "range": {
+        "start": {
+          "line": 1,
+          "character": 24
+        },
+        "end": {
+          "line": 1,
+          "character": 25
+        }
+      },
+      "capture": "punctuation.delimiter",
+      "token_type": 15
+    },
+    {
+      "span": {
+        "start": 62,
+        "end": 66
+      },
+      "range": {
+        "start": {
+          "line": 1,
+          "character": 25
+        },
+        "end": {
+          "line": 1,
+          "character": 29
+        }
+      },
+      "capture": "property",
+      "token_type": 8
+    },
+    {
+      "span": {
+        "start": 67,
+        "end": 68
+      },
+      "range": {
+        "start": {
+          "line": 1,
+          "character": 30
+        },
+        "end": {
+          "line": 1,
+          "character": 31
+        }
+      },
+      "capture": "operator",
+      "token_type": 2
+    },
+    {
+      "span": {
+        "start": 69,
+        "end": 78
+      },
+      "range": {
+        "start": {
+          "line": 1,
+          "character": 32
+        },
+        "end": {
+          "line": 1,
+          "character": 41
+        }
+      },
+      "capture": "string",
+      "token_type": 9
+    },
+    {
+      "span": {
+        "start": 79,
+        "end": 82
+      },
+      "range": {
+        "start": {
+          "line": 1,
+          "character": 42
+        },
+        "end": {
+          "line": 1,
+          "character": 45
+        }
+      },
+      "capture": "keyword",
+      "token_type": 1
+    },
+    {
+      "span": {
+        "start": 83,
+        "end": 94
+      },
+      "range": {
+        "start": {
+          "line": 1,
+          "character": 46
+        },
+        "end": {
+          "line": 1,
+          "character": 57
+        }
+      },
+      "capture": "function.builtin",
+      "token_type": 5
+    },
+    {
+      "span": {
+        "start": 94,
+        "end": 95
+      },
+      "range": {
+        "start": {
+          "line": 1,
+          "character": 57
+        },
+        "end": {
+          "line": 1,
+          "character": 58
+        }
+      },
+      "capture": "punctuation.bracket",
+      "token_type": 14
+    },
+    {
+      "span": {
+        "start": 95,
+        "end": 102
+      },
+      "range": {
+        "start": {
+          "line": 1,
+          "character": 58
+        },
+        "end": {
+          "line": 1,
+          "character": 65
+        }
+      },
+      "capture": "property",
+      "token_type": 8
+    },
+    {
+      "span": {
+        "start": 102,
+        "end": 103
+      },
+      "range": {
+        "start": {
+          "line": 1,
+          "character": 65
+        },
+        "end": {
+          "line": 1,
+          "character": 66
+        }
+      },
+      "capture": "punctuation.delimiter",
+      "token_type": 15
+    },
+    {
+      "span": {
+        "start": 103,
+        "end": 107
+      },
+      "range": {
+        "start": {
+          "line": 1,
+          "character": 66
+        },
+        "end": {
+          "line": 1,
+          "character": 70
+        }
+      },
+      "capture": "property",
+      "token_type": 8
+    },
+    {
+      "span": {
+        "start": 107,
+        "end": 108
+      },
+      "range": {
+        "start": {
+          "line": 1,
+          "character": 70
+        },
+        "end": {
+          "line": 1,
+          "character": 71
+        }
+      },
+      "capture": "punctuation.delimiter",
+      "token_type": 15
+    },
+    {
+      "span": {
+        "start": 109,
+        "end": 113
+      },
+      "range": {
+        "start": {
+          "line": 1,
+          "character": 72
+        },
+        "end": {
+          "line": 1,
+          "character": 76
+        }
+      },
+      "capture": "string",
+      "token_type": 9
+    },
+    {
+      "span": {
+        "start": 113,
+        "end": 114
+      },
+      "range": {
+        "start": {
+          "line": 1,
+          "character": 76
+        },
+        "end": {
+          "line": 1,
+          "character": 77
+        }
+      },
+      "capture": "punctuation.bracket",
+      "token_type": 14
+    },
+    {
+      "span": {
+        "start": 114,
+        "end": 115
+      },
+      "range": {
+        "start": {
+          "line": 1,
+          "character": 77
+        },
+        "end": {
+          "line": 1,
+          "character": 78
+        }
+      },
+      "capture": "punctuation.bracket",
+      "token_type": 14
+    },
+    {
+      "span": {
+        "start": 118,
+        "end": 119
+      },
+      "range": {
+        "start": {
+          "line": 2,
+          "character": 2
+        },
+        "end": {
+          "line": 2,
+          "character": 3
+        }
+      },
+      "capture": "punctuation.bracket",
+      "token_type": 14
+    },
+    {
+      "span": {
+        "start": 119,
+        "end": 126
+      },
+      "range": {
+        "start": {
+          "line": 2,
+          "character": 3
+        },
+        "end": {
+          "line": 2,
+          "character": 10
+        }
+      },
+      "capture": "type",
+      "token_type": 6
+    },
+    {
+      "span": {
+        "start": 127,
+        "end": 132
+      },
+      "range": {
+        "start": {
+          "line": 2,
+          "character": 11
+        },
+        "end": {
+          "line": 2,
+          "character": 16
+        }
+      },
+      "capture": "keyword",
+      "token_type": 1
+    },
+    {
+      "span": {
+        "start": 133,
+        "end": 144
+      },
+      "range": {
+        "start": {
+          "line": 2,
+          "character": 17
+        },
+        "end": {
+          "line": 2,
+          "character": 28
+        }
+      },
+      "capture": "property",
+      "token_type": 8
+    },
+    {
+      "span": {
+        "start": 144,
+        "end": 145
+      },
+      "range": {
+        "start": {
+          "line": 2,
+          "character": 28
+        },
+        "end": {
+          "line": 2,
+          "character": 29
+        }
+      },
+      "capture": "punctuation.delimiter",
+      "token_type": 15
+    },
+    {
+      "span": {
+        "start": 145,
+        "end": 149
+      },
+      "range": {
+        "start": {
+          "line": 2,
+          "character": 29
+        },
+        "end": {
+          "line": 2,
+          "character": 33
+        }
+      },
+      "capture": "property",
+      "token_type": 8
+    },
+    {
+      "span": {
+        "start": 150,
+        "end": 152
+      },
+      "range": {
+        "start": {
+          "line": 2,
+          "character": 34
+        },
+        "end": {
+          "line": 2,
+          "character": 36
+        }
+      },
+      "capture": "operator",
+      "token_type": 2
+    },
+    {
+      "span": {
+        "start": 153,
+        "end": 154
+      },
+      "range": {
+        "start": {
+          "line": 2,
+          "character": 37
+        },
+        "end": {
+          "line": 2,
+          "character": 38
+        }
+      },
+      "capture": "punctuation.bracket",
+      "token_type": 14
+    },
+    {
+      "span": {
+        "start": 154,
+        "end": 157
+      },
+      "range": {
+        "start": {
+          "line": 2,
+          "character": 38
+        },
+        "end": {
+          "line": 2,
+          "character": 41
+        }
+      },
+      "capture": "number",
+      "token_type": 10
+    },
+    {
+      "span": {
+        "start": 157,
+        "end": 158
+      },
+      "range": {
+        "start": {
+          "line": 2,
+          "character": 41
+        },
+        "end": {
+          "line": 2,
+          "character": 42
+        }
+      },
+      "capture": "punctuation.delimiter",
+      "token_type": 15
+    },
+    {
+      "span": {
+        "start": 159,
+        "end": 163
+      },
+      "range": {
+        "start": {
+          "line": 2,
+          "character": 43
+        },
+        "end": {
+          "line": 2,
+          "character": 47
+        }
+      },
+      "capture": "number",
+      "token_type": 10
+    },
+    {
+      "span": {
+        "start": 163,
+        "end": 164
+      },
+      "range": {
+        "start": {
+          "line": 2,
+          "character": 47
+        },
+        "end": {
+          "line": 2,
+          "character": 48
+        }
+      },
+      "capture": "punctuation.bracket",
+      "token_type": 14
+    },
+    {
+      "span": {
+        "start": 164,
+        "end": 165
+      },
+      "range": {
+        "start": {
+          "line": 2,
+          "character": 48
+        },
+        "end": {
+          "line": 2,
+          "character": 49
+        }
+      },
+      "capture": "punctuation.bracket",
+      "token_type": 14
+    },
+    {
+      "span": {
+        "start": 166,
+        "end": 167
+      },
+      "range": {
+        "start": {
+          "line": 3,
+          "character": 0
+        },
+        "end": {
+          "line": 3,
+          "character": 1
+        }
+      },
+      "capture": "operator.pipe",
+      "token_type": 3
+    },
+    {
+      "span": {
+        "start": 168,
+        "end": 172
+      },
+      "range": {
+        "start": {
+          "line": 3,
+          "character": 2
+        },
+        "end": {
+          "line": 3,
+          "character": 6
+        }
+      },
+      "capture": "keyword",
+      "token_type": 1
+    },
+    {
+      "span": {
+        "start": 173,
+        "end": 174
+      },
+      "range": {
+        "start": {
+          "line": 3,
+          "character": 7
+        },
+        "end": {
+          "line": 3,
+          "character": 8
+        }
+      },
+      "capture": "number",
+      "token_type": 10
+    }
+  ],
+  "legend": [
+    "comment",
+    "keyword",
+    "operator",
+    "operator.pipe",
+    "function",
+    "function.builtin",
+    "type",
+    "variable",
+    "property",
+    "string",
+    "number",
+    "boolean",
+    "constant",
+    "punctuation",
+    "punctuation.bracket",
+    "punctuation.delimiter",
+    "error",
+    "tide.keyword",
+    "tide.property",
+    "tide.uuid",
+    "tide.schema",
+    "markdown.heading",
+    "markdown.emphasis",
+    "markdown.strong",
+    "markdown.code",
+    "markdown.link",
+    "markdown.list",
+    "markdown.quote",
+    "macro"
+  ]
+}

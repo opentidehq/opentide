@@ -1,0 +1,1 @@
+index=main | streamstats count by user reset_on_change=true

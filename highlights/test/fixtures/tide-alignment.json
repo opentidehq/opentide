@@ -1,0 +1,177 @@
+{
+ "yaml": "tide-alignment.yaml",
+ "tokens": [
+  {
+   "row": "name: HL KQL",
+   "text": "name",
+   "type": "property"
+  },
+  {
+   "row": "name: HL KQL",
+   "text": "HL KQL",
+   "type": "string"
+  },
+  {
+   "row": "uuid: 6bd",
+   "text": "uuid",
+   "type": "property"
+  },
+  {
+   "row": "uuid: 6bd",
+   "text": "6bd65871-e768-4bb7-875b-570909c287a5",
+   "type": "number"
+  },
+  {
+   "row": "schema: rule::1.0",
+   "text": "rule::1.0",
+   "type": "type"
+  },
+  {
+   "row": "version: 1",
+   "text": "1",
+   "type": "number"
+  },
+  {
+   "row": "created:",
+   "text": "2026-11-22",
+   "type": "string"
+  },
+  {
+   "row": "tlp: amber",
+   "text": "amber",
+   "type": "enumMember"
+  },
+  {
+   "row": "author: qa",
+   "text": "qa",
+   "type": "string"
+  },
+  {
+   "row": "- Acme",
+   "text": "Acme",
+   "type": "string"
+  },
+  {
+   "row": "# What it finds",
+   "text": "# What it finds",
+   "type": "type"
+  },
+  {
+   "row": "Opens a handle",
+   "text": "`lsass.exe`",
+   "type": "regexp"
+  },
+  {
+   "row": "Opens a handle",
+   "text": "**often**",
+   "type": "keyword"
+  },
+  {
+   "row": "Opens a handle",
+   "text": "*quietly*",
+   "type": "variable"
+  },
+  {
+   "row": "Opens a handle",
+   "text": "[docs](https://x.y)",
+   "type": "decorator"
+  },
+  {
+   "row": "Opens a handle",
+   "text": "Opens a handle to",
+   "type": "string"
+  },
+  {
+   "row": "- one item",
+   "text": "one item",
+   "type": "string"
+  },
+  {
+   "row": "> a quoted line",
+   "text": "a quoted line",
+   "type": "comment"
+  },
+  {
+   "row": "detection_model:",
+   "text": "00000000-0000-4000-8006-000000000007",
+   "type": "number"
+  },
+  {
+   "row": "alert_severity:",
+   "text": "alert_severity",
+   "type": "property"
+  },
+  {
+   "row": "alert_severity:",
+   "text": "Informational",
+   "type": "enumMember"
+  },
+  {
+   "row": "schema: platform::sentinel",
+   "text": "platform::sentinel::1.0",
+   "type": "string"
+  },
+  {
+   "row": "status: STAGING",
+   "text": "STAGING",
+   "type": "string"
+  },
+  {
+   "row": "enabled: true",
+   "text": "true",
+   "type": "enumMember"
+  },
+  {
+   "row": "interval: 1h",
+   "text": "interval",
+   "type": "property"
+  },
+  {
+   "row": "interval: 1h",
+   "text": "1h",
+   "type": "string"
+  },
+  {
+   "row": "fields: [proc",
+   "text": "[proc.name, proc.pname]",
+   "type": "string"
+  }
+ ],
+ "punctuation": [
+  {
+   "row": "name: HL KQL",
+   "text": ":",
+   "scope": "punctuation.separator.key-value"
+  },
+  {
+   "row": "uuid: 6bd",
+   "text": ":",
+   "scope": "punctuation.separator.key-value"
+  },
+  {
+   "row": "configurations:",
+   "text": ":",
+   "scope": "punctuation.separator.key-value"
+  },
+  {
+   "row": "sentinel:",
+   "text": ":",
+   "scope": "punctuation.separator.key-value"
+  },
+  {
+   "row": "query: |",
+   "text": ":",
+   "scope": "punctuation.separator.key-value"
+  },
+  {
+   "row": "- Acme",
+   "text": "-",
+   "scope": "punctuation.definition.list.begin"
+  },
+  {
+   "row": "- qa",
+   "text": "-",
+   "scope": "punctuation.definition.list.begin"
+  }
+ ]
+}

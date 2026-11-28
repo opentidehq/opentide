@@ -1,0 +1,35 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/corpus/esql/registered_domain_command__invalid.esql
+---
+SOURCE_FILE@0..91
+  COMMENT@0..41 "// prod:registered_domain_command invalid"
+  WHITESPACE@41..42 "\n"
+  QUERY@42..90
+    FROM_COMMAND@42..66
+      FROM_KW@42..46 "FROM"
+      WHITESPACE@46..47 " "
+      INDEX_PATTERN@47..53
+        INDEX_NAME@47..53
+          SOURCE_TEXT@47..53 "logs-*"
+      WHITESPACE@53..54 " "
+      METADATA@54..66
+        METADATA_KW@54..62 "METADATA"
+        WHITESPACE@62..63 " "
+        METADATA_FIELD@63..66
+          SOURCE_TEXT@63..66 "_id"
+    WHITESPACE@66..67 "\n"
+    PIPE@67..68 "|"
+    WHITESPACE@68..69 " "
+    REGISTERED_DOMAIN_COMMAND@69..90
+      REGISTERED_DOMAIN_KW@69..86 "REGISTERED_DOMAIN"
+      WHITESPACE@86..87 " "
+      QUALIFIED_NAME@87..88
+        IDENTIFIER@87..88
+          IDENT@87..88 "d"
+      WHITESPACE@88..89 " "
+      EQ@89..90 "="
+  WHITESPACE@90..91 "\n"
+--- errors
+90..91: expected an expression

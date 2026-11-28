@@ -1,0 +1,824 @@
+{
+  "format": 1,
+  "scenario": "elastic/deploy",
+  "recorded_from": [
+    "{python}",
+    "tests/cassettes/elastic/client.py",
+    "deploy"
+  ],
+  "digest": "sha256:24cb87c85d905bd67bf5a20d8f262e0f4bd4fa327cdec88f1f00ff0b5c1042ac",
+  "interactions": [
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://kibana.elastic.invalid/s/soc/api/detection_engine/rules?rule_id=6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0001",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "ApiKey REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ],
+          [
+            "elastic-api-version",
+            "2023-10-31"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 404,
+        "headers": [
+          [
+            "server",
+            "elastic-tenant"
+          ],
+          [
+            "content-type",
+            "application/json; charset=utf-8"
+          ]
+        ],
+        "body": "{\"message\": \"rule_id: \\\"6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0001\\\" not found\", \"status_code\": 404}"
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://kibana.elastic.invalid/s/soc/api/detection_engine/rules",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "ApiKey REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ],
+          [
+            "elastic-api-version",
+            "2023-10-31"
+          ],
+          [
+            "kbn-xsrf",
+            "true"
+          ]
+        ],
+        "body": "{\"rule_id\": \"6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0001\", \"type\": \"query\", \"name\": \"Elastic rule 01\", \"description\": \"Rule 01 of the Elastic connector's cassettes.\", \"enabled\": true, \"severity\": \"high\", \"risk_score\": 73, \"interval\": \"5m\", \"from\": \"now-6m\", \"to\": \"now\", \"language\": \"kuery\", \"query\": \"process.name: \\\"cmd.exe\\\"\", \"index\": [\"logs-*\"], \"tags\": [\"OpenTide\"], \"author\": [\"Detection Engineering\"]}"
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "elastic-tenant"
+          ],
+          [
+            "content-type",
+            "application/json; charset=utf-8"
+          ]
+        ],
+        "body": "{\"id\": \"kb-4\", \"rule_id\": \"6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0001\", \"type\": \"query\", \"name\": \"Elastic rule 01\", \"description\": \"Rule 01 of the Elastic connector's cassettes.\", \"enabled\": true, \"severity\": \"high\", \"risk_score\": 73, \"interval\": \"5m\", \"from\": \"now-6m\", \"to\": \"now\", \"language\": \"kuery\", \"query\": \"process.name: \\\"cmd.exe\\\"\", \"index\": [\"logs-*\"], \"tags\": [\"OpenTide\"], \"author\": [\"Detection Engineering\"]}"
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://kibana.elastic.invalid/s/soc/api/detection_engine/rules?rule_id=6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0002",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "ApiKey REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ],
+          [
+            "elastic-api-version",
+            "2023-10-31"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "elastic-tenant"
+          ],
+          [
+            "content-type",
+            "application/json; charset=utf-8"
+          ]
+        ],
+        "body": "{\"id\": \"kb-2\", \"rule_id\": \"6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0002\", \"type\": \"query\", \"actions\": [{\"id\": \"slack-connector\", \"group\": \"default\", \"params\": {}}], \"exceptions_list\": [{\"id\": \"endpoint_list\", \"list_id\": \"endpoint_list\"}], \"timeline_id\": \"db366523-f1c6-4c1f-8731-6ce5ed9e5717\", \"timeline_title\": \"Generic Endpoint Timeline\"}"
+      }
+    },
+    {
+      "request": {
+        "method": "PUT",
+        "url": "https://kibana.elastic.invalid/s/soc/api/detection_engine/rules?rule_id=6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0002",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "ApiKey REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ],
+          [
+            "elastic-api-version",
+            "2023-10-31"
+          ],
+          [
+            "kbn-xsrf",
+            "true"
+          ]
+        ],
+        "body": "{\"rule_id\": \"6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0002\", \"type\": \"query\", \"name\": \"Elastic rule 02\", \"description\": \"Rule 02 of the Elastic connector's cassettes.\", \"enabled\": true, \"severity\": \"high\", \"risk_score\": 73, \"interval\": \"5m\", \"from\": \"now-6m\", \"to\": \"now\", \"language\": \"kuery\", \"query\": \"process.name: *\", \"index\": [\"logs-*\"], \"tags\": [\"OpenTide\"], \"author\": [\"Detection Engineering\"], \"actions\": [{\"id\": \"slack-connector\", \"group\": \"default\", \"params\": {}}], \"exceptions_list\": [{\"id\": \"endpoint_list\", \"list_id\": \"endpoint_list\"}], \"timeline_id\": \"db366523-f1c6-4c1f-8731-6ce5ed9e5717\", \"timeline_title\": \"Generic Endpoint Timeline\"}"
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "elastic-tenant"
+          ],
+          [
+            "content-type",
+            "application/json; charset=utf-8"
+          ]
+        ],
+        "body": "{\"id\": \"kb-2\", \"rule_id\": \"6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0002\", \"type\": \"query\", \"name\": \"Elastic rule 02\", \"description\": \"Rule 02 of the Elastic connector's cassettes.\", \"enabled\": true, \"severity\": \"high\", \"risk_score\": 73, \"interval\": \"5m\", \"from\": \"now-6m\", \"to\": \"now\", \"language\": \"kuery\", \"query\": \"process.name: *\", \"index\": [\"logs-*\"], \"tags\": [\"OpenTide\"], \"author\": [\"Detection Engineering\"], \"actions\": [{\"id\": \"slack-connector\", \"group\": \"default\", \"params\": {}}], \"exceptions_list\": [{\"id\": \"endpoint_list\", \"list_id\": \"endpoint_list\"}], \"timeline_id\": \"db366523-f1c6-4c1f-8731-6ce5ed9e5717\", \"timeline_title\": \"Generic Endpoint Timeline\"}"
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://kibana.elastic.invalid/s/soc/api/detection_engine/rules?rule_id=6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0003",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "ApiKey REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ],
+          [
+            "elastic-api-version",
+            "2023-10-31"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "elastic-tenant"
+          ],
+          [
+            "content-type",
+            "application/json; charset=utf-8"
+          ]
+        ],
+        "body": "{\"id\": \"kb-3\", \"rule_id\": \"6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0003\", \"type\": \"query\"}"
+      }
+    },
+    {
+      "request": {
+        "method": "DELETE",
+        "url": "https://kibana.elastic.invalid/s/soc/api/detection_engine/rules?rule_id=6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0003",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "ApiKey REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ],
+          [
+            "elastic-api-version",
+            "2023-10-31"
+          ],
+          [
+            "kbn-xsrf",
+            "true"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "elastic-tenant"
+          ],
+          [
+            "content-type",
+            "application/json; charset=utf-8"
+          ]
+        ],
+        "body": "{\"rule_id\": \"6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0003\"}"
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://kibana.elastic.invalid/s/soc/api/detection_engine/rules",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "ApiKey REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ],
+          [
+            "elastic-api-version",
+            "2023-10-31"
+          ],
+          [
+            "kbn-xsrf",
+            "true"
+          ]
+        ],
+        "body": "{\"rule_id\": \"6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0003\", \"type\": \"eql\", \"name\": \"Elastic rule 03\", \"description\": \"Rule 03 of the Elastic connector's cassettes.\", \"enabled\": true, \"severity\": \"high\", \"risk_score\": 73, \"interval\": \"5m\", \"from\": \"now-6m\", \"to\": \"now\", \"language\": \"eql\", \"query\": \"process where process.name == \\\"cmd.exe\\\"\", \"index\": [\"logs-*\"], \"tags\": [\"OpenTide\"], \"author\": [\"Detection Engineering\"]}"
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "elastic-tenant"
+          ],
+          [
+            "content-type",
+            "application/json; charset=utf-8"
+          ]
+        ],
+        "body": "{\"id\": \"kb-4\", \"rule_id\": \"6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0003\", \"type\": \"eql\", \"name\": \"Elastic rule 03\", \"description\": \"Rule 03 of the Elastic connector's cassettes.\", \"enabled\": true, \"severity\": \"high\", \"risk_score\": 73, \"interval\": \"5m\", \"from\": \"now-6m\", \"to\": \"now\", \"language\": \"eql\", \"query\": \"process where process.name == \\\"cmd.exe\\\"\", \"index\": [\"logs-*\"], \"tags\": [\"OpenTide\"], \"author\": [\"Detection Engineering\"]}"
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://kibana.elastic.invalid/s/soc/api/detection_engine/rules?rule_id=6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0004",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "ApiKey REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ],
+          [
+            "elastic-api-version",
+            "2023-10-31"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "elastic-tenant"
+          ],
+          [
+            "content-type",
+            "application/json; charset=utf-8"
+          ]
+        ],
+        "body": "{\"id\": \"kb-4\", \"rule_id\": \"6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0004\", \"type\": \"query\", \"immutable\": true, \"rule_source\": {\"type\": \"external\", \"is_customized\": false}}"
+      }
+    },
+    {
+      "request": {
+        "method": "DELETE",
+        "url": "https://kibana.elastic.invalid/s/soc/api/detection_engine/rules?rule_id=6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0005",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "ApiKey REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ],
+          [
+            "elastic-api-version",
+            "2023-10-31"
+          ],
+          [
+            "kbn-xsrf",
+            "true"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 404,
+        "headers": [
+          [
+            "server",
+            "elastic-tenant"
+          ],
+          [
+            "content-type",
+            "application/json; charset=utf-8"
+          ]
+        ],
+        "body": "{\"message\": \"rule_id: \\\"6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0005\\\" not found\", \"status_code\": 404}"
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://kibana.elastic.invalid/s/soc/api/detection_engine/rules?rule_id=6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0006",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "ApiKey REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ],
+          [
+            "elastic-api-version",
+            "2023-10-31"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 404,
+        "headers": [
+          [
+            "server",
+            "elastic-tenant"
+          ],
+          [
+            "content-type",
+            "application/json; charset=utf-8"
+          ]
+        ],
+        "body": "{\"message\": \"rule_id: \\\"6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0006\\\" not found\", \"status_code\": 404}"
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://kibana.elastic.invalid/s/soc/api/detection_engine/rules",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "ApiKey REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ],
+          [
+            "elastic-api-version",
+            "2023-10-31"
+          ],
+          [
+            "kbn-xsrf",
+            "true"
+          ]
+        ],
+        "body": "{\"rule_id\": \"6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0006\", \"type\": \"query\", \"name\": \"Elastic rule 06\", \"description\": \"Rule 06 of the Elastic connector's cassettes.\", \"enabled\": false, \"severity\": \"high\", \"risk_score\": 73, \"interval\": \"5m\", \"from\": \"now-6m\", \"to\": \"now\", \"language\": \"kuery\", \"query\": \"event.kind: alert\", \"index\": [\"logs-*\"], \"tags\": [\"OpenTide\"], \"author\": [\"Detection Engineering\"]}"
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "elastic-tenant"
+          ],
+          [
+            "content-type",
+            "application/json; charset=utf-8"
+          ]
+        ],
+        "body": "{\"id\": \"kb-5\", \"rule_id\": \"6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0006\", \"type\": \"query\", \"name\": \"Elastic rule 06\", \"description\": \"Rule 06 of the Elastic connector's cassettes.\", \"enabled\": false, \"severity\": \"high\", \"risk_score\": 73, \"interval\": \"5m\", \"from\": \"now-6m\", \"to\": \"now\", \"language\": \"kuery\", \"query\": \"event.kind: alert\", \"index\": [\"logs-*\"], \"tags\": [\"OpenTide\"], \"author\": [\"Detection Engineering\"]}"
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://es.elastic.invalid/_query",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "ApiKey REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ],
+          [
+            "elastic-api-version",
+            "2023-10-31"
+          ]
+        ],
+        "body": "{\"query\": \"FROM logs-* METADATA _id\\n| STATS c = COUNT(*) BY host.name, user.name\\n| LIMIT 0\"}"
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "elastic-tenant"
+          ],
+          [
+            "content-type",
+            "application/json; charset=utf-8"
+          ]
+        ],
+        "body": "{\"columns\": [{\"name\": \"host.name\", \"type\": \"keyword\"}, {\"name\": \"user.name\", \"type\": \"keyword\"}], \"values\": [], \"is_partial\": false}"
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://kibana.elastic.invalid/s/soc/api/detection_engine/rules?rule_id=6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0007",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "ApiKey REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ],
+          [
+            "elastic-api-version",
+            "2023-10-31"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 404,
+        "headers": [
+          [
+            "server",
+            "elastic-tenant"
+          ],
+          [
+            "content-type",
+            "application/json; charset=utf-8"
+          ]
+        ],
+        "body": "{\"message\": \"rule_id: \\\"6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0007\\\" not found\", \"status_code\": 404}"
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://kibana.elastic.invalid/s/soc/api/detection_engine/rules",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "ApiKey REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ],
+          [
+            "elastic-api-version",
+            "2023-10-31"
+          ],
+          [
+            "kbn-xsrf",
+            "true"
+          ]
+        ],
+        "body": "{\"rule_id\": \"6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0007\", \"type\": \"esql\", \"name\": \"\\u00c9lastic ES|QL \\u2014 grouped\", \"description\": \"Rule 07 of the Elastic connector's cassettes.\", \"enabled\": true, \"severity\": \"high\", \"risk_score\": 73, \"interval\": \"5m\", \"from\": \"now-6m\", \"to\": \"now\", \"language\": \"esql\", \"query\": \"FROM logs-* METADATA _id\\n| STATS c = COUNT(*) BY host.name, user.name\", \"alert_suppression\": {\"group_by\": [\"host.name\"], \"missing_fields_strategy\": \"suppress\"}, \"tags\": [\"OpenTide\"], \"author\": [\"Detection Engineering\"]}"
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "elastic-tenant"
+          ],
+          [
+            "content-type",
+            "application/json; charset=utf-8"
+          ]
+        ],
+        "body": "{\"id\": \"kb-6\", \"rule_id\": \"6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0007\", \"type\": \"esql\", \"name\": \"\\u00c9lastic ES|QL \\u2014 grouped\", \"description\": \"Rule 07 of the Elastic connector's cassettes.\", \"enabled\": true, \"severity\": \"high\", \"risk_score\": 73, \"interval\": \"5m\", \"from\": \"now-6m\", \"to\": \"now\", \"language\": \"esql\", \"query\": \"FROM logs-* METADATA _id\\n| STATS c = COUNT(*) BY host.name, user.name\", \"alert_suppression\": {\"group_by\": [\"host.name\"], \"missing_fields_strategy\": \"suppress\"}, \"tags\": [\"OpenTide\"], \"author\": [\"Detection Engineering\"]}"
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://es.elastic.invalid/logs-system.security-*/_field_caps?fields=user.name,source.ip&ignore_unavailable=true&allow_no_indices=true",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "ApiKey REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ],
+          [
+            "elastic-api-version",
+            "2023-10-31"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "elastic-tenant"
+          ],
+          [
+            "content-type",
+            "application/json; charset=utf-8"
+          ]
+        ],
+        "body": "{\"indices\": [\"logs-system.security-*\"], \"fields\": {\"user.name\": {\"keyword\": {\"type\": \"keyword\", \"searchable\": true, \"aggregatable\": true}}, \"source.ip\": {\"ip\": {\"type\": \"ip\", \"searchable\": true, \"aggregatable\": true}}}}"
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://es.elastic.invalid/logs-system.security-*/_field_caps?fields=event.created&ignore_unavailable=true&allow_no_indices=true",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "ApiKey REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ],
+          [
+            "elastic-api-version",
+            "2023-10-31"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "elastic-tenant"
+          ],
+          [
+            "content-type",
+            "application/json; charset=utf-8"
+          ]
+        ],
+        "body": "{\"indices\": [\"logs-system.security-*\"], \"fields\": {\"event.created\": {\"date\": {\"type\": \"date\", \"searchable\": true, \"aggregatable\": true}}}}"
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://kibana.elastic.invalid/s/soc/api/detection_engine/rules?rule_id=6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0008",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "ApiKey REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ],
+          [
+            "elastic-api-version",
+            "2023-10-31"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 404,
+        "headers": [
+          [
+            "server",
+            "elastic-tenant"
+          ],
+          [
+            "content-type",
+            "application/json; charset=utf-8"
+          ]
+        ],
+        "body": "{\"message\": \"rule_id: \\\"6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0008\\\" not found\", \"status_code\": 404}"
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://kibana.elastic.invalid/s/soc/api/detection_engine/rules",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "ApiKey REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ],
+          [
+            "elastic-api-version",
+            "2023-10-31"
+          ],
+          [
+            "kbn-xsrf",
+            "true"
+          ]
+        ],
+        "body": "{\"rule_id\": \"6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0008\", \"type\": \"threshold\", \"name\": \"Elastic rule 08\", \"description\": \"Rule 08 of the Elastic connector's cassettes.\", \"enabled\": true, \"severity\": \"high\", \"risk_score\": 73, \"interval\": \"5m\", \"from\": \"now-6m\", \"to\": \"now\", \"language\": \"lucene\", \"query\": \"event.code:\\\"4625\\\"\", \"index\": [\"logs-system.security-*\"], \"threshold\": {\"field\": [\"user.name\"], \"value\": 50, \"cardinality\": [{\"field\": \"source.ip\", \"value\": 8}]}, \"timestamp_override\": \"event.created\", \"tags\": [\"OpenTide\"], \"author\": [\"Detection Engineering\"]}"
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "elastic-tenant"
+          ],
+          [
+            "content-type",
+            "application/json; charset=utf-8"
+          ]
+        ],
+        "body": "{\"id\": \"kb-7\", \"rule_id\": \"6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0008\", \"type\": \"threshold\", \"name\": \"Elastic rule 08\", \"description\": \"Rule 08 of the Elastic connector's cassettes.\", \"enabled\": true, \"severity\": \"high\", \"risk_score\": 73, \"interval\": \"5m\", \"from\": \"now-6m\", \"to\": \"now\", \"language\": \"lucene\", \"query\": \"event.code:\\\"4625\\\"\", \"index\": [\"logs-system.security-*\"], \"threshold\": {\"field\": [\"user.name\"], \"value\": 50, \"cardinality\": [{\"field\": \"source.ip\", \"value\": 8}]}, \"timestamp_override\": \"event.created\", \"tags\": [\"OpenTide\"], \"author\": [\"Detection Engineering\"]}"
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://kibana.elastic.invalid/s/soc/api/data_views/data_view/dv-missing",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "ApiKey REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ],
+          [
+            "elastic-api-version",
+            "2023-10-31"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 404,
+        "headers": [
+          [
+            "server",
+            "elastic-tenant"
+          ],
+          [
+            "content-type",
+            "application/json; charset=utf-8"
+          ]
+        ],
+        "body": "{\"statusCode\": 404, \"error\": \"Not Found\", \"message\": \"Saved object [index-pattern/dv-missing] not found\"}"
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://kibana.elastic.invalid/s/soc/api/detection_engine/rules?rule_id=6b2e9c14-7a31-4f58-9d0c-1e8a4b7c000a",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "ApiKey REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ],
+          [
+            "elastic-api-version",
+            "2023-10-31"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 401,
+        "headers": [
+          [
+            "server",
+            "elastic-tenant"
+          ],
+          [
+            "content-type",
+            "application/json; charset=utf-8"
+          ]
+        ],
+        "body": "{\"statusCode\": 401, \"error\": \"Unauthorized\", \"message\": \"missing privilege\"}"
+      }
+    }
+  ]
+}

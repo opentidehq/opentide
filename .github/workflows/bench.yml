@@ -1,0 +1,234 @@
+# The plan section 11 benchmarks with their budgets (UC-0.8, #806): `cargo xtask bench`
+# (xtask/src/bench/) on the heavy workspace, held by `cargo xtask bench --check` to
+# tests/bench/budgets.toml and to the last result of the comparison base. The rust engine
+# only: the python engine (the oracle, opentide 0.23.0 from PyPI) is frozen, and its
+# baselines in budgets.toml are recorded once; nothing here measures it any more.
+#
+# When: in the nightly (ci.yml's `nightly` job calls nightly.yml, whose `benchmarks`
+# job calls this workflow; the schedule
+# runs on the default branch, and Run workflow on ci.yml with scope `nightly` runs it
+# on another) and on demand (Run workflow on this one, which on a branch is how a
+# change is measured); never on a pull request or a push. A run measures each command as
+# fresh processes on one runner class, ubuntu-24.04 (4 vCPU, the class the baseline in
+# budgets.toml was recorded on): numbers from another class are not comparable.
+#
+# The comparison base (BASE_BRANCH): integration/unified-core, where the Rust command
+# line is; development has none until the Unified Core merges there (epic #790), so its
+# runs would compare the Rust engine with nothing. Set BASE_BRANCH back to development
+# when it does. The rust engine's last result is the bench-rust artifact of the newest run on
+# BASE_BRANCH, of ci.yml's nightly or of this workflow run alone, whose job for that
+# engine succeeded on the same CPU model (scripts/ci/bench_reference.py). A job that failed its check is never the
+# reference, so a regression stays red until it is fixed or the budgets are
+# re-recorded on purpose. Each run keeps its own results as the bench-rust
+# artifact for 90 days.
+#
+# Safety: no `pull_request_target`; a run has a read-only token and no secrets.
+# The benchmarks reach no tenant: `deploy` runs with --dry-run, and every measured
+# process gets proxies that lead nowhere (xtask/src/bench/measure.rs).
+name: Benchmarks
+
+on:
+  # Part of the nightly: nightly.yml calls this workflow (ci.yml's `nightly` scope,
+  # .github/AGENTS.md); Run workflow runs it alone. Never on a pull request
+  # or a push, so it never blocks a merge.
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  # The branch whose last result each run is held to (above).
+  BASE_BRANCH: integration/unified-core
+
+jobs:
+  bench:
+    # `Benchmarks (<engine>)`: the name scripts/ci/bench_reference.py looks
+    # for in the earlier runs.
+    name: Benchmarks (rust)
+    # Per run: every run (the nightly through ci.yml, or Run workflow) keeps a
+    # complete result. Called from ci.yml, github.run_id is ci.yml's run.
+    concurrency:
+      group: bench-${{ github.run_id }}-rust
+      cancel-in-progress: false
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    permissions:
+      contents: read
+      actions: read # gh run list and gh run download: the base branch's last result
+    env:
+      RUSTFLAGS: "-Dwarnings"
+      CARGO_PROFILE_DEV_DEBUG: line-tables-only
+      RUSTC_WRAPPER: sccache
+      SCCACHE_DIR: ${{ github.workspace }}/.sccache
+      SCCACHE_CACHE_SIZE: 2G
+      # The Rust command line (the opentide binary), the language server and the
+      # workspace load.
+      ENGINE: rust
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Rust
+        run: rustup toolchain install --profile minimal --no-self-update
+
+      # Restore-only: the full set's compiler cache for Linux, which ci.yml's
+      # `conformance` saves (its RUSTFLAGS and dev debug level, set above, so
+      # that the crates both build hit). This workflow saves none: its two
+      # target trees evicted the caches pull requests restore (the 10 GB
+      # GitHub keeps per repository).
+      - uses: taiki-e/install-action@3a3daafd3b7f23b8f65d9f5ba2db203fb59b79e2 # v2.90.2
+        with:
+          tool: sccache@0.19.0
+      # The compiler cache's week: its key is the toolchain and the ISO week,
+      # so a family is saved once a week (tests/test_ci/test_workflows.py).
+      - name: Compiler cache week
+        id: week
+        shell: bash
+        run: echo "week=$(date -u +%G-W%V)" >> "$GITHUB_OUTPUT"
+      - name: Restore the compiler cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ env.SCCACHE_DIR }}
+          key: sccache-full-set-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml') }}-${{ steps.week.outputs.week }}
+          restore-keys: sccache-full-set-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml') }}-
+
+      # One uv release: the oracle's Python (ORACLE_PYTHON in xtask/src/bench/oracle.rs) is
+      # a uv-managed download this release knows.
+      - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
+        with:
+          version: "0.11.32"
+          enable-cache: false
+
+      - name: Build xtask
+        run: cargo build --locked --package xtask
+
+      # The rust engine measures startup (`opentide --version`) and `explain` through
+      # the console script, opentide._cli:main (UC-3.8b, #960): `uv sync` installs it
+      # in .venv, with the engine built in the develop profile (release without LTO).
+      - name: Install the console script
+        run: uv sync --locked --no-dev
+
+      - name: Run the benchmarks
+        run: cargo xtask bench --engine "$ENGINE" --scale 1 --json --out bench.json > /dev/null
+
+      # `deploy --dry-run` and `generate docs` on the heavy workspace (which declares
+      # tenants for five platforms) under strace, with the release binary the
+      # benchmark built: neither may open a network
+      # connection nor send a datagram to a network address (every network syscall
+      # traced: connect, sendto, sendmsg, sendmmsg). `generate docs` looks CVEs up
+      # online by default ([cve] retrieve_details): the heavy workspace names none, and
+      # the measured runs get proxies that lead nowhere besides.
+      - name: Prove that the dry run and generate docs reach no network
+        run: |
+          command -v strace >/dev/null || { sudo apt-get update -q && sudo apt-get install -y -q strace; }
+          heavy="$RUNNER_TEMP/heavy"
+          cargo xtask corpus generate --seed 20261107 --out "$heavy"
+          opentide="$GITHUB_WORKSPACE/target/release/opentide"
+          mkdir -p "$RUNNER_TEMP/home"
+          traced() {
+            (cd "$heavy" && env -i PATH=/usr/bin:/bin HOME="$RUNNER_TEMP/home" LANG=C.UTF-8 \
+              strace -f -qq -e trace=%network -o "$RUNNER_TEMP/network-$1.txt" \
+              "$opentide" --json "${@:2}" > "$RUNNER_TEMP/$1.json")
+            # Every network syscall is traced; a socket() alone (Python probes IPv6
+            # support at import) reaches nothing, so only calls that name a
+            # destination count.
+            if grep -E '^[0-9]+ +(connect|sendto|sendmsg|sendmmsg)\(.*AF_INET6?' "$RUNNER_TEMP/network-$1.txt"; then
+              echo "::error::opentide ${*:2} opened a network connection"
+              exit 1
+            fi
+          }
+          traced dry-run deploy --dry-run --all --strategy PREVIEW
+          jq -e '.dry_run == true and .ok == true' "$RUNNER_TEMP/dry-run.json" > /dev/null
+          echo "deploy --dry-run planned $(jq '[.plan[] | length] | add' "$RUNNER_TEMP/dry-run.json") rule deployments and opened no network connection."
+          traced docs generate docs
+          jq -e '.ok == true' "$RUNNER_TEMP/docs.json" > /dev/null
+          echo "generate docs opened no network connection."
+
+      # The newest run on BASE_BRANCH, of ci.yml's nightly (which calls this
+      # workflow, so the run and its artifacts are ci.yml's) or of this workflow
+      # run alone, whose job for this engine succeeded on this run's CPU: its
+      # bench-<engine> artifact is the reference (scripts/ci/bench_reference.py).
+      - name: Find the base branch's last result
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/ci/bench_reference.py bench.json previous
+
+      - name: Check against the budgets
+        run: |
+          previous=()
+          if [ -f previous/bench.json ]; then
+            previous=(--previous previous/bench.json)
+          fi
+          # --require-reference: a command no baseline, target or previous result
+          # applies to fails, so a changed default cannot turn the
+          # gate off silently (and that run never becomes the reference).
+          cargo xtask bench --check tests/bench/budgets.toml bench.json "${previous[@]}" \
+            --require-reference \
+            --summary "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: ${{ !cancelled() }}
+        with:
+          name: bench-rust
+          path: bench.json
+          if-no-files-found: ignore
+          retention-days: 90
+
+  # The language server's cold start (#1754): spawn to the first diagnostics of a
+  # rule it was asked to open, native and WASI (under wasmtime, the host the
+  # budgets were measured with), on the small workspace (the Tide corpus) and the
+  # large one (1,000 object files), by the scripted client of
+  # scripts/perf/lsp-bench.mjs (scripts/perf/cold-start.sh). Each scenario's p50 is
+  # held to tests/bench/lsp-cold-start.toml with budgets.toml's headroom
+  # (scripts/perf/check_cold_start.py; docs/engine/THROUGHPUT.md). The servers are
+  # built as they ship (native --release with LTO, WASI with the `wasi-lsp` profile); no tenant,
+  # no network.
+  lsp-cold-start:
+    name: Benchmarks (language server cold start)
+    concurrency:
+      group: bench-${{ github.run_id }}-lsp-cold-start
+      cancel-in-progress: false
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Rust
+        uses: ./.github/actions/rust-setup
+        with:
+          targets: wasm32-wasip1
+          tools: wasmtime@38.0.0
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+
+      - name: Build the language server, native and WASI
+        run: |
+          cargo build --locked --release -p opentide-lsp
+          # The WASI module as the release ships it (scripts/engine/build-wasm.sh wasi): opt-level s.
+          cargo build --locked --profile wasi-lsp -p opentide-lsp --target wasm32-wasip1
+
+      - name: Measure the cold start
+        run: >-
+          scripts/perf/cold-start.sh cold-start target/release/opentide-lsp
+          target/wasm32-wasip1/wasi-lsp/opentide-lsp.wasm
+
+      - name: Check against the budgets
+        run: >-
+          python3 scripts/perf/check_cold_start.py tests/bench/lsp-cold-start.toml cold-start
+          --summary "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: ${{ !cancelled() }}
+        with:
+          name: bench-lsp-cold-start
+          path: cold-start
+          if-no-files-found: ignore
+          retention-days: 90

@@ -1,0 +1,4 @@
+open_write and proc.name in (oops and (fd.filename in (shell_config_filenames) or
+     fd.name in (shell_config_files) or
+     fd.directory in (shell_config_directories))
+and not proc.name in (shell_binaries) and not exe_running_docker_save and not user_known_shell_config_modifiers

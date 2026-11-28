@@ -1,0 +1,1 @@
+print a = long(null), b = int(null), c = datetime(null), d = bool(null), e = guid(null), f = timespan(null), g = real(null), h = double(null), i = decimal(null)

@@ -1,0 +1,12 @@
+// prod:graph_operation valid
+rule r {
+  meta:
+    author = "a"
+  setup:
+    graph_append [$g, %assets]
+    graph_exclude ($g.graph.entity.hostname = %retired.hostname)
+  events:
+    $e.metadata.event_type = "USER_LOGIN"
+  condition:
+    $e
+}

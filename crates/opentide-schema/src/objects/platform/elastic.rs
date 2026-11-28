@@ -1,0 +1,1109 @@
+//! Elastic Security detection rule, `platform::elastic::1.0` (RFC 0007;
+//! `ElasticConfig` and its nested models), with the named check
+//! `elastic_rule_shape` ([`block_codes`]): the block's constraint codes,
+//! judged on the raw block before its fields. A key is set when its value is
+//! not null (`present`), or, where a check needs a value, when it is not null
+//! and not an empty string, sequence or mapping (`filled`); a value's type is
+//! its YAML node's kind (a mapping, a sequence, an integer; a boolean is never
+//! an integer).
+
+use std::collections::BTreeSet;
+use std::ops::RangeInclusive;
+
+use garde::Validate;
+use indexmap::IndexMap;
+use schemars::JsonSchema;
+use serde::{Deserialize, Serialize};
+
+use crate::FromNode;
+use crate::from_node::Context;
+use crate::node::{Node, Value};
+use crate::objects::any::Any;
+use crate::objects::platform::durations::{ELASTIC_MAX_SECONDS, duration_seconds};
+use crate::objects::platform::{
+    filled, get, is_map, literal_enum, non_empty_str, platform_block, present,
+};
+use crate::pins::Pins;
+
+literal_enum! {
+    /// `missing_fields_strategy`.
+    MissingFieldsStrategy { Suppress = "suppress", DoNotSuppress = "doNotSuppress", }
+}
+
+literal_enum! {
+    /// An Elasticsearch mapping type (`FieldType`).
+    FieldType {
+        Keyword = "keyword",
+        ConstantKeyword = "constant_keyword",
+        Wildcard = "wildcard",
+        Text = "text",
+        MatchOnlyText = "match_only_text",
+        Long = "long",
+        Integer = "integer",
+        Short = "short",
+        Byte = "byte",
+        UnsignedLong = "unsigned_long",
+        Double = "double",
+        Float = "float",
+        HalfFloat = "half_float",
+        ScaledFloat = "scaled_float",
+        Date = "date",
+        DateNanos = "date_nanos",
+        Boolean = "boolean",
+        Ip = "ip",
+        Version = "version",
+        Binary = "binary",
+        GeoPoint = "geo_point",
+        GeoShape = "geo_shape",
+        Object = "object",
+        Flattened = "flattened",
+        Nested = "nested",
+    }
+}
+
+literal_enum! {
+    /// `equals`, the only operator.
+    EqualsOperator { Equals = "equals", }
+}
+
+literal_enum! {
+    /// A Kibana severity.
+    KibanaSeverity { Low = "low", Medium = "medium", High = "high", Critical = "critical", }
+}
+
+literal_enum! {
+    /// `mapping`, the only threat entry type.
+    MappingType { Mapping = "mapping", }
+}
+
+literal_enum! {
+    /// An exception list's namespace.
+    NamespaceType { Single = "single", Agnostic = "agnostic", }
+}
+
+literal_enum! {
+    /// An exception list's type.
+    ExceptionListType { Detection = "detection", RuleDefault = "rule_default", }
+}
+
+literal_enum! {
+    /// A query language.
+    QueryLanguage { Kuery = "kuery", Lucene = "lucene", }
+}
+
+literal_enum! {
+    /// The rule type.
+    RuleType {
+        Query = "query",
+        Eql = "eql",
+        Esql = "esql",
+        Threshold = "threshold",
+        NewTerms = "new_terms",
+        ThreatMatch = "threat_match",
+        MachineLearning = "machine_learning",
+    }
+}
+
+/// Declares an Elastic nested model with the shared derives.
+macro_rules! model {
+    ($(#[$meta:meta])* $name:ident = $model:tt { $($body:tt)* }) => {
+        $(#[$meta])*
+        #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, Validate, FromNode)]
+        #[serde(deny_unknown_fields)]
+        #[garde(context(Pins))]
+        #[garde(allow_unvalidated)]
+        #[schemars(rename = $model, description = "")]
+        #[from_node(model = $model)]
+        #[cfg_attr(
+            feature = "python",
+            pyo3::pyclass(frozen, get_all, eq, name = $model, module = "opentide._native.models")
+        )]
+        #[cfg_attr(
+            feature = "python",
+            expect(
+                clippy::unsafe_derive_deserialize,
+                reason = "the `unsafe` is PyO3's FFI glue, which relies on no invariant of the fields"
+            )
+        )]
+        pub struct $name { $($body)* }
+    };
+}
+
+fn suppress() -> MissingFieldsStrategy {
+    MissingFieldsStrategy::Suppress
+}
+
+fn equals() -> EqualsOperator {
+    EqualsOperator::Equals
+}
+
+fn mapping() -> MappingType {
+    MappingType::Mapping
+}
+
+fn five_minutes() -> String {
+    "5m".to_owned()
+}
+
+fn one_minute() -> String {
+    "1m".to_owned()
+}
+
+fn any_version() -> String {
+    "*".to_owned()
+}
+
+model! {
+    /// Alert suppression (`ElasticSuppression`).
+    ElasticSuppression = "ElasticSuppression" {
+        /// 1–3 field names. Required for every type except `threshold`, where it is forbidden.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pub group_by: Option<Vec<String>>,
+        /// Suppression window. Required for `threshold`. Omitted on other types suppresses for the rule
+        /// execution only.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pub duration: Option<String>,
+        /// `suppress` or `doNotSuppress`: whether alerts missing a `group_by` field are suppressed
+        /// together. Not sent for `threshold`.
+        #[serde(default = "suppress")]
+        pub missing_fields_strategy: MissingFieldsStrategy,
+    }
+}
+
+model! {
+    /// Count of distinct values (`ElasticCardinality`).
+    ElasticCardinality = "ElasticCardinality" {
+        /// Field whose distinct values are counted.
+        pub field: String,
+        /// Minimum number of distinct values.
+        pub value: i64,
+    }
+}
+
+model! {
+    /// Group-by fields and count (`ElasticThreshold`).
+    ElasticThreshold = "ElasticThreshold" {
+        /// Group by, 0–5 fields. `[]` counts all matches.
+        #[serde(default)]
+        pub field: Vec<String>,
+        /// Threshold, at least 1.
+        pub value: i64,
+        /// Count: alert only when `field` has at least `value` distinct values.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pub cardinality: Option<ElasticCardinality>,
+    }
+}
+
+model! {
+    /// A field the rule needs (`ElasticRequiredField`).
+    ElasticRequiredField = "ElasticRequiredField" {
+        /// Field name.
+        pub name: String,
+        /// Elasticsearch mapping type: `keyword`, `constant_keyword`, `wildcard`, `text`,
+        /// `match_only_text`, `long`, `integer`, `short`, `byte`, `unsigned_long`, `double`, `float`,
+        /// `half_float`, `scaled_float`, `date`, `date_nanos`, `boolean`, `ip`, `version`, `binary`,
+        /// `geo_point`, `geo_shape`, `object`, `flattened`, or `nested`.
+        pub r#type: FieldType,
+    }
+}
+
+model! {
+    /// An integration the rule expects (`ElasticIntegration`).
+    ElasticIntegration = "ElasticIntegration" {
+        /// Integration package, for example `windows`, `endpoint`, `aws`.
+        pub package: String,
+        /// Policy template inside the package, for example `cloudtrail`.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pub integration: Option<String>,
+        /// Semver range, for example `^2.0.0`.
+        #[serde(default = "any_version")]
+        pub version: String,
+    }
+}
+
+model! {
+    /// A severity override (`ElasticSeverityMapping`).
+    ElasticSeverityMapping = "ElasticSeverityMapping" {
+        /// Source event field.
+        pub field: String,
+        /// Value to match.
+        pub value: String,
+        /// `equals` is the only operator.
+        #[serde(default = "equals")]
+        pub operator: EqualsOperator,
+        /// Kibana severity: `low`, `medium`, `high`, or `critical`.
+        pub severity: KibanaSeverity,
+    }
+}
+
+fn empty() -> String {
+    String::new()
+}
+
+model! {
+    /// A risk score override (`ElasticRiskScoreMapping`).
+    ElasticRiskScoreMapping = "ElasticRiskScoreMapping" {
+        /// Source event field holding a score.
+        pub field: String,
+        /// `equals` is the only operator.
+        #[serde(default = "equals")]
+        pub operator: EqualsOperator,
+        /// Kibana sends an empty string.
+        #[serde(default = "empty")]
+        pub value: String,
+    }
+}
+
+model! {
+    /// An indicator field mapping (`ElasticThreatEntry`).
+    ElasticThreatEntry = "ElasticThreatEntry" {
+        /// Event field.
+        pub field: String,
+        /// Indicator field.
+        pub value: String,
+        /// `mapping` is the only type.
+        #[serde(default = "mapping")]
+        pub r#type: MappingType,
+        /// `true` is the UI's DOES NOT MATCH. Not sent when null.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pub negate: Option<bool>,
+    }
+}
+
+model! {
+    /// A group of indicator mappings (`ElasticThreatGroup`).
+    ElasticThreatGroup = "ElasticThreatGroup" {
+        /// Field mappings in this group. Every entry must match (AND).
+        pub entries: Vec<ElasticThreatEntry>,
+    }
+}
+
+model! {
+    /// Runs every, additional look-back, and max alerts per run (`ElasticScheduling`).
+    ElasticScheduling = "ElasticScheduling" {
+        /// Runs every.
+        #[serde(default = "five_minutes")]
+        pub interval: String,
+        /// Additional look-back time. `0m` is valid.
+        #[serde(default = "one_minute")]
+        pub lookback: String,
+        /// Max alerts per run (`max_signals`). Omitted leaves the detection engine's default of 100.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pub max_alerts: Option<i64>,
+    }
+}
+
+model! {
+    /// A default severity plus severity overrides (`ElasticSeverity`).
+    ElasticSeverity = "ElasticSeverity" {
+        /// An `alert_severity` value.
+        pub default: String,
+        /// Severity override: alerts whose `field` equals `value` get `severity`.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pub mapping: Option<Vec<ElasticSeverityMapping>>,
+    }
+}
+
+model! {
+    /// A score plus risk score overrides (`ElasticRisk`).
+    ElasticRisk = "ElasticRisk" {
+        /// 0–100. Omitted derives the score from the severity.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pub score: Option<i64>,
+        /// Risk score override: the alert takes its score from `field`.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pub mapping: Option<Vec<ElasticRiskScoreMapping>>,
+    }
+}
+
+model! {
+    /// Rule name override and timestamp override (`ElasticOverrides`).
+    ElasticOverrides = "ElasticOverrides" {
+        /// Rule name override: the alert title comes from this field.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pub name: Option<String>,
+        /// Timestamp override: the rule's time range runs on this field instead of `@timestamp`.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pub timestamp: Option<String>,
+        /// "Do not use @timestamp as a fallback timestamp field".
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pub disable_fallback: Option<bool>,
+    }
+}
+
+model! {
+    /// Investigation guide and Setup guide (`ElasticGuide`).
+    ElasticGuide = "ElasticGuide" {
+        /// Investigation guide (Kibana `note`). Markdown.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pub investigation: Option<String>,
+        /// Setup guide (Kibana `setup`). Not the tenant `setup` table.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pub setup: Option<String>,
+    }
+}
+
+model! {
+    /// An existing exception list (`ElasticExceptionList`).
+    ElasticExceptionList = "ElasticExceptionList" {
+        /// Exception list id.
+        pub id: String,
+        /// Exception list `list_id`.
+        pub list_id: String,
+        /// `single` (one space) or `agnostic` (every space).
+        pub namespace_type: NamespaceType,
+        /// `detection` or `rule_default`.
+        pub r#type: ExceptionListType,
+    }
+}
+
+model! {
+    /// Exception lists to attach (`ElasticExceptions`).
+    ElasticExceptions = "ElasticExceptions" {
+        /// Attach the Elastic Endpoint exception list.
+        #[serde(default)]
+        pub endpoint: bool,
+        /// Existing exception lists.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pub lists: Option<Vec<ElasticExceptionList>>,
+    }
+}
+
+model! {
+    /// The Timeline template (`ElasticTimeline`).
+    ElasticTimeline = "ElasticTimeline" {
+        /// Timeline template id.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pub id: Option<String>,
+        /// Timeline template title.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pub title: Option<String>,
+    }
+}
+
+model! {
+    /// Rule actions, response actions, and the Timeline template (`ElasticActions`).
+    ElasticActions = "ElasticActions" {
+        /// Rule actions: connector `id`, `action_type_id`, `group`, `params`, and `frequency`, in
+        /// Kibana's shape. Copied unchanged.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pub notify: Option<Vec<IndexMap<String, Any>>>,
+        /// Response actions: `{endpoint: <command>, field?, comment?}` or `{osquery: {...}}`.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pub respond: Option<Vec<IndexMap<String, Any>>>,
+        /// Timeline template attached to the rule: `id` and `title`, both optional strings.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pub timeline: Option<ElasticTimeline>,
+    }
+}
+
+model! {
+    /// A rule query filter (`ElasticFilter`).
+    ElasticFilter = "ElasticFilter" {
+        /// Phrase shorthand: field to match.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pub field: Option<String>,
+        /// Phrase shorthand: value to match.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pub value: Option<String>,
+        /// Phrase shorthand: exclude matches.
+        #[serde(default)]
+        pub negate: bool,
+        /// Raw detection-engine filter `meta`.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pub meta: Option<IndexMap<String, Any>>,
+        /// Raw detection-engine filter query.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pub query: Option<IndexMap<String, Any>>,
+    }
+}
+
+model! {
+    /// EQL-only settings (`ElasticEql`).
+    ElasticEql = "ElasticEql" {
+        /// Timestamp field for EQL sequencing.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pub timestamp_field: Option<String>,
+        /// Event category field.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pub event_category_override: Option<String>,
+        /// Tiebreaker for events with equal timestamps.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pub tiebreaker_field: Option<String>,
+    }
+}
+
+model! {
+    /// Fields whose new values alert, and the history window (`ElasticNewTerms`).
+    ElasticNewTerms = "ElasticNewTerms" {
+        /// 1–3 fields whose value, or combination of values, must be new.
+        pub fields: Vec<String>,
+        /// History window size. Sent as `now-<duration>`. Separate from the schedule.
+        pub history_window_start: String,
+    }
+}
+
+model! {
+    /// The indicator side of an indicator match rule (`ElasticThreatMatch`).
+    ElasticThreatMatch = "ElasticThreatMatch" {
+        /// Indicator index patterns. Always a list.
+        pub index: Vec<String>,
+        /// Indicator query.
+        pub query: String,
+        /// `kuery` or `lucene`, for the indicator query.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[schemars(schema_with = "crate::objects::platform::optional_literal::<QueryLanguage>")]
+        pub language: Option<QueryLanguage>,
+        /// Groups are OR. Entries in a group are AND.
+        pub mapping: Vec<ElasticThreatGroup>,
+        /// Indicator filters, in the same two shapes as the block `filters`.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pub filters: Option<Vec<IndexMap<String, Any>>>,
+        /// Indicator prefix override. Kibana's default is `threat.indicator`.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pub indicator_path: Option<String>,
+    }
+}
+
+/// `job_id: str | list[str]`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, FromNode)]
+#[serde(untagged)]
+#[from_node(union)]
+pub enum JobId {
+    /// One job.
+    #[schemars(description = "")]
+    One(String),
+    /// Several jobs.
+    #[schemars(description = "")]
+    Many(Vec<String>),
+}
+
+model! {
+    /// Anomaly jobs and threshold (`ElasticMachineLearning`).
+    ElasticMachineLearning = "ElasticMachineLearning" {
+        /// Existing anomaly detection job id or ids. Sent unchanged, in either shape. The block does not
+        /// create jobs.
+        pub job_id: JobId,
+        /// Anomaly score cutoff on Kibana's 0–100 scale.
+        pub anomaly_threshold: i64,
+    }
+}
+
+/// `severity: str | ElasticSeverity`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, FromNode)]
+#[serde(untagged)]
+#[from_node(union)]
+pub enum SeverityChoice {
+    /// An `alert_severity` value.
+    #[schemars(description = "")]
+    Level(String),
+    /// A default plus severity overrides.
+    #[schemars(description = "")]
+    Mapped(ElasticSeverity),
+}
+
+/// `risk: int | ElasticRisk`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, FromNode)]
+#[serde(untagged)]
+#[from_node(union)]
+pub enum RiskChoice {
+    /// A score 0–100.
+    #[schemars(description = "")]
+    Score(i64),
+    /// A score plus risk score overrides.
+    #[schemars(description = "")]
+    Mapped(ElasticRisk),
+}
+
+/// An `integration` item: `str | ElasticIntegration`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, FromNode)]
+#[schemars(description = "")]
+#[serde(untagged)]
+#[from_node(union)]
+pub enum IntegrationChoice {
+    /// A package name.
+    #[schemars(description = "")]
+    Package(String),
+    /// A package, policy template and version range.
+    #[schemars(description = "")]
+    Detailed(ElasticIntegration),
+}
+
+fn garde_block(block: &ElasticConfig, _pins: &Pins) -> garde::Result {
+    crate::objects::platform::garde_named("ElasticConfig", block)
+}
+
+fn raw_block(node: &Node, cx: &mut Context) -> bool {
+    crate::objects::platform::before("ElasticConfig", node, cx)
+}
+
+platform_block! {
+    /// Elastic Security detection rule (`ElasticConfig`).
+    #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, Validate, FromNode)]
+    #[serde(deny_unknown_fields)]
+    #[garde(context(Pins))]
+    #[garde(allow_unvalidated)]
+    #[garde(custom(garde_block))]
+    #[schemars(rename = "ElasticConfig", description = "")]
+    #[from_node(model = "ElasticConfig", before = "raw_block")]
+    #[cfg_attr(feature = "python", pyo3::pyclass(frozen, get_all, eq, name = "ElasticConfig", module = "opentide._native.models"))]
+    #[cfg_attr(feature = "python", expect(clippy::unsafe_derive_deserialize, reason = "the `unsafe` is PyO3's FFI glue, which relies on no invariant of the fields"))]
+    pub struct ElasticConfig ["platform::elastic::1.0"] {
+        /// Rule type: `query`, `eql`, `esql`, `threshold`, `new_terms`, `threat_match` or
+        /// `machine_learning`. Kibana cannot change the type of an existing rule in place.
+        pub r#type: RuleType,
+        /// The event query, in the language the type selects. Multiline. Not sent for
+        /// `machine_learning`.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[from_node(with = "crate::objects::platform::optional_query_text")]
+        #[garde(custom(crate::objects::platform::garde_optional_query_text))]
+        pub query: Option<String>,
+        /// `kuery` (KQL) or `lucene`, for the event query of `query`, `threshold`, `new_terms`, and
+        /// `threat_match`. Compiled as `kuery` when omitted. MUST NOT be set for `eql`, `esql`, or
+        /// `machine_learning`.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[schemars(schema_with = "crate::objects::platform::optional_literal::<QueryLanguage>")]
+        pub language: Option<QueryLanguage>,
+        /// Index patterns. A single pattern is a one-item list (`[logs-*]`). Omitted uses the tenant
+        /// `setup.index`.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pub index: Option<Vec<String>>,
+        /// One existing Kibana data view. Replaces `index`.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pub data_view_id: Option<String>,
+        /// Rule query filters. Not Elastic Defend event filters.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pub filters: Option<Vec<ElasticFilter>>,
+        /// Runs every, additional look-back, and max alerts per run.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pub scheduling: Option<ElasticScheduling>,
+        /// An `alert_severity` value, or a default plus severity overrides.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pub severity: Option<SeverityChoice>,
+        /// Risk score 0–100, or a score plus risk score overrides.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pub risk: Option<RiskChoice>,
+        /// Alert suppression.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pub suppression: Option<ElasticSuppression>,
+        /// Custom highlighted fields on the alert.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pub highlighted_fields: Option<Vec<String>>,
+        /// Group-by fields and count.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pub threshold: Option<ElasticThreshold>,
+        /// Fields whose new values alert, and the history window.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pub new_terms: Option<ElasticNewTerms>,
+        /// EQL-only settings.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pub eql: Option<ElasticEql>,
+        /// The indicator side of an indicator match rule. Not the ATT&CK array.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pub threat: Option<ElasticThreatMatch>,
+        /// Anomaly jobs and threshold.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pub machine_learning: Option<ElasticMachineLearning>,
+        /// Integrations the rule expects. Recorded on the rule; Fleet is not touched.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pub integration: Option<Vec<IntegrationChoice>>,
+        /// Fields the rule needs, with their mapping types.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pub required_fields: Option<Vec<ElasticRequiredField>>,
+        /// Investigation guide and Setup guide.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pub guide: Option<ElasticGuide>,
+        /// Known false positives.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pub false_positives: Option<Vec<String>>,
+        /// Rule tags, after `opentide` and the tenant tags.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pub tags: Option<Vec<String>>,
+        /// Exception lists to attach.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pub exceptions: Option<ElasticExceptions>,
+        /// Building block rule: alerts are hidden from the default Alerts view.
+        #[serde(default)]
+        pub building_block: bool,
+        /// Rule name override and timestamp override.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pub overrides: Option<ElasticOverrides>,
+        /// Rule actions, response actions, and the Timeline template.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pub actions: Option<ElasticActions>,
+    }
+}
+
+// ---------------------------------------------------------------------------
+// The named check `elastic_rule_shape`.
+// ---------------------------------------------------------------------------
+
+const ENDPOINT_COMMANDS: [&str; 4] = ["isolate", "kill-process", "suspend-process", "runscript"];
+const ENDPOINT_KEYS: [&str; 3] = ["endpoint", "comment", "field"];
+const ALERT_SEVERITIES: [&str; 5] = ["informational", "low", "medium", "high", "critical"];
+const EXCEPTION_TYPES: [&str; 2] = ["detection", "rule_default"];
+const RULE_TYPES: [&str; 7] = [
+    "query",
+    "eql",
+    "esql",
+    "threshold",
+    "new_terms",
+    "threat_match",
+    "machine_learning",
+];
+/// The flat keys of the pre-RFC 0007 block, removed (`type_block`).
+pub const REMOVED_FLAT: [&str; 40] = [
+    "saved_id",
+    "interval",
+    "from",
+    "license",
+    "meta",
+    "alert_suppression",
+    "related_integrations",
+    "investigation_fields",
+    "max_signals",
+    "note",
+    "setup",
+    "endpoint_exceptions",
+    "exceptions_list",
+    "timeline_id",
+    "timeline_title",
+    "timestamp_override",
+    "timestamp_override_fallback_disabled",
+    "risk_score",
+    "risk_score_mapping",
+    "severity_mapping",
+    "timestamp_field",
+    "event_category_override",
+    "tiebreaker_field",
+    "new_terms_fields",
+    "history_window_start",
+    "threat_index",
+    "threat_query",
+    "threat_language",
+    "threat_mapping",
+    "threat_filters",
+    "threat_indicator_path",
+    "concurrent_searches",
+    "items_per_search",
+    "machine_learning_job_id",
+    "anomaly_threshold",
+    "rule_name_override",
+    "response_actions",
+    "timestamp",
+    "timeline",
+    "passthrough",
+];
+
+/// A non-empty list of non-empty strings.
+fn pattern_list(node: &Node) -> bool {
+    match &node.value {
+        Value::Seq(items) => {
+            !items.is_empty()
+                && items
+                    .iter()
+                    .all(|item| item.value.as_str().is_some_and(|text| !text.is_empty()))
+        }
+        _ => false,
+    }
+}
+
+/// The keys of a mapping, as strings.
+fn keys(node: &Node) -> Vec<&str> {
+    match &node.value {
+        Value::Map(entries) => entries
+            .iter()
+            .filter_map(|entry| entry.key.value.as_str())
+            .collect(),
+        _ => Vec::new(),
+    }
+}
+
+/// RFC 0007 `response_action`, the two author shapes only,
+/// never Kibana's raw form.
+fn valid_response(action: &Node) -> bool {
+    let Value::Map(entries) = &action.value else {
+        return false;
+    };
+    let all_strings = entries
+        .iter()
+        .all(|entry| entry.key.value.as_str().is_some());
+    if let Some(endpoint) = action.get("endpoint") {
+        return endpoint
+            .value
+            .as_str()
+            .is_some_and(|command| ENDPOINT_COMMANDS.contains(&command))
+            && all_strings
+            && keys(action).iter().all(|key| ENDPOINT_KEYS.contains(key));
+    }
+    if let Some(osquery) = action.get("osquery") {
+        return entries.len() == 1
+            && is_map(Some(osquery))
+            && non_empty_str(get(Some(osquery), "query")).is_some();
+    }
+    false
+}
+
+/// The items of a list field. A value that is not a sequence has none here:
+/// the field's type refuses it (`list_type`).
+fn items(node: Option<&Node>) -> &[std::sync::Arc<Node>] {
+    match node.map(|node| &node.value) {
+        Some(Value::Seq(items)) => items,
+        _ => &[],
+    }
+}
+
+/// Whether an integer field's value is within `range`. Any other value fails
+/// the constraint, except a boolean: a boolean is no integer, and the field's
+/// type refuses it on the value itself (`int_type`).
+fn int_within(node: Option<&Node>, range: &RangeInclusive<i64>) -> bool {
+    match node.map(|node| &node.value) {
+        Some(Value::Int(value)) => range.contains(value),
+        Some(Value::Bool(_)) => true,
+        _ => false,
+    }
+}
+
+/// Every constraint code of `elastic_rule_shape` on a raw block, sorted; empty when the block passes, is not a mapping, or has
+/// no `status` (left to the field: a missing status is "Field required", as
+/// on every platform).
+#[expect(
+    clippy::too_many_lines,
+    reason = "one check per constraint, read top to bottom"
+)]
+pub fn block_codes(raw: &Node) -> BTreeSet<&'static str> {
+    let mut codes = BTreeSet::new();
+    if !is_map(Some(raw)) || !present(get(Some(raw), "status")) || !super::within_budget(raw) {
+        return codes;
+    }
+    let field = |key: &str| get(Some(raw), key);
+    let rule_type = field("type").and_then(|node| node.value.as_str());
+    let is_type = |wanted: &str| rule_type == Some(wanted);
+
+    if !rule_type.is_some_and(|value| RULE_TYPES.contains(&value))
+        || keys(raw).iter().any(|key| REMOVED_FLAT.contains(key))
+    {
+        codes.insert("type_block");
+    }
+    if present(field("threshold")) != is_type("threshold") {
+        codes.insert("type_block");
+    }
+    let new_terms = field("new_terms");
+    if present(new_terms) != is_type("new_terms")
+        || (is_type("new_terms")
+            && (!is_map(new_terms)
+                || !present(get(new_terms, "fields"))
+                || !present(get(new_terms, "history_window_start"))))
+    {
+        codes.insert("type_block");
+    }
+    if present(field("eql")) && !is_type("eql") {
+        codes.insert("type_block");
+    }
+    let threat = field("threat");
+    if present(threat) != is_type("threat_match")
+        || (is_type("threat_match")
+            && (!is_map(threat)
+                || ["index", "query", "mapping"]
+                    .iter()
+                    .any(|key| !present(get(threat, key)))))
+    {
+        codes.insert("type_block");
+    }
+    let ml = field("machine_learning");
+    if present(ml) != is_type("machine_learning")
+        || (is_type("machine_learning")
+            && (!is_map(ml)
+                || !present(get(ml, "job_id"))
+                || !present(get(ml, "anomaly_threshold"))))
+    {
+        codes.insert("type_block");
+    }
+    if !is_type("machine_learning") && !filled(field("query")) {
+        codes.insert("type_block");
+    }
+    if ["eql", "esql", "machine_learning"]
+        .iter()
+        .any(|kind| is_type(kind))
+        && filled(field("language"))
+    {
+        codes.insert("language");
+    }
+    if ["esql", "machine_learning"]
+        .iter()
+        .any(|kind| is_type(kind))
+        && (filled(field("index")) || filled(field("data_view_id")) || filled(field("filters")))
+    {
+        codes.insert("esql_source");
+    }
+    if filled(field("index")) && filled(field("data_view_id")) {
+        codes.insert("index_xor_data_view");
+    }
+    if let Some(index) = field("index").filter(|node| present(Some(node)))
+        && !pattern_list(index)
+    {
+        codes.insert("index_list");
+    }
+    if is_map(threat)
+        && let Some(index) = get(threat, "index").filter(|node| present(Some(node)))
+        && !pattern_list(index)
+    {
+        codes.insert("index_list");
+    }
+    let threat_filters = if is_map(threat) {
+        get(threat, "filters")
+    } else {
+        None
+    };
+    for entries in [field("filters"), threat_filters] {
+        let Some(entries) = entries.filter(|node| present(Some(node))) else {
+            continue;
+        };
+        let Value::Seq(items) = &entries.value else {
+            codes.insert("filter_shape");
+            continue;
+        };
+        for entry in items {
+            let entry = Some(entry.as_ref());
+            if !is_map(entry) {
+                codes.insert("filter_shape");
+                continue;
+            }
+            let shorthand = ["field", "value", "negate"]
+                .iter()
+                .any(|key| present(get(entry, key)));
+            let raw_filter = present(get(entry, "meta")) || present(get(entry, "query"));
+            // Exactly one shape, and that shape complete: {field, value,
+            // negate?} or {meta, query}. An empty entry is neither.
+            if shorthand == raw_filter
+                || (shorthand && (!present(get(entry, "field")) || !present(get(entry, "value"))))
+                || (raw_filter && (!present(get(entry, "meta")) || !present(get(entry, "query"))))
+            {
+                codes.insert("filter_shape");
+            }
+        }
+    }
+    // Each item of `exceptions.lists`, when there is such a list.
+    for item in items(get(field("exceptions"), "lists")) {
+        let ok = is_map(Some(item))
+            && get(Some(item), "type")
+                .and_then(|kind| kind.value.as_str())
+                .is_some_and(|kind| EXCEPTION_TYPES.contains(&kind));
+        if !ok {
+            codes.insert("exception_type");
+        }
+    }
+    let actions = field("actions");
+    match actions.map(|node| &node.value) {
+        Some(Value::Seq(_)) => {
+            codes.insert("type_block");
+        }
+        Some(Value::Map(_))
+            if !items(get(actions, "respond"))
+                .iter()
+                .all(|action| valid_response(action)) =>
+        {
+            codes.insert("response_action");
+        }
+        _ => {}
+    }
+    let mut suppression = field("suppression").filter(|node| present(Some(node)));
+    if suppression.is_some() && !is_map(suppression) {
+        codes.insert("suppression_shape");
+        suppression = None;
+    }
+    if suppression.is_some() {
+        let group_by = get(suppression, "group_by");
+        if is_type("threshold") {
+            // A missing duration is a shape fault; an empty one is a
+            // `duration` fault, reported by the duration check below.
+            if !present(get(suppression, "duration")) || filled(group_by) {
+                codes.insert("suppression_shape");
+            }
+        } else {
+            let ok = match group_by.map(|node| &node.value) {
+                Some(Value::Seq(items)) => {
+                    (1..=3).contains(&items.len())
+                        && items.iter().all(|item| non_empty_str(Some(item)).is_some())
+                        && items.iter().enumerate().all(|(index, item)| {
+                            items[..index]
+                                .iter()
+                                .all(|other| !crate::objects::any::same(other, item))
+                        })
+                }
+                _ => false,
+            };
+            if !ok {
+                codes.insert("suppression_shape");
+            }
+        }
+    }
+    if is_map(new_terms)
+        && let Some(fields) = get(new_terms, "fields")
+        && !matches!(&fields.value, Value::Seq(items) if (1..=3).contains(&items.len()))
+    {
+        codes.insert("new_terms_fields");
+    }
+    let threshold = field("threshold");
+    if is_map(threshold) {
+        let threshold_field = get(threshold, "field").filter(|node| filled(Some(node)));
+        let field_ok = match threshold_field.map(|node| &node.value) {
+            None => true,
+            Some(Value::Seq(items)) => items.len() <= 5,
+            Some(_) => false,
+        };
+        let value_ok = int_within(get(threshold, "value"), &(1..=i64::MAX));
+        if !field_ok || !value_ok {
+            codes.insert("threshold_fields");
+        }
+    }
+    let severity = field("severity");
+    let level = if is_map(severity) {
+        get(severity, "default")
+    } else {
+        severity
+    };
+    if present(level) {
+        let known = level
+            .and_then(|node| node.value.as_str())
+            .is_some_and(|text| ALERT_SEVERITIES.contains(&text.trim().to_lowercase().as_str()));
+        if !known {
+            // RFC 0007 §2: alert_severity vocabulary. An unknown value used
+            // to compile silently to Informational (low, risk 1).
+            codes.insert("severity");
+        }
+    }
+    let risk = field("risk");
+    let score = if is_map(risk) {
+        get(risk, "score")
+    } else {
+        risk
+    };
+    if present(score) && !int_within(score, &(0..=100)) {
+        codes.insert("risk_score");
+    }
+    if !bad_durations(raw).is_empty() {
+        codes.insert("duration");
+    }
+    codes
+}
+
+/// The block's durations that do not parse, or are longer than
+/// [`ELASTIC_MAX_SECONDS`], as `(key path, node)`:
+/// `scheduling.lookback` (which may be zero), `scheduling.interval`,
+/// `suppression.duration` and `new_terms.history_window_start`. The
+/// `duration` code's places, which its message names (B3: it named the
+/// block alone).
+pub fn bad_durations(raw: &Node) -> Vec<(&'static str, &Node)> {
+    let field = |key: &str| get(Some(raw), key);
+    // A non-object `scheduling` is a shape fault, not a duration one: left to
+    // the field type, which names `scheduling` and the expected shape.
+    let scheduling = field("scheduling").filter(|node| is_map(Some(node)));
+    let suppression = field("suppression").filter(|node| present(Some(node)) && is_map(Some(node)));
+    let new_terms = field("new_terms");
+    let history = if is_map(new_terms) {
+        get(new_terms, "history_window_start")
+    } else {
+        None
+    };
+    // Past `ELASTIC_MAX_SECONDS` the seconds saturate: refused, as deploy
+    // refuses them (#1982).
+    let duration_ok = |node: &Node, allow_zero: bool| {
+        node.value.as_str().is_some_and(|text| {
+            duration_seconds(text, allow_zero).is_ok_and(|seconds| seconds <= ELASTIC_MAX_SECONDS)
+        })
+    };
+    // `None` is absent (#557); every other value, "" included, must parse.
+    [
+        ("scheduling.lookback", get(scheduling, "lookback"), true),
+        ("scheduling.interval", get(scheduling, "interval"), false),
+        ("suppression.duration", get(suppression, "duration"), false),
+        ("new_terms.history_window_start", history, false),
+    ]
+    .into_iter()
+    .filter_map(|(path, node, allow_zero)| {
+        node.filter(|node| present(Some(node)) && !duration_ok(node, allow_zero))
+            .map(|node| (path, node))
+    })
+    .collect()
+}
+
+/// What the `duration` code's message adds: each bad duration, its value
+/// and the form it takes. `named` puts each field's path before its value;
+/// a finding placed at the one bad value already names its field.
+pub fn duration_detail(raw: &Node, named: bool) -> String {
+    bad_durations(raw)
+        .iter()
+        .map(|(path, node)| {
+            let value = match &node.value {
+                Value::Str(text) => format!("{:?}", text.as_str()),
+                other => other.to_string(),
+            };
+            let field = if named {
+                format!("{path} ")
+            } else {
+                String::new()
+            };
+            if node.value.as_str().is_some_and(|text| {
+                duration_seconds(text, true).is_ok_and(|seconds| seconds > ELASTIC_MAX_SECONDS)
+            }) {
+                return format!(
+                    "{field}{value} is longer than a rule can be deployed with: at most \
+                     {ELASTIC_MAX_SECONDS} seconds"
+                );
+            }
+            let extra = if *path == "new_terms.history_window_start" {
+                "; deploy adds `now-`"
+            } else {
+                ""
+            };
+            format!(
+                "{field}{value} is not a duration: a number and a unit, s, m, h or d, such as \
+                 `14d`{extra}"
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("; ")
+}
+
+/// What the `language` code's message adds: `kuery` or `lucene` is the
+/// language of the event query of `query`, `threshold`, `new_terms` and
+/// `threat_match` rules, and the block's `type` is none of them (the code fires
+/// for `eql`, `esql` and `machine_learning` only). E2E-3: it was the bare
+/// code.
+pub fn language_detail(raw: &Node) -> String {
+    let (rule_type, why) = match get(Some(raw), "type").and_then(|node| node.value.as_str()) {
+        Some("eql") => ("eql", "whose query is EQL"),
+        Some("esql") => ("esql", "whose query is ES|QL"),
+        _ => ("machine_learning", "which has no query"),
+    };
+    format!(
+        "`language` (`kuery` or `lucene`) applies to `type: query`, `threshold`, `new_terms` \
+         and `threat_match`, not to `type: {rule_type}`, {why}: remove `language` from the block"
+    )
+}
+
+/// What the `esql_source` code's message adds: the source fields the rule
+/// sets, and where a rule of its type reads its events from (E2E-3: it was
+/// the bare code).
+pub fn esql_source_detail(raw: &Node) -> String {
+    let set: Vec<String> = ["index", "data_view_id", "filters"]
+        .into_iter()
+        .filter(|key| filled(get(Some(raw), key)))
+        .map(|key| format!("`{key}`"))
+        .collect();
+    let (rule_type, source) =
+        if get(Some(raw), "type").is_some_and(|node| node.value.as_str() == Some("esql")) {
+            ("esql", "the query's `FROM` command names the sources")
+        } else {
+            (
+                "machine_learning",
+                "the rule reads the anomaly job's results, not an index",
+            )
+        };
+    format!(
+        "{} set on `type: {rule_type}`, where {source}: remove {}",
+        set.join(", "),
+        if set.len() == 1 { "it" } else { "them" }
+    )
+}

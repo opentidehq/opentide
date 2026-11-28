@@ -1,0 +1,33 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: validate.query/plain/live-tenants/live-splunk-ci-github
+---
+args: opentide validate query --live --platform splunk
+exit: 1
+
+━━━ stdout
+::error file=objects/rules/splunk-unknown-command.yaml,line=15,title=query_rejected::Splunk unknown command rule: Splunk refused the query on ***: Unknown search command 'badcommand'.
+
+━━━ stderr
+warning: Query validation warning · detail: Splunk gateway rule (00000000-0000-4000-8046-000000000003) on *** · warning: Splunk's parser timed out behind a gateway; the query is assumed valid
+error: Query rejected · detail: Splunk unknown command rule (00000000-0000-4000-8046-000000000002) on splunk tenant *** · reason: Splunk refused the query on ***: Unknown search command 'badcommand'.
+✗ Splunk Enterprise queries · 3 rules · <SECONDS>
+warning: Query validation reported warnings for splunk
+error: Queries rejected on splunk · 3 checked on 1 tenant
+
+━━━ tmp/github-step-summary.md · created 0644
+### ✗ opentide validate query --platform splunk
+
+Queries rejected on splunk · 3 checked on 1 tenant
+
+Strategies: `PREVIEW`, `RELEASE`
+
+| Tenant | Queries |
+|---|---|
+| lab | 3 |
+
+**Rejected queries**
+
+| Rule | Tenant | Reason |
+|---|---|---|
+| objects/rules/splunk-unknown-command.yaml:15 | lab | Splunk refused the query on lab: Unknown search command 'badcommand'. |

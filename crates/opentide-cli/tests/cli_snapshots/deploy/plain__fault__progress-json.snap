@@ -1,0 +1,11 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: deploy/plain/fault/progress-json
+---
+args: opentide deploy --strategy PREVIEW --all --dry-run
+exit: 1
+view: diagnostics (code, severity, file, line, column and counts; a warning's text; log events by name; no other message text)
+
+━━━ stdout · text, not held
+
+━━━ stderr · text, not held

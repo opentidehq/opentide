@@ -1,0 +1,134 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: setup.platforms/json/empty/example
+---
+args: opentide --json setup platforms --sentinel --splunk --yes
+exit: 0
+
+━━━ stdout · json, 1 lines
+{
+  "command": "setup platforms",
+  "duration_ms": 0,
+  "exit_code": 0,
+  "failure": null,
+  "files": [
+    ".opentide/configurations/platforms/sentinel.toml",
+    ".opentide/configurations/platforms/splunk.toml"
+  ],
+  "message": "Wrote 2 files",
+  "next_actions": [],
+  "ok": true,
+  "path": "<WS>",
+  "platforms": [
+    "sentinel",
+    "splunk"
+  ],
+  "schema_version": 1,
+  "status": "completed",
+  "summary": {}
+}
+
+━━━ stderr · empty
+
+━━━ ws/.opentide/configurations/ · created 0755
+
+━━━ ws/.opentide/configurations/platforms/ · created 0755
+
+━━━ ws/.opentide/configurations/platforms/sentinel.toml · created 0644
+[platform]
+enabled = true
+name = "Microsoft Sentinel"
+description = """Microsoft Sentinel delivers intelligent security analytics
+and threat intelligence across the enterprise. With Microsoft Sentinel, you
+get a single solution for attack detection, threat visibility, proactive
+hunting, and threat response."""
+
+#[[modifiers]]
+#name = "Modifier Demo"
+#description = "Example of using modifiers as a development lifecycle automation"
+#[modifiers.conditions]
+#status = ["STAGING"]
+#[modifiers.modifications]
+#alert.severity = "Informational"
+#alert.title = "prefix::Staging "
+
+#[[tenants]]
+#name = "Tenant"
+#description = "Tenant Description"
+#strategies = ["PREVIEW", "RELEASE"] # status strategies this tenant accepts; omit for both
+#manual = false # true: only rules whose block lists this tenant
+#[tenants.setup]
+#ssl = true
+#resource_group = ""
+#workspace_name =  ""
+#workspace_id = "$AZURE_WORKSPACE_ID"
+#azure_tenant_id = "$AZURE_TENANT_ID"
+#azure_subscription_id = "$AZURE_SUBSCRIPTION_ID"
+#azure_client_id = "$AZURE_CLIENT_ID"
+#azure_client_secret = "$AZURE_CLIENT_SECRET"
+
+━━━ ws/.opentide/configurations/platforms/splunk.toml · created 0644
+[platform]
+enabled = true
+name = "Splunk Enterprise"
+description = """Splunk Enterprise enables you to search, analyze and
+visualize your data to quickly act on insights from across your technology landscape."""
+
+# [[tenants]]
+# name = "Default"
+# description = "Default Splunk deployment target"
+# strategies = ["PREVIEW", "RELEASE"]  # status strategies this tenant accepts; omit for both
+# [tenants.setup]
+# ssl = false
+# url = "$SPLUNK_URL"
+# port = "$SPLUNK_PORT"
+# token = "$SPLUNK_TOKEN"
+# app = "$SPLUNK_APP"
+# correlation_searches = true
+# enterprise_security = true
+# allow_skew = "20%"
+# schedule_offset = 5
+# frequency_scheduling = "random"
+# actions_enabled = ["notable"]
+# default_actions = ["notable"]
+
+# [[modifiers]]
+# name = "Example Modifier"
+# description = "Example deployment modifier"
+# [modifiers.conditions]
+# status = ["DEVELOPMENT"]
+# [modifiers.modifications]
+# allowed_actions = false
+# "alert.severity" = 1
+
+# [[modifiers]]
+# name = "Platform Defaults"
+# description = "Default Splunk parameters applied to all rules"
+# [modifiers.conditions]
+# default = true
+# [modifiers.modifications]
+# "request.ui_dispatch_app" = "SplunkEnterpriseSecuritySuite"
+# "dispatch.latest_time" = "-5m@m"
+# "dispatch.index_latest" = ""
+# disabled = "false"
+# description = "Default description for an alert"
+# cron_schedule = "0 * * * *"
+# "alert.severity" = "3"
+# "alert.suppress.fields" = ""
+# is_scheduled = "true"
+# "action.customsearchbuilder.spec" = "{}"
+# "action.notable.param.verbose" = "0"
+# "action.notable.param.security_domain" = "threat"
+# "alert.digest_mode" = "1"
+# "alert.expires" = "2h"
+# "alert.suppress" = "0"
+# "alert.track" = "1"
+# alert_comparator = "greater than"
+# alert_threshold = "0"
+# alert_type = "number of events"
+# realtime_schedule = "0"
+# "request.ui_dispatch_view" = "search"
+# schedule_window = "auto"
+# schedule_priority = "default"
+# "dispatch.earliest_time" = ""
+# "dispatch.index_earliest" = ""

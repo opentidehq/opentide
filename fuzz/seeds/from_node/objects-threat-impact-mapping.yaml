@@ -1,0 +1,18 @@
+name: Threat
+criticality: High
+metadata:
+  uuid: 00000000-0000-4000-8000-000000000002
+  schema: threat::1.0
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+threat:
+  description: d
+  severity: High
+  impact: {a: b}
+  leverage: [High]
+  viability: High
+  terrain: Endpoints.
+  surface: [OS::Windows::Desktop]
+  mitre_attack: [T1059]

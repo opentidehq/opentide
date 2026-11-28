@@ -1,0 +1,10 @@
+// prod:cross_join valid
+stage total_users {
+  outcome:
+    $count = count($user_login_counts.user)
+  limit:
+    1
+}
+cross join $total_users, $user_login_counts
+outcome:
+  $share = max($user_login_counts.count) / max($total_users.count)

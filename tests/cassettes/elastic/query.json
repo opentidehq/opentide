@@ -1,0 +1,609 @@
+{
+  "format": 1,
+  "scenario": "elastic/query",
+  "recorded_from": [
+    "{python}",
+    "tests/cassettes/elastic/client.py",
+    "query"
+  ],
+  "digest": "sha256:8573f50c58ecaa1b475987e8a4ebb9f7cfa3286a92e1fc81228a7e064f966604",
+  "interactions": [
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://es.elastic.invalid/_query",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "ApiKey REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ],
+          [
+            "elastic-api-version",
+            "2023-10-31"
+          ]
+        ],
+        "body": "{\"query\": \"FROM logs-* // no LIMIT here\\n| LIMIT 2\", \"filter\": {\"range\": {\"@timestamp\": {\"gte\": \"2026-10-26T08:00:00.000Z\", \"lte\": \"2026-10-27T08:00:00.000Z\", \"format\": \"strict_date_optional_time\"}}}}"
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "elastic-tenant"
+          ],
+          [
+            "content-type",
+            "application/json; charset=utf-8"
+          ]
+        ],
+        "body": "{\"columns\": [{\"name\": \"host.name\", \"type\": \"keyword\"}, {\"name\": \"user.name\", \"type\": \"keyword\"}], \"values\": [[\"ws-1\", \"alice\"], [\"ws-2\", \"bob\"]], \"is_partial\": false}"
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://es.elastic.invalid/_query",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "ApiKey REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ],
+          [
+            "elastic-api-version",
+            "2023-10-31"
+          ]
+        ],
+        "body": "{\"query\": \"FROM nope\\n| LIMIT 101\", \"filter\": {\"range\": {\"@timestamp\": {\"gte\": \"2026-10-26T08:00:00.000Z\", \"lte\": \"2026-10-27T08:00:00.000Z\", \"format\": \"strict_date_optional_time\"}}}}"
+      },
+      "response": {
+        "status": 400,
+        "headers": [
+          [
+            "server",
+            "elastic-tenant"
+          ],
+          [
+            "content-type",
+            "application/json; charset=utf-8"
+          ]
+        ],
+        "body": "{\"error\": {\"root_cause\": [{\"type\": \"verification_exception\", \"reason\": \"Unknown index [nope]\"}], \"type\": \"verification_exception\", \"reason\": \"Unknown index [nope]\"}, \"status\": 400}"
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://es.elastic.invalid/logs-*,winlogbeat-*/_search",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "ApiKey REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ],
+          [
+            "elastic-api-version",
+            "2023-10-31"
+          ]
+        ],
+        "body": "{\"size\": 101, \"query\": {\"bool\": {\"must\": [{\"query_string\": {\"query\": \"process.name:cmd.exe\"}}], \"filter\": [{\"range\": {\"@timestamp\": {\"gte\": \"2026-10-26T08:00:00.000Z\", \"lte\": \"2026-10-27T08:00:00.000Z\", \"format\": \"strict_date_optional_time\"}}}]}}, \"sort\": [{\"@timestamp\": {\"order\": \"desc\", \"unmapped_type\": \"date\"}}]}"
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "elastic-tenant"
+          ],
+          [
+            "content-type",
+            "application/json; charset=utf-8"
+          ]
+        ],
+        "body": "{\"timed_out\": false, \"hits\": {\"total\": {\"value\": 7}, \"hits\": [{\"_index\": \"logs-1\", \"_source\": {\"process\": {\"name\": \"cmd.exe\"}, \"tags\": [\"a\"]}}, {\"_index\": \"logs-2\", \"_source\": {\"process\": {\"name\": \"cmd.exe\"}, \"host\": {}}}]}}"
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://es.elastic.invalid/logs-*/_eql/search",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "ApiKey REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ],
+          [
+            "elastic-api-version",
+            "2023-10-31"
+          ]
+        ],
+        "body": "{\"query\": \"sequence [process where true] [process where true]\", \"size\": 101, \"filter\": {\"range\": {\"@timestamp\": {\"gte\": \"2026-10-26T08:00:00.000Z\", \"lte\": \"2026-10-27T08:00:00.000Z\", \"format\": \"strict_date_optional_time\"}}}}"
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "elastic-tenant"
+          ],
+          [
+            "content-type",
+            "application/json; charset=utf-8"
+          ]
+        ],
+        "body": "{\"is_partial\": false, \"timed_out\": false, \"hits\": {\"total\": {\"value\": 1, \"relation\": \"eq\"}, \"sequences\": [{\"events\": [{\"_index\": \"logs-1\", \"_source\": {\"process\": {\"name\": \"cmd.exe\"}}}, {\"_index\": \"logs-1\", \"_source\": {\"process\": {\"name\": \"whoami.exe\"}}}]}]}}"
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://kibana.elastic.invalid/s/soc/api/detection_engine/rules/preview",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "ApiKey REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ],
+          [
+            "elastic-api-version",
+            "2023-10-31"
+          ],
+          [
+            "kbn-xsrf",
+            "true"
+          ]
+        ],
+        "body": "{\"type\": \"query\", \"language\": \"kuery\", \"query\": \"process.name: \\\"powershell.exe\\\"\", \"name\": \"opentide query preview\", \"description\": \"Read-only preview run by opentide query\", \"risk_score\": 21, \"severity\": \"low\", \"interval\": \"86400s\", \"from\": \"now-86400s\", \"max_signals\": 101, \"index\": [\"logs-*\", \"winlogbeat-*\"], \"invocationCount\": 1, \"timeframeEnd\": \"2026-10-27T08:00:00.000Z\"}"
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "elastic-tenant"
+          ],
+          [
+            "content-type",
+            "application/json; charset=utf-8"
+          ]
+        ],
+        "body": "{\"previewId\": \"p-1\", \"logs\": [{\"errors\": [], \"warnings\": [\"the rule matched no index yet\"]}], \"isAborted\": false}"
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://es.elastic.invalid/.preview.alerts-security.alerts-soc/_search",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "ApiKey REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ],
+          [
+            "elastic-api-version",
+            "2023-10-31"
+          ]
+        ],
+        "body": "{\"size\": 101, \"query\": {\"term\": {\"kibana.alert.rule.uuid\": \"p-1\"}}, \"sort\": [{\"@timestamp\": {\"order\": \"desc\", \"unmapped_type\": \"date\"}}]}"
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "elastic-tenant"
+          ],
+          [
+            "content-type",
+            "application/json; charset=utf-8"
+          ]
+        ],
+        "body": "{\"timed_out\": false, \"hits\": {\"total\": {\"value\": 1}, \"hits\": [{\"_index\": \".internal.preview.alerts-security.alerts-soc\", \"_source\": {\"@timestamp\": \"2026-10-27T07:58:00.000Z\", \"process\": {\"name\": \"powershell.exe\", \"pid\": 4242}, \"kibana\": {\"alert\": {\"rule\": {\"uuid\": \"p-1\"}}}, \"signal\": {\"rule\": {\"id\": \"p-1\"}}}}]}}"
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://kibana.elastic.invalid/s/soc/api/detection_engine/rules/preview",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "ApiKey REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ],
+          [
+            "elastic-api-version",
+            "2023-10-31"
+          ],
+          [
+            "kbn-xsrf",
+            "true"
+          ]
+        ],
+        "body": "{\"type\": \"query\", \"language\": \"kuery\", \"query\": \"process.name: cmd.exe\", \"name\": \"opentide query preview\", \"description\": \"Read-only preview run by opentide query\", \"risk_score\": 21, \"severity\": \"low\", \"interval\": \"86400s\", \"from\": \"now-86400s\", \"max_signals\": 6, \"data_view_id\": \"dv-logs\", \"invocationCount\": 1, \"timeframeEnd\": \"2026-10-27T08:00:00.000Z\"}"
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "elastic-tenant"
+          ],
+          [
+            "content-type",
+            "application/json; charset=utf-8"
+          ]
+        ],
+        "body": "{\"previewId\": \"p-2\", \"logs\": [{\"errors\": [], \"warnings\": [\"the rule matched no index yet\"]}], \"isAborted\": false}"
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://es.elastic.invalid/.preview.alerts-security.alerts-soc/_search",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "ApiKey REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ],
+          [
+            "elastic-api-version",
+            "2023-10-31"
+          ]
+        ],
+        "body": "{\"size\": 6, \"query\": {\"term\": {\"kibana.alert.rule.uuid\": \"p-2\"}}, \"sort\": [{\"@timestamp\": {\"order\": \"desc\", \"unmapped_type\": \"date\"}}]}"
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "elastic-tenant"
+          ],
+          [
+            "content-type",
+            "application/json; charset=utf-8"
+          ]
+        ],
+        "body": "{\"timed_out\": false, \"hits\": {\"total\": {\"value\": 1}, \"hits\": [{\"_index\": \".internal.preview.alerts-security.alerts-soc\", \"_source\": {\"@timestamp\": \"2026-10-27T07:58:00.000Z\", \"process\": {\"name\": \"powershell.exe\", \"pid\": 4242}, \"kibana\": {\"alert\": {\"rule\": {\"uuid\": \"p-1\"}}}, \"signal\": {\"rule\": {\"id\": \"p-1\"}}}}]}}"
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://kibana.elastic.invalid/s/soc/api/data_views/data_view/dv-logs",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "ApiKey REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ],
+          [
+            "elastic-api-version",
+            "2023-10-31"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "elastic-tenant"
+          ],
+          [
+            "content-type",
+            "application/json; charset=utf-8"
+          ]
+        ],
+        "body": "{\"data_view\": {\"id\": \"dv-logs\", \"title\": \"logs-*,winlogbeat-*\", \"name\": \"Logs\"}}"
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://es.elastic.invalid/logs-*,winlogbeat-*/_search",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "ApiKey REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ],
+          [
+            "elastic-api-version",
+            "2023-10-31"
+          ]
+        ],
+        "body": "{\"size\": 2, \"query\": {\"bool\": {\"must\": [{\"query_string\": {\"query\": \"process.name:cmd.exe\"}}], \"filter\": [{\"range\": {\"@timestamp\": {\"gte\": \"2026-10-26T08:00:00.000Z\", \"lte\": \"2026-10-27T08:00:00.000Z\", \"format\": \"strict_date_optional_time\"}}}]}}, \"sort\": [{\"@timestamp\": {\"order\": \"desc\", \"unmapped_type\": \"date\"}}]}"
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "elastic-tenant"
+          ],
+          [
+            "content-type",
+            "application/json; charset=utf-8"
+          ]
+        ],
+        "body": "{\"timed_out\": false, \"hits\": {\"total\": {\"value\": 7}, \"hits\": [{\"_index\": \"logs-1\", \"_source\": {\"process\": {\"name\": \"cmd.exe\"}, \"tags\": [\"a\"]}}, {\"_index\": \"logs-2\", \"_source\": {\"process\": {\"name\": \"cmd.exe\"}, \"host\": {}}}]}}"
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://es.elastic.invalid/broken-*/_search",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "ApiKey REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ],
+          [
+            "elastic-api-version",
+            "2023-10-31"
+          ]
+        ],
+        "body": "{\"size\": 101, \"query\": {\"bool\": {\"must\": [{\"query_string\": {\"query\": \"*\"}}], \"filter\": [{\"range\": {\"@timestamp\": {\"gte\": \"2026-10-26T08:00:00.000Z\", \"lte\": \"2026-10-27T08:00:00.000Z\", \"format\": \"strict_date_optional_time\"}}}]}}, \"sort\": [{\"@timestamp\": {\"order\": \"desc\", \"unmapped_type\": \"date\"}}]}"
+      },
+      "response": {
+        "status": 504,
+        "headers": [
+          [
+            "server",
+            "elastic-tenant"
+          ],
+          [
+            "content-type",
+            "text/html"
+          ]
+        ],
+        "body": "<!DOCTYPE html><html><head><title>Gateway Timeout</title></head></html>"
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://es.elastic.invalid/broken-*/_search",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "ApiKey REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ],
+          [
+            "elastic-api-version",
+            "2023-10-31"
+          ]
+        ],
+        "body": "{\"size\": 101, \"query\": {\"bool\": {\"must\": [{\"query_string\": {\"query\": \"*\"}}], \"filter\": [{\"range\": {\"@timestamp\": {\"gte\": \"2026-10-26T08:00:00.000Z\", \"lte\": \"2026-10-27T08:00:00.000Z\", \"format\": \"strict_date_optional_time\"}}}]}}, \"sort\": [{\"@timestamp\": {\"order\": \"desc\", \"unmapped_type\": \"date\"}}]}"
+      },
+      "response": {
+        "status": 504,
+        "headers": [
+          [
+            "server",
+            "elastic-tenant"
+          ],
+          [
+            "content-type",
+            "text/html"
+          ]
+        ],
+        "body": "<!DOCTYPE html><html><head><title>Gateway Timeout</title></head></html>"
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://es.elastic.invalid/broken-*/_search",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "ApiKey REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ],
+          [
+            "elastic-api-version",
+            "2023-10-31"
+          ]
+        ],
+        "body": "{\"size\": 101, \"query\": {\"bool\": {\"must\": [{\"query_string\": {\"query\": \"*\"}}], \"filter\": [{\"range\": {\"@timestamp\": {\"gte\": \"2026-10-26T08:00:00.000Z\", \"lte\": \"2026-10-27T08:00:00.000Z\", \"format\": \"strict_date_optional_time\"}}}]}}, \"sort\": [{\"@timestamp\": {\"order\": \"desc\", \"unmapped_type\": \"date\"}}]}"
+      },
+      "response": {
+        "status": 504,
+        "headers": [
+          [
+            "server",
+            "elastic-tenant"
+          ],
+          [
+            "content-type",
+            "text/html"
+          ]
+        ],
+        "body": "<!DOCTYPE html><html><head><title>Gateway Timeout</title></head></html>"
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://es.elastic.invalid/broken-*/_search",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "ApiKey REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ],
+          [
+            "elastic-api-version",
+            "2023-10-31"
+          ]
+        ],
+        "body": "{\"size\": 101, \"query\": {\"bool\": {\"must\": [{\"query_string\": {\"query\": \"*\"}}], \"filter\": [{\"range\": {\"@timestamp\": {\"gte\": \"2026-10-26T08:00:00.000Z\", \"lte\": \"2026-10-27T08:00:00.000Z\", \"format\": \"strict_date_optional_time\"}}}]}}, \"sort\": [{\"@timestamp\": {\"order\": \"desc\", \"unmapped_type\": \"date\"}}]}"
+      },
+      "response": {
+        "status": 504,
+        "headers": [
+          [
+            "server",
+            "elastic-tenant"
+          ],
+          [
+            "content-type",
+            "text/html"
+          ]
+        ],
+        "body": "<!DOCTYPE html><html><head><title>Gateway Timeout</title></head></html>"
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://kibana.elastic.invalid/s/soc/api/detection_engine/rules/preview",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "ApiKey REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ],
+          [
+            "elastic-api-version",
+            "2023-10-31"
+          ],
+          [
+            "kbn-xsrf",
+            "true"
+          ]
+        ],
+        "body": "{\"type\": \"query\", \"language\": \"kuery\", \"query\": \"a::b\", \"name\": \"opentide query preview\", \"description\": \"Read-only preview run by opentide query\", \"risk_score\": 21, \"severity\": \"low\", \"interval\": \"86400s\", \"from\": \"now-86400s\", \"max_signals\": 101, \"index\": [\"logs-*\", \"winlogbeat-*\"], \"invocationCount\": 1, \"timeframeEnd\": \"2026-10-27T08:00:00.000Z\"}"
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "elastic-tenant"
+          ],
+          [
+            "content-type",
+            "application/json; charset=utf-8"
+          ]
+        ],
+        "body": "{\"previewId\": \"p-3\", \"logs\": [{\"errors\": [\"Expected AND but found ':'\"], \"warnings\": []}], \"isAborted\": false}"
+      }
+    }
+  ]
+}

@@ -1,0 +1,246 @@
+//! # opentide
+//!
+//! The Rust SDK of [opentide](https://opentide.org), spec-driven development
+//! for agentic detection engineering: open a Tide workspace (threat vectors,
+//! detection objectives and detection rules as YAML, with their
+//! configuration), validate and lint it, read its catalogue and its ATT&CK
+//! coverage, plan a deploy to the fourteen platforms opentide deploys to, and run
+//! the `opentide` command line.
+//!
+//! This crate is opentide's public Rust API, and the only opentide crate with
+//! a stability promise (below). The Python package and the npm packages wrap
+//! it; the `opentide-*` crates it builds on are internal.
+//!
+//! ```
+//! use opentide::validate::QueriesMode;
+//!
+//! let ws = opentide::Workspace::from_files(
+//!     "/ws",
+//!     [(
+//!         "objects/rules/example.yaml",
+//!         "name: Example\nmetadata:\n  uuid: 11111111-1111-4111-8111-111111111111\n  schema: rule::1.1\n",
+//!     )],
+//! )?;
+//! let validation = ws.validate(&opentide::ValidateOptions::default().queries(QueriesMode::Off));
+//! for diagnostic in validation.report.issues.iter().chain(&validation.report.warnings) {
+//!     println!("{}: {}", diagnostic.code, diagnostic.message);
+//! }
+//! # Ok::<(), opentide::Error>(())
+//! ```
+//!
+//! On disk, [`Workspace::open`] takes the repository's folder. The examples
+//! (`cargo run -p opentide --example validate -- <workspace>`, `catalog`,
+//! `deploy_plan`) and the Rust page of the SDK documentation
+//! (`docs/sdk/rust.md`) walk through the rest.
+//!
+//! ## Features
+//!
+//! | Feature | Default | What it adds |
+//! |---------|:-------:|--------------|
+//! | `schema` | yes | [`models`]: the Tide models, every revision, schema identifiers |
+//! | `analysis` | no | [`analysis`]: check one query on its own, highlight a text, without a workspace (the bindings' `analyze_query`, `highlight`) |
+//! | `workspace` | yes | [`Workspace`]: open, [`Workspace::validate`], [`Workspace::lint`], [`Workspace::info`], [`Workspace::rules`], [`Workspace::objectives`], [`Workspace::threats`], [`Workspace::catalog`], [`Workspace::coverage`] |
+//! | `compile` | yes | [`Workspace::deploy_plan`] and [`deploy`] |
+//! | `queries` | yes | The offline query engines (KQL, SPL, ES\|QL, EQL, Kibana KQL, Lucene, Falco, CQL) behind validate's and lint's queries checks |
+//! | `cli` | no | `cli::main(argv)`, `cli::run_json(argv)` and the `opentide` binary (`cargo install opentide --features cli`); implies `compile` and `queries` |
+//! | `cli-core` | no | `cli::main(argv)` and `cli::run_json(argv)` without the terminal UI and the `setup` wizard's prompts (`opentide tui` and the questions refuse, as under WASI); implies `compile` and `queries`. `cli` adds the terminal |
+//! | `lsp` | no | `lsp`: the language server, on stdio or one message at a time |
+//! | `connectors` | no | [`connectors`]: the tenants a workspace configures ([`Workspace::tenants`]), and on each a query run, a live query check and a rule deploy (async, on tokio); implies `compile` |
+//! | `plugins` | no | [`plugins`]: the platform plugin host a binding embeds to add platforms (the connectors' traits, [`plugins::set_host`]); implies `connectors`, not the command line |
+//! | `python` | no | [`python`]: the Tide models as Python classes ([`python::register`]); brings PyO3 |
+//! | `stubs` | no | PyO3 introspection behind `python`, for `cargo xtask stubs` |
+//!
+//! `queries` is a default feature: [`ValidateOptions::default`] asks for the
+//! queries check, so a program that validates with the default options needs the
+//! engines. Without `queries` (`default-features = false` and no `queries`,
+//! `cli` or `queries`-implying feature), a queries check is never skipped:
+//! validate reports one `engine_unavailable` error, whose message names the
+//! feature, and lint fails with that code, as the Python package does when its
+//! engine does not load ([`queries`]). Add the feature (`features =
+//! ["queries"]`), or turn the check off ([`validate::QueriesMode::Off`]) to
+//! validate without it, as the example above does. The default build checks
+//! queries:
+//!
+//! ```
+//! let ws = opentide::Workspace::from_files(
+//!     "/ws",
+//!     [(
+//!         "objects/rules/example.yaml",
+//!         "name: Example\nmetadata:\n  uuid: 11111111-1111-4111-8111-111111111111\n  schema: rule::1.1\n",
+//!     )],
+//! )?;
+//! // The default options. The default features carry the engines; a build
+//! // with `default-features = false` and no `queries` does not.
+//! let validation = ws.validate(&opentide::ValidateOptions::default());
+//! let missing = validation
+//!     .report
+//!     .issues
+//!     .iter()
+//!     .find(|d| d.code == opentide::queries::ENGINE_UNAVAILABLE);
+//! if opentide::queries::AVAILABLE {
+//!     assert!(missing.is_none());
+//! } else {
+//!     // Without `queries`: one error, which says what to enable.
+//!     let error = missing.expect("a build without the engines reports it");
+//!     assert!(validation.failed);
+//!     assert!(error.message.contains("features = [\"queries\"]"), "{}", error.message);
+//! }
+//! # Ok::<(), opentide::Error>(())
+//! ```
+//!
+//! With `connectors`, a [`connectors::Connection`] reaches one of the
+//! workspace's tenants ([`Workspace::tenants`]): it runs a query, checks one
+//! live and deploys a compiled rule, as `opentide query`,
+//! `opentide validate query --live` and `opentide deploy` do. Its operations
+//! are `async`, on tokio; [`connectors::block_on`] runs one from synchronous
+//! code. The default features do not build for `wasm32-unknown-unknown`: a
+//! build for it sets `default-features = false` and the features it needs, as
+//! `opentide-wasm` does (`analysis` and `lsp`).
+//!
+//! ## Errors
+//!
+//! Every fallible operation returns [`Error`], a `#[non_exhaustive]` enum
+//! whose variants each map to a stable code ([`Error::code`]). Findings
+//! about the workspace are not errors: they are [`Diagnostic`]s in a report,
+//! each with its code, severity and place (1-based lines, columns in Unicode
+//! code points, `end_column` exclusive).
+//!
+//! ## Stability
+//!
+//! This crate follows [semantic versioning](https://semver.org) as Cargo reads
+//! it: a release that breaks the API raises the major version and a minor or
+//! patch release never does. Every item this
+//! crate exports is covered, re-exported types included; the `opentide-*`
+//! crates are not, and their APIs change with the engine.
+//! `cargo semver-checks` runs on this crate in CI. The `connectors` feature
+//! re-exports `jiff::Timestamp` ([`connectors::Timestamp`], the time of a
+//! query's window): a jiff release that breaks it is a breaking release here. Structs that may gain a
+//! field and enums that may gain a variant are `#[non_exhaustive]`.
+//!
+//! Platforms, query languages and diagnostic codes are open sets. Adding one
+//! is a minor release; match them with a wildcard arm. `analysis::LanguageId`
+//! is `#[non_exhaustive]`; [`models::RuleConfigurations`], a field per
+//! platform, is too, so build it from `Default`. The lists of them
+//! (`LanguageId::QUERY_LANGUAGES`, `RuleConfigurations::PLATFORMS`,
+//! [`validate::STRICT_EXEMPT_WARNINGS`]) are slices, whose type does not
+//! change when one is added.
+//!
+//! The JSON documents ([`Document`], [`cli::run_json`] when built) follow the
+//! command line's contract (`docs/cli/json-output.md`), which only grows.
+//! The minimum supported Rust version is the `rust-version` of the
+//! manifest; raising it is a minor release.
+
+// The crate's page links the items of every feature; a build without `cli`
+// and `connectors` (which imply every feature linked here) lacks some of them. docs.rs and
+// CI's facade job document every feature, with broken links denied. An
+// `allow`, not an `expect`: rustc does not run rustdoc's lints, so an
+// expectation would be unfulfilled in every build but rustdoc's.
+#![cfg_attr(
+    not(all(feature = "cli", feature = "connectors")),
+    allow(
+        rustdoc::broken_intra_doc_links,
+        reason = "links to the items of features this build leaves out"
+    )
+)]
+
+pub mod document;
+pub mod error;
+
+#[cfg(feature = "schema")]
+pub mod models;
+
+#[cfg(feature = "python")]
+pub mod python;
+
+#[cfg(feature = "analysis")]
+pub mod analysis;
+
+#[cfg(feature = "plugins")]
+pub mod plugins;
+
+#[cfg(feature = "workspace")]
+pub mod catalog;
+#[cfg(feature = "workspace")]
+pub mod lint;
+#[cfg(feature = "workspace")]
+pub mod queries;
+#[cfg(feature = "workspace")]
+pub mod validate;
+#[cfg(feature = "workspace")]
+mod workspace;
+
+#[cfg(feature = "compile")]
+pub mod deploy;
+
+#[cfg(feature = "cli-core")]
+pub mod cli;
+
+#[cfg(feature = "lsp")]
+pub mod lsp;
+
+#[cfg(feature = "connectors")]
+pub mod connectors;
+
+pub use document::Document;
+pub use error::{DeployFailed, Error, FailureScope};
+
+#[cfg(feature = "workspace")]
+pub use opentide_workspace::{Diagnostic, Fix, Severity, TextEdit};
+#[cfg(feature = "workspace")]
+pub use validate::{Report, Validation};
+#[cfg(feature = "workspace")]
+pub use workspace::{Counts, Info, LintOptions, Options, ValidateOptions, Workspace};
+
+#[cfg(feature = "compile")]
+pub use deploy::{DeployPlan, DeployPlanOptions, Strategy};
+
+/// This crate's version.
+pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+
+/// The Rust page of the SDK documentation, whose samples run as doctests.
+#[cfg(doctest)]
+#[doc = include_str!("../../../docs/sdk/rust.md")]
+pub struct RustSdkPage;
+
+/// The report structs are `#[non_exhaustive]` (#1937): code outside the
+/// crate cannot build one with a struct expression, so a new field is not a
+/// breaking change. Each sample compiles once the attribute is removed.
+///
+/// ```compile_fail,E0639
+/// fn edit(found: opentide::Diagnostic) -> opentide::Diagnostic {
+///     opentide::Diagnostic { code: String::new(), ..found }
+/// }
+/// ```
+///
+/// ```compile_fail,E0639
+/// fn edit(report: opentide::Report) -> opentide::Report {
+///     opentide::Report { ok: true, ..report }
+/// }
+/// ```
+///
+/// ```compile_fail,E0639
+/// fn edit(report: opentide::lint::LintReport) -> opentide::lint::LintReport {
+///     opentide::lint::LintReport { exit_code: 0, ..report }
+/// }
+/// ```
+///
+/// The fields those samples name exist and are public, so each fails for the
+/// attribute alone: a renamed field fails here instead (#1985). The error
+/// code of a `compile_fail` sample is checked on nightly only.
+///
+/// ```
+/// fn read(
+///     found: &opentide::Diagnostic,
+///     report: &opentide::Report,
+///     lint: &opentide::lint::LintReport,
+/// ) -> (String, bool, i32) {
+///     (found.code.clone(), report.ok, lint.exit_code)
+/// }
+/// ```
+#[cfg(all(doctest, feature = "workspace"))]
+pub struct NonExhaustiveReports;
+
+/// The crate's README, whose sample runs as a doctest.
+#[cfg(doctest)]
+#[doc = include_str!("../README.md")]
+pub struct Readme;

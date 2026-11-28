@@ -1,19 +1,36 @@
 """``release.py``: the version to release, and whether its notes PR has merged.
 
-``publish-pypi.yml`` releases from "Run workflow" on ``development``, as
-language-server's Release workflow does from ``main``: the workflow builds the
-version the changelog names, creates its tag with the GitHub Release, and
-publishes it. opentide's version comes from the git tag (hatch-vcs), so before
-the tag exists the newest dated ``CHANGELOG.md`` heading is the only statement
-of the version in the tree::
+``publish.yml``, the release train, releases from "Run workflow" on
+``development``, as language-server's Release workflow did from ``main``: the
+workflow builds the version the changelog names, creates its tag with the
+GitHub Release, and publishes it everywhere. The newest dated ``CHANGELOG.md``
+heading states the version to release; the Cargo workspace's (which the wheel
+takes, through maturin) must already be at it (``scripts/engine/release.py
+lockstep``)::
 
-    uv run python scripts/build/release.py version          # 0.20.0
-    uv run python scripts/build/release.py check v0.20.0    # the notes PR merged
+    uv run python scripts/build/release.py version                  # 0.24.0
+    uv run python scripts/build/release.py check v0.24.0            # the notes PR merged
+    uv run python scripts/build/release.py check-candidate v0.25.0-rc.1
+    uv run python scripts/build/release.py notes v0.24.0            # the Release body
+    uv run python scripts/build/release.py notes --internal v1.0.0-rc.1
 
 ``check`` refuses a release whose Step 1 (the release-management skill) is
-missing: the changelog section and its links, the GitHub Release notes file,
-the Usage → Releases section and the README install pin. That every docs page
-pins the same version is ``tests/test_docs/test_docs_version_claims.py``'s job.
+missing: the changelog section and its links, ``crates/CHANGELOG.md``'s
+section (the language server's notes, which opentide.org reads), the GitHub
+Release notes file, the Usage → Releases section and the README install pin.
+That every docs page pins the same version is ``tests/test_docs/test_docs_version_claims.py``'s job.
+The crates and npm packages carry the same version: ``scripts/engine/release.py
+lockstep`` checks them, and the workflow runs both.
+
+``check-candidate`` refuses a release candidate (``vX.Y.Z-rc.N``) of a version
+that is not newer than the last release. Candidates are for the Rust-core
+transition (they may be retired after): pre-releases on GitHub, PyPI, crates.io
+and npm (the dist-tag ``next``, never ``latest``). A candidate needs no notes
+PR: its GitHub pre-release says what ``## [Unreleased]`` holds (``notes``).
+
+An internal candidate (``publish.yml``'s ``internal_candidate``) is the same
+tag on a draft GitHub pre-release only, with every package attached and nothing
+on a registry: ``notes --internal`` says so.
 """
 
 from __future__ import annotations
@@ -29,9 +46,18 @@ REPOSITORY = "https://github.com/opentidehq/opentide"
 #: ``## [0.19.0] — 2026-10-29``; the ``[Unreleased]`` heading does not match.
 _RELEASE_HEADING = re.compile(r"^##\s+\[(\d+\.\d+\.\d+)\]\s+[-—]\s+\d{4}-\d{2}-\d{2}\s*$")
 _TAG = re.compile(r"v(\d+\.\d+\.\d+)")
-_PIN = re.compile(r"opentide==(\d+\.\d+\.\d+)")
+_CANDIDATE = re.compile(r"v(\d+\.\d+\.\d+)-rc\.([1-9]\d*)")
+#: A release's pin. A pre-release pin (`opentide==1.0.0rc1`, `1.0.0-rc.1`, `1.0.0.dev3`)
+#: names a candidate, not the release, so it is not one.
+_PIN = re.compile(r"opentide==(\d+\.\d+\.\d+)(?![0-9A-Za-z]|[.-][0-9A-Za-z])")
+#: The first install command of the README: ``pip install ...`` or ``uv pip install ...``.
+_INSTALL = re.compile(r"^\s*(?:uv )?pip install .*$", re.MULTILINE)
+#: A candidate's pin (``opentide==1.0.0rc2``): what the installation page documents.
+_CANDIDATE_PIN = re.compile(r"opentide==\d+\.\d+\.\d+rc\d+")
 #: ``## 0.19.0 — 29 October 2026`` in ``docs/usage/releases.md``.
 _RELEASES_HEADING = re.compile(r"^##\s+(\d+\.\d+\.\d+)\b")
+#: ``## Since 1.0.0-rc.4`` in a notes file: the changes after that version.
+_SINCE = re.compile(r"^##\s+Since\s+v?(\S+)\s*$", re.MULTILINE)
 
 
 class ReleaseError(Exception):
@@ -72,6 +98,7 @@ def problems(root: Path, tag: str) -> list[str]:
     for link in sorted(links):
         if not re.search(rf"^{re.escape(link)}\s*$", changelog, re.MULTILINE):
             found.append(f"CHANGELOG.md lacks the link {link}")
+    found.extend(_engine_changelog_problems(root, release))
     notes = root / ".github" / "release-notes" / f"{tag}.md"
     if not notes.is_file() or not notes.read_text(encoding="utf-8").strip():
         found.append(f"{notes.relative_to(root).as_posix()} is missing or empty: the Release body")
@@ -86,12 +113,180 @@ def problems(root: Path, tag: str) -> list[str]:
     )
     if top != release:
         found.append(f"docs/usage/releases.md starts with {top}, not {release}")
-    pins = set(_PIN.findall((root / "README.md").read_text(encoding="utf-8")))
+    readme = (root / "README.md").read_text(encoding="utf-8")
+    pins = set(_PIN.findall(readme))
     if pins != {release}:
         found.append(
             f"README.md pins opentide=={', '.join(sorted(pins)) or '(nothing)'}, not {release}"
         )
+    found.extend(_since_problems(root, tag))
+    if _leads_with_pre(readme) and not _documents_a_candidate(root):
+        found.append(
+            "README.md's first install command is a `--pre` one, but "
+            "docs/usage/installation.md documents no release candidate: "
+            "put the stable pin back first (the final release's notes PR)"
+        )
     return found
+
+
+def _engine_changelog_problems(root: Path, release: str) -> list[str]:
+    """``crates/CHANGELOG.md``, the language server's notes, cut at ``release`` too.
+
+    The engine ships in lockstep with opentide (one version, one tag), and
+    opentide.org's language-server page reads this file: a release that leaves
+    it un-cut shows the previous version there (1.0.0 shipped so, at 0.16.1).
+    """
+    path = root / "crates" / "CHANGELOG.md"
+    if not path.is_file():
+        return ["crates/CHANGELOG.md is missing: the language server's notes"]
+    dated = {
+        match.group(1)
+        for line in path.read_text(encoding="utf-8").splitlines()
+        if (match := _RELEASE_HEADING.match(line))
+    }
+    if release not in dated:
+        return [
+            f"crates/CHANGELOG.md has no ## [{release}] - YYYY-MM-DD section: "
+            "cut its [Unreleased] in the notes PR (the engine-release-notes skill)"
+        ]
+    return []
+
+
+def _leads_with_pre(readme: str) -> bool:
+    """The README's first ``pip install`` line asks for pre-releases (``--pre``)."""
+    first = _INSTALL.search(readme)
+    return first is not None and "--pre" in first.group(0)
+
+
+def _documents_a_candidate(root: Path) -> bool:
+    """``docs/usage/installation.md`` still has a candidate's pin (``opentide==1.0.0rc2``).
+
+    While a candidate is current, the README leads with ``--pre`` (the candidate's PyPI
+    page), and the newest dated release is still the previous one: only the final
+    release's notes PR removes the candidate text, and it puts the stable pin first.
+    """
+    page = root / "docs" / "usage" / "installation.md"
+    return page.is_file() and _CANDIDATE_PIN.search(page.read_text(encoding="utf-8")) is not None
+
+
+def _section(changelog: str, heading: str) -> str | None:
+    """The body of ``## [heading]`` in ``changelog``, up to the next version or the links."""
+    match = re.search(
+        rf"^## \[{re.escape(heading)}\][^\n]*\n(.*?)(?=^## |^\[[^\]]+\]: |\Z)",
+        changelog,
+        re.MULTILINE | re.DOTALL,
+    )
+    return match.group(1).strip() if match else None
+
+
+def _key(version: str) -> tuple[int, ...]:
+    return tuple(int(part) for part in version.split("."))
+
+
+def candidate_problems(root: Path, tag: str) -> list[str]:
+    """What keeps ``tag`` (``vX.Y.Z-rc.N``) from being a release candidate:
+    its version must be newer than the newest one ``CHANGELOG.md`` dates."""
+    match = _CANDIDATE.fullmatch(tag)
+    if match is None:
+        return [f"{tag!r} is not a release candidate tag (vX.Y.Z-rc.N)"]
+    candidate = match.group(1)
+    changelog = (root / "CHANGELOG.md").read_text(encoding="utf-8")
+    found: list[str] = []
+    try:
+        newest = version(root)
+    except ReleaseError as exc:
+        return [str(exc)]
+    if _key(candidate) <= _key(newest):
+        found.append(
+            f"{candidate} is not newer than {newest}, the last release: "
+            "bump the workspace version first (scripts/engine/release.py bump X.Y.Z)"
+        )
+    if _section(changelog, "Unreleased") is None:
+        found.append("CHANGELOG.md has no ## [Unreleased] heading, which a candidate's notes quote")
+    found.extend(_since_problems(root, tag))
+    return found
+
+
+def _previous(root: Path, tag: str) -> str | None:
+    """The version just before ``tag``, which its notes' ``## Since`` names: candidate
+    N's is candidate N-1, the first candidate's the newest dated release, and a release's
+    its own newest candidate (the newest ``vX.Y.Z-rc.N.md`` notes file), if it had one."""
+    if match := _CANDIDATE.fullmatch(tag):
+        candidate, number = match.group(1), int(match.group(2))
+        if number > 1:
+            return f"{candidate}-rc.{number - 1}"
+        try:
+            return version(root)
+        except ReleaseError:
+            return None
+    if match := _TAG.fullmatch(tag):
+        release = match.group(1)
+        numbers = [
+            int(found.group(2))
+            for path in (root / ".github" / "release-notes").glob(f"v{release}-rc.*.md")
+            if (found := _CANDIDATE.fullmatch(path.stem)) and found.group(1) == release
+        ]
+        return f"{release}-rc.{max(numbers)}" if numbers else None
+    return None
+
+
+def _since_problems(root: Path, tag: str) -> list[str]:
+    """A ``## Since X`` heading in ``tag``'s notes file that does not name the version
+    just before it (``v1.0.0-rc.5.md`` headed its own changes ``Since 1.0.0-rc.5``)."""
+    notes = root / ".github" / "release-notes" / f"{tag}.md"
+    if not notes.is_file():
+        return []
+    previous = _previous(root, tag)
+    if previous is None:
+        return []
+    return [
+        f"{notes.relative_to(root).as_posix()}: '## Since {since}' should name {previous}, "
+        f"the version before {tag.removeprefix('v')}"
+        for since in _SINCE.findall(notes.read_text(encoding="utf-8"))
+        if since != previous
+    ]
+
+
+def notes(root: Path, tag: str, *, internal: bool = False) -> str:
+    """The GitHub Release body of ``tag``: a release's is the file its notes PR
+    wrote; a public candidate's says what it is, then gives its own short notes
+    file (``.github/release-notes/vX.Y.Z-rc.N.md``, which carries install
+    commands) when there is one, else quotes ``## [Unreleased]``. A public
+    candidate's summary names its registries, npm's ``next`` tag included. An internal
+    candidate's (``internal``) says that no registry has it and always quotes
+    ``## [Unreleased]``."""
+    match = _CANDIDATE.fullmatch(tag)
+    if internal and match is None:
+        raise ReleaseError(f"{tag!r} is not a release candidate tag (vX.Y.Z-rc.N)")
+    if match:
+        changelog = (root / "CHANGELOG.md").read_text(encoding="utf-8")
+        unreleased = _section(changelog, "Unreleased") or "Nothing is listed under [Unreleased]."
+        if internal:
+            where = (
+                f"Internal release candidate {match.group(2)} of {match.group(1)}, for testing "
+                "before anything reaches a package manager: a draft GitHub pre-release only, "
+                "nothing on PyPI, crates.io or npm. Its assets are the binaries and the "
+                "release assets (SHA256SUMS lists them), and every wheel, the sdist, the "
+                "crate packages and the npm tarballs (PACKAGES-SHA256SUMS lists those). "
+            )
+        else:
+            where = (
+                f"Release candidate {match.group(2)} of {match.group(1)}, for testing: "
+                "a pre-release on PyPI (`pip install --pre opentide`), on crates.io and on "
+                "npm under the `next` tag (`npm install @opentide/opentide@next`), never "
+                "`latest`. "
+            )
+        own = root / ".github" / "release-notes" / f"{tag}.md"
+        if not internal and own.is_file() and own.read_text(encoding="utf-8").strip():
+            # The candidate's summary; the full list stays in CHANGELOG.md.
+            return f"{where.rstrip()}\n\n{own.read_text(encoding='utf-8').strip()}\n"
+        return f"{where}What it holds so far, from CHANGELOG.md's [Unreleased]:\n\n{unreleased}\n"
+    if _TAG.fullmatch(tag) is None:
+        raise ReleaseError(f"{tag!r} is not a release tag (vX.Y.Z or vX.Y.Z-rc.N)")
+    path = root / ".github" / "release-notes" / f"{tag}.md"
+    if not path.is_file():
+        raise ReleaseError(f"{path.relative_to(root).as_posix()} is missing: the Release body")
+    return path.read_text(encoding="utf-8")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -100,12 +295,27 @@ def main(argv: list[str] | None = None) -> int:
     commands.add_parser("version", help="print the version CHANGELOG.md releases")
     check = commands.add_parser("check", help="the notes PR for TAG has merged")
     check.add_argument("tag", help="vX.Y.Z")
+    candidate = commands.add_parser("check-candidate", help="TAG may be a release candidate")
+    candidate.add_argument("tag", help="vX.Y.Z-rc.N")
+    body = commands.add_parser("notes", help="print the GitHub Release body of TAG")
+    body.add_argument("tag", help="vX.Y.Z or vX.Y.Z-rc.N")
+    body.add_argument(
+        "--internal",
+        action="store_true",
+        help="an internal candidate's: a draft pre-release, on no registry",
+    )
     args = parser.parse_args(argv)
     try:
         if args.command == "version":
             print(version(ROOT))
             return 0
-        found = problems(ROOT, args.tag)
+        if args.command == "notes":
+            sys.stdout.write(notes(ROOT, args.tag, internal=args.internal))
+            return 0
+        if args.command == "check-candidate":
+            found = candidate_problems(ROOT, args.tag)
+        else:
+            found = problems(ROOT, args.tag)
     except (OSError, ReleaseError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1

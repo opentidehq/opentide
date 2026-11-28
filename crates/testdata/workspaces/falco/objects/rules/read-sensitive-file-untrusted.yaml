@@ -1,0 +1,65 @@
+# Converted from the Falco default rule "Read sensitive file untrusted"
+# (falcosecurity/rules, rules/falco_rules.yaml, Apache-2.0). The condition and
+# output are unmodified; the block overrides one of the rule's tuning macros.
+name: Read sensitive file untrusted
+metadata:
+  uuid: 3bbe1f3a-b8f5-4d42-89f8-81c3ce1822f4
+  schema: rule::1.0
+  version: 1
+  created: '2026-11-02'
+  modified: '2026-11-02'
+  tlp: clear
+  author: Detection Engineering
+  organisation:
+    uuid: 5f3c2a10-7b6e-4c1d-9a8f-2e4b6d0c1a73
+    name: Detection Engineering
+description: |
+  An attempt to read any sensitive file (files containing user, password or
+  authentication information). Exceptions are made for known trusted programs.
+techniques:
+- T1555
+response:
+  alert_severity: Medium
+configurations:
+  sysdig:
+    enabled: true
+    schema: platform::sysdig::1.0
+    status: PRODUCTION
+    condition: |
+      open_read
+      and sensitive_files
+      and proc_name_exists
+      and not proc.name in (user_mgmt_binaries, userexec_binaries, package_mgmt_binaries,
+       cron_binaries, read_sensitive_file_binaries, shell_binaries, hids_binaries,
+       vpn_binaries, mail_config_binaries, nomachine_binaries, sshkit_script_binaries,
+       in.proftpd, mandb, salt-call, salt-minion, postgres_mgmt_binaries,
+       google_oslogin_
+       )
+      and not cmp_cp_by_passwd
+      and not ansible_running_python
+      and not run_by_qualys
+      and not run_by_chef
+      and not run_by_google_accounts_daemon
+      and not user_read_sensitive_file_conditions
+      and not mandb_postinst
+      and not perl_running_plesk
+      and not perl_running_updmap
+      and not veritas_driver_script
+      and not perl_running_centrifydc
+      and not runuser_reading_pam
+      and not linux_bench_reading_etc_shadow
+      and not user_known_read_sensitive_files_activities
+      and not user_read_sensitive_file_containers
+      and not systemd_sensitive_file_readers
+    output: >-
+      Sensitive file opened for reading by non-trusted program | file=%fd.name
+      gparent=%proc.aname[2] ggparent=%proc.aname[3] gggparent=%proc.aname[4]
+      evt_type=%evt.type user=%user.name user_uid=%user.uid user_loginuid=%user.loginuid
+      process=%proc.name proc_exepath=%proc.exepath parent=%proc.pname
+      command=%proc.cmdline terminal=%proc.tty
+    macros:
+    - name: user_known_read_sensitive_files_activities
+      condition: proc.name in (vault_agents) and fd.name startswith /etc/vault
+    lists:
+    - name: vault_agents
+      items: [vault, vault-agent]
