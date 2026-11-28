@@ -486,9 +486,60 @@ pub fn compile(cx: &Context<'_>, rule: &Rule, tenant: &Json) -> Result<Vec<Write
     }])
 }
 
+/// A rule compiled for one tenant ([`crate::compiler::Harfanglab`]): the
+/// block's kind (`None` when it has neither) and the writes the dry run
+/// shows ([`compile`]).
+#[derive(Debug, Clone, PartialEq)]
+pub struct Compiled {
+    /// The block's own kind, which picks the endpoint ([`Kind::of`]).
+    pub kind: Option<Kind>,
+    /// The Sigma rule's or YARA file's write, a delete, or none.
+    pub writes: Vec<Write>,
+}
+
+/// The deploy request's body for the rule `compiled` holds
+/// ([`request_body`]): its kind and the first write's body, which a delete
+/// leaves out (its body is `null`). `null` for a block with neither kind.
+pub fn deploy_body(compiled: &Compiled) -> Json {
+    let Some(kind) = compiled.kind else {
+        return Json::Null;
+    };
+    let rule = compiled
+        .writes
+        .first()
+        .map(|write| &write.body)
+        .filter(|body| !body.is_null());
+    request_body(kind, rule)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_deploy_body_is_the_kind_and_the_first_writes_body() {
+        let mut rule = Object::new();
+        rule.insert("name".into(), "é😀".into());
+        let compiled = Compiled {
+            kind: Some(Kind::Sigma),
+            writes: vec![Write::new("PUT", "u", Json::Object(rule.clone()))],
+        };
+        assert_eq!(
+            deploy_body(&compiled),
+            request_body(Kind::Sigma, Some(&Json::Object(rule)))
+        );
+        // A delete names the kind alone.
+        let deletion = Compiled {
+            kind: Some(Kind::Yara),
+            writes: vec![Write::new("DELETE", "u", Json::Null)],
+        };
+        assert_eq!(deploy_body(&deletion), request_body(Kind::Yara, None));
+        let neither = Compiled {
+            kind: None,
+            writes: Vec::new(),
+        };
+        assert_eq!(deploy_body(&neither), Json::Null);
+    }
 
     #[test]
     fn yara_names_are_identifiers() {

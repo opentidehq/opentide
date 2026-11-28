@@ -302,7 +302,7 @@ impl Sender<'_, '_> {
     }
 
     /// The request a HarfangLab rule sends: its own kind and the rule
-    /// compiled for it (`harfanglab::request_body`); a delete names the kind.
+    /// compiled for it (`compiler::Harfanglab`); a delete names the kind.
     fn harfanglab_request(
         &self,
         connection: &Connection,
@@ -310,30 +310,28 @@ impl Sender<'_, '_> {
         rule: &opentide_compile::Rule,
         deletion: bool,
     ) -> Result<DeployRequest, Raised> {
+        use opentide_compile::compiler::{Compiler, Harfanglab};
         let compile_error = |error: opentide_compile::rule::CompileError| {
             Raised::new(format!("Rule {} ({}): {error}", rule.uuid, rule.name))
         };
         // The block's own kind picks the endpoint (platform-harfanglab 1.6).
-        let Some(kind) = opentide_compile::harfanglab::Kind::of(rule) else {
+        if opentide_compile::harfanglab::Kind::of(rule).is_none() {
             return Err(Raised::new(format!(
                 "HarfangLab rule {} is neither a sigma nor a yara rule",
                 rule.uuid
             )));
-        };
+        }
         let table =
             resolved_table(&batch.table, &connection.tenant).map_err(|e| unset_variable(&e))?;
-        let writes = opentide_compile::harfanglab::compile(self.compile, rule, &table)
-            .map_err(compile_error)?;
-        let Some(write) = writes.first() else {
+        // The write the dry run shows; the request sends its body.
+        let compiled = Harfanglab::compile(self.compile, rule, &table).map_err(compile_error)?;
+        if compiled.writes.is_empty() {
             return Err(Raised::new(format!(
                 "HarfangLab compiled no request for rule {}",
                 rule.uuid
             )));
-        };
-        let body = opentide_compile::harfanglab::request_body(
-            kind,
-            (!write.body.is_null()).then_some(&write.body),
-        );
+        }
+        let body = Harfanglab::body(&compiled);
         Ok(DeployRequest::new(
             rule.uuid.clone(),
             if deletion {
