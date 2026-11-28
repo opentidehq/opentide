@@ -11,7 +11,7 @@ use opentide_workspace::{OsFs, Workspace, root};
 
 use super::super::placement;
 use super::super::result::{CommandResult, ExitCode, Status};
-use super::{Args, COMMAND, Context, RuleResult, convert, deploy, refusal, set};
+use super::{Args, COMMAND, Context, RuleResult, deploy, refusal, set};
 use crate::envelope::NextAction;
 use crate::json::Json;
 use crate::render::glyphs;
@@ -158,12 +158,7 @@ fn report_skipped(
     };
     result.data.push((
         "skipped".into(),
-        Json::Array(
-            skipped
-                .iter()
-                .map(|entry| convert(&entry.to_json()))
-                .collect(),
-        ),
+        Json::Array(skipped.iter().map(|entry| entry.to_json()).collect()),
     ));
     // The rows the run skipped (a rule no tenant takes, an `INERT` block),
     // and the rules a status left out that have no such row: a rule is
