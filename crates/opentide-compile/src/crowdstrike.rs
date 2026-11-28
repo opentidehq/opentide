@@ -177,13 +177,15 @@ pub fn body(cx: &Context<'_>, rule: &Rule, tenant: &Json) -> Result<Json, Compil
 /// The writes a deploy sends for `rule` to `tenant`, whose recorded id is
 /// `known`: a create (`POST`), an update (`PATCH` of a one-rule list with
 /// the id) or a delete (`DELETE ?ids=`), or none for a rule to retire that
-/// the tenant never received.
+/// the tenant never received. The body is the one the deploy sends
+/// ([`crate::compiler::Crowdstrike`]).
 pub fn compile(
     cx: &Context<'_>,
     rule: &Rule,
     tenant: &Json,
     known: Option<&str>,
 ) -> Result<Vec<Write>, CompileError> {
+    use crate::compiler::{Compiler, Crowdstrike};
     let status = rule
         .block(PLATFORM)
         .and_then(|block| block.get("status"))
@@ -201,7 +203,7 @@ pub fn compile(
         base_api(&api)?
     };
     let endpoint = format!("{base}/correlation-rules/entities/rules/v1");
-    let body = body(cx, rule, tenant)?;
+    let body = Crowdstrike::body(&Crowdstrike::compile(cx, rule, tenant)?);
     Ok(vec![match action {
         Action::Create => Write::new("POST", endpoint, body),
         Action::Update(id) => {
