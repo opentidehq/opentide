@@ -8,7 +8,7 @@
 //! [`HighlightToken`], because an analysis is diagnostics and highlight
 //! tokens and every query crate already builds on this crate.
 
-use opentide_core::{Diagnostic, LanguageId};
+use opentide_core::{CompletionItem, Diagnostic, LanguageId, SignatureHelp};
 
 use crate::HighlightToken;
 
@@ -72,5 +72,45 @@ pub trait QueryEngine: Sync {
     /// language's default dialect and profile, with no workspace context.
     fn analyze(&self, source: &str) -> AnalyzeResult {
         self.analyze_for(source, &Setting::default())
+    }
+
+    /// The highlight tokens of `source` alone. The default is
+    /// [`analyze`](Self::analyze)'s tokens; an engine that can highlight
+    /// without its checks overrides it.
+    fn highlight(&self, source: &str) -> Vec<HighlightToken> {
+        self.analyze(source).tokens
+    }
+
+    /// Hover at byte `offset` of `source`, in Markdown. `setting.platform`
+    /// picks the dialect (KQL, Lucene). What only the caller knows (ECS
+    /// fields, a Falco block's macros) stays with it. The default is none.
+    fn hover(&self, source: &str, offset: usize, setting: &Setting<'_>) -> Option<String> {
+        let _ = (source, offset, setting);
+        None
+    }
+
+    /// Completion at byte `offset` of `source`, as [`hover`](Self::hover)
+    /// reads its setting. The default is none.
+    fn completions(
+        &self,
+        source: &str,
+        offset: usize,
+        setting: &Setting<'_>,
+    ) -> Vec<CompletionItem> {
+        let _ = (source, offset, setting);
+        Vec::new()
+    }
+
+    /// Signature help at byte `offset` of `source`, as [`hover`](Self::hover)
+    /// reads its setting. The default is none: a language with no function
+    /// calls.
+    fn signature_help(
+        &self,
+        source: &str,
+        offset: usize,
+        setting: &Setting<'_>,
+    ) -> Option<SignatureHelp> {
+        let _ = (source, offset, setting);
+        None
     }
 }

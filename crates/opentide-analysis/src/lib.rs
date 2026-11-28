@@ -42,7 +42,6 @@ pub use opentide_highlight::{HighlightResult, HighlightToken, SemanticTokens};
 pub use opentide_tide::{DocumentSymbol, ElasticTenant, IndexEntry, IndexedObject};
 
 use opentide_highlight::{HighlightSpec, encode_lsp_semantic_tokens};
-use opentide_kql::Dialect;
 use opentide_tide::TideAnalyzeResult;
 
 // The README's example runs as a doctest, so the crates.io page cannot drift.
@@ -51,6 +50,9 @@ use opentide_tide::TideAnalyzeResult;
 pub struct ReadmeDoctests;
 
 mod ecs;
+
+#[cfg(test)]
+mod dispatch_tests;
 
 /// This engine's version: the one every `opentide-*` build reports
 /// ([`opentide_core::VERSION`]): the crate version, or the release
@@ -823,43 +825,36 @@ pub fn hover(
     }
 }
 
-/// Hover inside one query language. `platform` selects the KQL dialect.
+/// Hover inside one query language: its engine's, then, for the Elastic
+/// languages, the ECS field under the cursor. `platform` selects the KQL and
+/// Lucene dialects.
 fn query_hover(language: LanguageId, text: &str, offset: usize, platform: &str) -> Option<String> {
+    // Configuration hover needs the file's path (configuration_hover), and
+    // Tide YAML is not a query language: neither has an engine.
+    let engine = engines::engine(language)?;
+    engine
+        .hover(text, offset, &editor_setting(platform))
+        .or_else(|| ecs_applies(language, platform).then(|| ecs::hover(text, offset))?)
+}
+
+/// What the editor hooks read: the platform, which picks the dialect.
+fn editor_setting(platform: &str) -> opentide_highlight::Setting<'_> {
+    opentide_highlight::Setting {
+        platform,
+        ..opentide_highlight::Setting::default()
+    }
+}
+
+/// Whether a query in `language` on `platform` reads ECS fields: ES|QL, EQL,
+/// Kibana KQL, and Lucene in its Elastic dialect. Carbon Black has its own
+/// fields (#162), and Graylog its message fields.
+fn ecs_applies(language: LanguageId, platform: &str) -> bool {
     match language {
-        LanguageId::Kql => opentide_kql::hover(text, offset, Dialect::for_platform(platform)),
-        LanguageId::Spl => opentide_spl::hover(text, offset),
-        LanguageId::Esql => opentide_esql::hover(text, offset).or_else(|| ecs::hover(text, offset)),
-        LanguageId::Eql => opentide_eql::hover(text, offset).or_else(|| ecs::hover(text, offset)),
-        LanguageId::Kuery => {
-            opentide_kuery::hover(text, offset).or_else(|| ecs::hover(text, offset))
-        }
-        // Carbon Black has its own fields (#162), and Graylog its message
-        // fields: no ECS.
-        LanguageId::Lucene
-            if opentide_lucene::Dialect::for_platform(platform)
-                != opentide_lucene::Dialect::Elastic =>
-        {
-            opentide_lucene::hover_dialect(
-                text,
-                offset,
-                opentide_lucene::Dialect::for_platform(platform),
-            )
-        }
+        LanguageId::Esql | LanguageId::Eql | LanguageId::Kuery => true,
         LanguageId::Lucene => {
-            opentide_lucene::hover(text, offset).or_else(|| ecs::hover(text, offset))
+            opentide_lucene::Dialect::for_platform(platform) == opentide_lucene::Dialect::Elastic
         }
-        LanguageId::Falco => {
-            opentide_falco::hover(text, offset, &opentide_falco::Context::default())
-        }
-        LanguageId::Cql => opentide_cql::hover(text, offset),
-        LanguageId::Yara => opentide_yara::editor::hover(text, offset),
-        LanguageId::Exabeam => opentide_exabeam::hover(text, offset),
-        LanguageId::Datadog => opentide_datadog::hover(text, offset),
-        LanguageId::Yaral => opentide_yaral::editor::hover(text, offset),
-        // Configuration hover needs the file's path: configuration_hover.
-        LanguageId::TideYaml | LanguageId::Config => None,
-        // `LanguageId` is non-exhaustive: no hover for a language added later.
-        _ => None,
+        _ => false,
     }
 }
 
@@ -915,42 +910,16 @@ fn query_completions(
     offset: usize,
     platform: &str,
 ) -> Vec<CompletionItem> {
-    match language {
-        LanguageId::Kql => opentide_kql::completions(text, offset, Dialect::for_platform(platform)),
-        LanguageId::Spl => opentide_spl::completions(text, offset),
-        LanguageId::Lucene
-            if opentide_lucene::Dialect::for_platform(platform)
-                != opentide_lucene::Dialect::Elastic =>
-        {
-            opentide_lucene::completions_dialect(
-                text,
-                offset,
-                opentide_lucene::Dialect::for_platform(platform),
-            )
-        }
-        LanguageId::Esql | LanguageId::Eql | LanguageId::Kuery | LanguageId::Lucene => {
-            let mut items = match language {
-                LanguageId::Esql => opentide_esql::completions(text, offset),
-                LanguageId::Eql => opentide_eql::completions(text, offset),
-                LanguageId::Kuery => opentide_kuery::completions(text, offset),
-                _ => opentide_lucene::completions(text, offset),
-            };
-            ecs::complete(language, text, offset, &mut items);
-            items
-        }
-        LanguageId::Falco => {
-            opentide_falco::completions(text, offset, &opentide_falco::Context::default())
-        }
-        LanguageId::Cql => opentide_cql::completions(text, offset),
-        LanguageId::Yara => opentide_yara::editor::completions(text, offset),
-        LanguageId::Exabeam => opentide_exabeam::completions(text, offset),
-        LanguageId::Datadog => opentide_datadog::completions(text, offset),
-        LanguageId::Yaral => opentide_yaral::editor::completions(text, offset),
-        // Configuration completion needs the file's path: configuration_completions.
-        LanguageId::TideYaml | LanguageId::Config => Vec::new(),
-        // `LanguageId` is non-exhaustive: no completion for a language added later.
-        _ => Vec::new(),
+    // Configuration completion needs the file's path
+    // (configuration_completions): no engine, as for Tide YAML.
+    let Some(engine) = engines::engine(language) else {
+        return Vec::new();
+    };
+    let mut items = engine.completions(text, offset, &editor_setting(platform));
+    if ecs_applies(language, platform) {
+        ecs::complete(language, text, offset, &mut items);
     }
+    items
 }
 
 pub use yara::{definition, folding, format, references, rename};
@@ -993,27 +962,7 @@ fn query_signature_help(
     offset: usize,
     platform: &str,
 ) -> Option<SignatureHelp> {
-    match language {
-        LanguageId::Kql => {
-            opentide_kql::signature_help(text, offset, Dialect::for_platform(platform))
-        }
-        LanguageId::Spl => opentide_spl::signature_help(text, offset),
-        LanguageId::Esql => opentide_esql::signature_help(text, offset),
-        LanguageId::Eql => opentide_eql::signature_help(text, offset),
-        LanguageId::Cql => opentide_cql::signature_help(text, offset),
-        LanguageId::Yara => opentide_yara::editor::signature_help(text, offset),
-        LanguageId::Yaral => opentide_yaral::editor::signature_help(text, offset),
-        LanguageId::Kuery
-        | LanguageId::Lucene
-        | LanguageId::Falco
-        | LanguageId::Exabeam
-        | LanguageId::Datadog
-        | LanguageId::TideYaml
-        | LanguageId::Config => None,
-        // `LanguageId` is non-exhaustive: no signature help for a language
-        // added later.
-        _ => None,
-    }
+    engines::engine(language)?.signature_help(text, offset, &editor_setting(platform))
 }
 
 #[cfg(test)]

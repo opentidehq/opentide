@@ -155,6 +155,33 @@ impl opentide_highlight::QueryEngine for Engine {
             tokens: r.tokens,
         }
     }
+
+    fn hover(
+        &self,
+        source: &str,
+        offset: usize,
+        _setting: &opentide_highlight::Setting<'_>,
+    ) -> Option<String> {
+        hover(source, offset)
+    }
+
+    fn completions(
+        &self,
+        source: &str,
+        offset: usize,
+        _setting: &opentide_highlight::Setting<'_>,
+    ) -> Vec<opentide_core::CompletionItem> {
+        completions(source, offset)
+    }
+
+    fn signature_help(
+        &self,
+        source: &str,
+        offset: usize,
+        _setting: &opentide_highlight::Setting<'_>,
+    ) -> Option<opentide_core::SignatureHelp> {
+        signature_help(source, offset)
+    }
 }
 
 /// Analyze a CQL query under `profile`: a correlation rule or a search.

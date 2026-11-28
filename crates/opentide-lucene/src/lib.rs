@@ -128,6 +128,24 @@ impl opentide_highlight::QueryEngine for Engine {
             tokens: r.tokens,
         }
     }
+
+    fn hover(
+        &self,
+        source: &str,
+        offset: usize,
+        setting: &opentide_highlight::Setting<'_>,
+    ) -> Option<String> {
+        hover_dialect(source, offset, Dialect::for_platform(setting.platform))
+    }
+
+    fn completions(
+        &self,
+        source: &str,
+        offset: usize,
+        setting: &opentide_highlight::Setting<'_>,
+    ) -> Vec<opentide_core::CompletionItem> {
+        completions_dialect(source, offset, Dialect::for_platform(setting.platform))
+    }
 }
 
 #[expect(

@@ -116,6 +116,31 @@ impl opentide_highlight::QueryEngine for Engine {
             tokens: r.tokens,
         }
     }
+
+    fn highlight(&self, source: &str) -> Vec<HighlightToken> {
+        let Ok(spec) = HighlightSpec::shared() else {
+            return Vec::new();
+        };
+        highlight(spec, source)
+    }
+
+    fn hover(
+        &self,
+        source: &str,
+        offset: usize,
+        _setting: &opentide_highlight::Setting<'_>,
+    ) -> Option<String> {
+        hover(source, offset)
+    }
+
+    fn completions(
+        &self,
+        source: &str,
+        offset: usize,
+        _setting: &opentide_highlight::Setting<'_>,
+    ) -> Vec<opentide_core::CompletionItem> {
+        completions(source, offset)
+    }
 }
 
 /// Analyze a query where `ctx` says it runs.
