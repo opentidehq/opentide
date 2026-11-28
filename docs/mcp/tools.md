@@ -37,6 +37,7 @@ Every tool and resource answers for the files as they are on disk at the call. T
 | `search` | Search the catalogue | true | false | true | false |
 | `get_chaining` | Threat, objective and rule lineage | true | false | true | false |
 | `coverage` | ATT&CK coverage | true | false | true | false |
+| `graph` | Catalogue gaps | true | false | true | false |
 | `validate_rule` | Validate a rule | true | false | true | false |
 | `validation_report` | Validation report | true | false | true | false |
 | `explain` | Explain a diagnostic code | true | false | true | false |
@@ -197,6 +198,46 @@ Without `technique`:
   "tactic_filter": null
 }
 ```
+
+## graph
+
+Where the catalogue is blind: the threat → objective → rule → production funnel as counts and gap lists. Use it to answer "where are we blind?" or "which threats have nothing in production?". `coverage` answers per ATT&CK technique and `get_chaining` per object; `graph` is the whole catalogue at once, and stays small whatever its size.
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `detail` | string | `"summary"` | The level of detail. Only `summary` is offered |
+
+A threat is covered when an objective lists it in `objective.threats`. A rule counts for the objective its `detection_model` names or, when that is a signal (`objective.signals[].uuid`), for the signal's objective, as in `coverage` and `get_chaining`. A rule is *in production* when one of its platform blocks has a status in `release_statuses`: the `[[statuses]]` of `deployment.toml` mapped to `RELEASE`, or to `UNIVERSAL`, which a release run deploys as well (`PRODUCTION` in the default lifecycle). `DISABLEMENT` and `DELETION` statuses are deployed by a release run to take a rule away, so they do not count.
+
+Each threat lands in the first gap that applies: no objective, else no rule, else no rule in production. Each gap is `{count, items}`: `count` is the full number and `items` lists at most 25 objects, each shaped like a `search` result. `rule_blocks_by_status` and `rule_blocks_by_platform` count platform blocks, a block without a status as `unset`. `chained_threats` counts the threats a `threat.chaining` entry names or comes from.
+
+```json
+// call
+{}
+
+// returns
+{
+  "counts": { "threats": 3, "objectives": 2, "rules": 11, "signals": 1, "chained_threats": 2, "actors": 1 },
+  "release_statuses": ["PRODUCTION"],
+  "rule_blocks_by_status": { "PRODUCTION": 1, "STAGING": 10 },
+  "rule_blocks_by_platform": { "sentinel": { "STAGING": 1 }, "splunk": { "PRODUCTION": 1, "STAGING": 1 } },
+  "threats_without_objectives": {
+    "count": 1,
+    "items": [{ "uuid": "00000000-0000-4000-8001-0000000000a3", "type": "threat", "title": "Threat no objective covers", "status": null }]
+  },
+  "threats_without_rules": {
+    "count": 1,
+    "items": [{ "uuid": "00000000-0000-4000-8001-0000000000a2", "type": "threat", "title": "Credential dumping after the intrusion", "status": null }]
+  },
+  "threats_without_production_rules": { "count": 0, "items": [] },
+  "objectives_without_rules": {
+    "count": 1,
+    "items": [{ "uuid": "00000000-0000-4000-8002-0000000000a2", "type": "objective", "title": "Objective without rules", "status": null }]
+  }
+}
+```
+
+Follow an item with `get_chaining` for its lineage, or `coverage` for its techniques. Any other `detail` fails the call (`isError: true`, `argument detail must be one of summary, not "full"`).
 
 ## validate_rule
 
@@ -581,6 +622,7 @@ deploy_rule(uuid=<new rule>, platform="sentinel", dry_run=true)   → preview
 ### Audit coverage
 
 ```text
+graph()                                   → threats and objectives without rules, threats with nothing in production
 coverage()                                → technique_count + matrix of technique → rule UUIDs (own and inherited)
 coverage(technique="T1059")               → covered bool + rules list for one technique
 search(technique=<gap>)                   → confirm nothing exists

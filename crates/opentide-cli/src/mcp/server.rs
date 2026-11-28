@@ -484,7 +484,7 @@ mod tests {
     #[test]
     fn every_tool_has_a_title_and_annotations() {
         let manifest = Manifest::load("1.2.3");
-        assert_eq!(manifest.tools.tools.len(), 10);
+        assert_eq!(manifest.tools.tools.len(), 11);
         for tool in &manifest.tools.tools {
             let name = &tool.name;
             assert!(
@@ -526,6 +526,7 @@ mod tests {
             "search",
             "get_chaining",
             "coverage",
+            "graph",
             "validate_rule",
             "validation_report",
             "explain",
@@ -533,6 +534,7 @@ mod tests {
         ] {
             let hints = hints_of(name);
             assert_eq!(hints.read_only_hint, Some(true), "{name}");
+            assert_eq!(hints.idempotent_hint, Some(true), "{name}");
             assert_eq!(hints.open_world_hint, Some(false), "{name}");
         }
     }
