@@ -1,7 +1,5 @@
 //! SentinelOne: the STAR custom detection rule a deploy sends to one tenant
-//! (`platforms/sentinel_one/deployer.py` `compile_deployment`, the client's
-//! `create_update_detection_rule` and `delete_detection_rule`): the body with
-//! its `null` values left out.
+//! to create, update or delete it: the body with its `null` values left out.
 
 use crate::Context;
 use crate::deploy::{self, Action, Write};
@@ -15,12 +13,14 @@ pub const PLATFORM: &str = "sentinel_one";
 /// The platform's display name, in messages.
 pub const DISPLAY: &str = "SentinelOne";
 
-/// A failure the oracle raises without a message (`raise Exception`).
+/// A failure with no detail: an empty block, one without its condition, or a condition
+/// type other than `Single Event` and `Correlation`. The message says `no
+/// detail given`.
 fn bare() -> CompileError {
     CompileError::failed(DISPLAY, "")
 }
 
-/// A duration in minutes (`_convert_to_minutes`): `30m`, or `2h`.
+/// A duration in minutes: `30m`, or `2h`.
 pub fn minutes(timespan: &str) -> Result<i64, CompileError> {
     let refused = || {
         CompileError::failed(
@@ -65,7 +65,7 @@ fn text<'j>(value: Option<&'j Json>, key: &str) -> Option<&'j str> {
         .filter(|text| !text.is_empty())
 }
 
-/// `value` without its `null` members and items (`_remove_nulls`).
+/// `value` without its `null` members and items.
 pub fn without_nulls(value: Json) -> Json {
     match value {
         Json::Object(object) => Json::Object(

@@ -1,21 +1,19 @@
-//! Durations as the platforms take them: Sentinel's ISO 8601 durations
-//! (`platforms/sentinel/client.py`) and Elastic's date math
-//! (`platforms/elastic/durations.py`).
+//! Durations as the platforms take them: Sentinel's ISO 8601 durations and
+//! Elastic's date math.
 //!
-//! Digits are ASCII digits: Azure accepts no other script's decimal digits.
-//! The oracle took any Unicode decimal digit; the difference is approved (a
-//! Sentinel duration with non-ASCII digits is `compile_invalid_rule`).
+//! Digits are ASCII digits: Azure accepts no other script's decimal digits,
+//! so a Sentinel duration with non-ASCII digits is `compile_invalid_rule`.
 
 /// Seconds in a minute, an hour and a day.
 const MINUTE: u64 = 60;
 const HOUR: u64 = 3600;
 const DAY: u64 = 86_400;
 
-/// A Sentinel rule duration in seconds (`iso_duration_timedelta`): ISO 8601
+/// A Sentinel rule duration in seconds: ISO 8601
 /// (`PT1H`, `PT30M`, `P1D`, any case) or the shorthand older catalogues use
 /// (`30m`, `1h`, `1h10m`, `1d`), around blanks; read by
 /// [`opentide_core::duration::SENTINEL`], the grammar `validate` reads too
-/// (#1934). The error is the oracle's message.
+/// (#1934). The error quotes the duration and says what is accepted.
 pub fn sentinel_seconds(duration: &str) -> Result<u64, String> {
     use opentide_core::duration::{Iso8601Error, SENTINEL, SENTINEL_MAX_DAYS};
     SENTINEL
@@ -32,7 +30,7 @@ pub fn sentinel_seconds(duration: &str) -> Result<u64, String> {
         })
 }
 
-/// A duration as the Sentinel API takes it (`duration_isoformat`): whole
+/// A duration as the Sentinel API takes it: whole
 /// units keep their zero-padded time fields (`PT01H00M00S`, `PT30M00S`), whole
 /// days stay bare (`P1D`).
 pub fn sentinel_isoformat(seconds: u64) -> String {
@@ -66,12 +64,13 @@ pub fn sentinel(duration: &str) -> Result<String, String> {
     sentinel_seconds(duration).map(sentinel_isoformat)
 }
 
-/// An Elastic duration in seconds (`duration_seconds`): `<n>s|m|h|d`, compound
+/// An Elastic duration in seconds: `<n>s|m|h|d`, compound
 /// shorthand (`1h10m`), or ISO 8601 (`PT1H`, `P14D`), read by
 /// `opentide_core::duration`, the one grammar the model and the language
 /// server use too. Zero only with `allow_zero`; at most
-/// [`opentide_core::duration::ELASTIC_MAX_SECONDS`], as the model checks (#1982): past it the seconds
-/// saturate. The error is the oracle's message.
+/// [`opentide_core::duration::ELASTIC_MAX_SECONDS`], as the model checks
+/// (#1982): a longer duration, however many digits it has, is an error. The
+/// error quotes the value.
 pub fn elastic_seconds(value: &str, allow_zero: bool) -> Result<u128, String> {
     let seconds = opentide_core::duration::duration_seconds(value, allow_zero).map_err(
         |error| match error {
@@ -157,7 +156,7 @@ mod tests {
     }
 
     #[test]
-    fn sentinel_refuses_what_the_oracle_refuses() {
+    fn sentinel_refuses_malformed_durations() {
         for text in [
             "P", "PT", "P1DT", "1H", "h", "1x", "", "PT1H1D", "1m1h", "1h1h", "PT1H1H", "P1D1D",
         ] {

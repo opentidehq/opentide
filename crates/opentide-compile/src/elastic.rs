@@ -1,11 +1,10 @@
-//! Elastic Security: a rule as a Detection Engine rule body
-//! (`platforms/elastic/compile.py` `compile_rule`, `attack.py`
-//! `resolve_elastic_threat`), in the oracle's key order.
+//! Elastic Security: a rule as a Detection Engine rule body, its ATT&CK
+//! `threat` included, with its keys in a fixed order.
 //!
-//! The oracle compiles the rule's model dump (`by_alias`, `exclude_none`): the
-//! nested models' defaults are present, and their keys are in the model's
-//! field order whatever order the file writes them in. [`model_order`] puts
-//! those back, so the body does not depend on how the YAML is laid out.
+//! The nested objects are compiled as the model reads them: their defaults
+//! are present, `null` values are left out, and their keys are in the model's
+//! field order whatever order the file writes them in. [`model_order`] does
+//! that, so the body does not depend on how the YAML is laid out.
 
 use indexmap::IndexMap;
 
@@ -118,8 +117,8 @@ const THRESHOLD: Fields = &[
     ("cardinality", None),
 ];
 
-/// An object as the oracle's model dump holds it: the model's fields in their
-/// order, defaults filled in, `null` left out.
+/// An object as its model reads it: the model's fields in their order,
+/// defaults filled in, `null` and keys the model does not have left out.
 pub fn model_order(value: &Json, fields: Fields) -> Json {
     let Some(object) = value.as_object() else {
         return value.clone();
@@ -293,7 +292,7 @@ fn related_integration(entry: &Json) -> Json {
     }
 }
 
-/// The rule's alert level (`_alert_level`).
+/// The rule's alert level.
 fn alert_level(block: &Json, rule: &Rule) -> &'static str {
     let response_severity = || {
         rule.response()

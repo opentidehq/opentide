@@ -1,15 +1,12 @@
 //! Generation (UC-3.2, #824): the files `opentide generate exports` writes,
 //! and what writing them takes.
 //!
-//! - [`relations`]: an object's parents and children (`generation/framework.py`
-//!   `parents`, `childs`, `get_type`).
+//! - [`relations`]: an object's parents and children.
 //! - [`exports`]: the ATT&CK Navigator layer, the objects table and the
-//!   revisions snapshot (`export/`).
-//! - [`explorer`]: the explorer site's bundle and search index
-//!   (`export/explorer_export.py`), and [`visibility`], the telemetry report
-//!   `--include-visibility` adds (`cli/services/visibility.py`).
-//! - [`inflight`]: the inflight preview shards and their overlay
-//!   (`indexing/inflight.py`).
+//!   revisions snapshot.
+//! - [`explorer`]: the explorer site's bundle and search index, and
+//!   [`visibility`], the telemetry report `--include-visibility` adds.
+//! - [`inflight`]: the inflight preview shards and their overlay.
 //! - [`json_text`]: JSON files as serde_json lays them out (pretty at an
 //!   indent, or one line), UTF-8.
 //! - [`files`]: writing [`Output`]s in parallel (rayon), and [`files::Changes`],

@@ -1,4 +1,4 @@
-//! Where a rule deploys (`documentation/facts/deployment.py`): per platform
+//! Where a rule deploys: per platform
 //! block, its status, the runs that act on it, and the tenants they reach.
 //!
 //! A page shows what `opentide deploy` would do with the rule, not what its

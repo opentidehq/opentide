@@ -1,4 +1,4 @@
-//! Text helpers every section shares (`documentation/markdown/text.py`).
+//! Text helpers every section shares.
 //!
 //! Values reach a page from YAML, vocabularies and platform models. These
 //! turn them into Markdown that renders the same on every flavour: no raw

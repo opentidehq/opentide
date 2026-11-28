@@ -1,4 +1,4 @@
-//! The diagrams pages show (`documentation/diagram/builders.py`), each
+//! The diagrams pages show, each
 //! answering one question:
 //!
 //! - **Detection coverage** (every page): how a threat is detected; lanes

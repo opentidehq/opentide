@@ -1,7 +1,5 @@
 //! The deploy plan: which rule goes to which platform and tenant, and what
-//! that does there (`deployment/utils.py` `make_deploy_plan`,
-//! `deployment/planning.py` `tenants_resolver`, `platforms/enabled.py`,
-//! `cli/services/deploy_plan.py`).
+//! that does there.
 
 use std::path::{Path, PathBuf};
 
@@ -95,7 +93,7 @@ fn walk(
     }
 }
 
-/// The warning for rule files in subfolders (`_nested_rules_warning`).
+/// The warning for rule files in subfolders.
 pub fn nested_warning(nested: &[String], folder: &str) -> String {
     let mut names = nested
         .iter()
@@ -269,7 +267,8 @@ fn legacy_keys(rule: &Json) -> Vec<(String, String)> {
 pub const MIGRATE_ADVICE: &str =
     "run 'opentide deploy migrate-state' and commit .opentide/states/deployment/";
 
-/// The rule's UUID as the oracle reads a raw document (`object_uuid`).
+/// The rule's UUID from its raw document: a top-level `uuid`, else
+/// `metadata.uuid`.
 fn object_uuid(rule: &Json) -> Option<String> {
     if let Some(top) = rule.get("uuid").filter(|value| value.is_name()) {
         return Some(top.to_text());
@@ -351,7 +350,8 @@ pub fn select(
                     .filter(|status| status.is_filled())
                     .map(Json::to_text)
                     .ok_or_else(|| {
-                        // The oracle's `get_platform_status` logs it, then raises.
+                        // Logged with its fix (`platform_status_missing`),
+                        // then the plan fails.
                         let detail = format!(
                             "Rule {name:?} ({uuid}) has no 'status' in its {platform} \
                              configuration block. Add a status, e.g. 'status: STAGING', then \
@@ -370,8 +370,8 @@ pub fn select(
                         ))
                     })?;
                 if !options.enabled.iter().any(|known| known == platform) {
-                    // Logged whatever `log` says: `make_deploy_plan` logs it
-                    // for every caller, a deploy too.
+                    // Logged whatever `log` says: every caller of the plan,
+                    // a deploy too, gets the warning.
                     tracing::warn!(
                         system = platform.to_uppercase().as_str(),
                         rule = name.as_str(),
@@ -737,7 +737,7 @@ pub fn state_ids(
     Some(found)
 }
 
-/// What a change does (`_action`).
+/// What a change does.
 pub fn action(
     statuses: &Statuses,
     platform: &str,
@@ -844,8 +844,9 @@ pub fn env_reference(value: &str) -> Option<&str> {
 }
 
 /// The unset variables the `setup` of the planned `(platform, tenant)` pairs
-/// name, in the order the oracle reads them, each once. A tenant the plan
-/// sends nothing to (another strategy's, another platform's) needs none.
+/// name, in plan order then each `setup`'s key order, each once. A tenant
+/// the plan sends nothing to (another strategy's, another platform's) needs
+/// none.
 pub fn unset_variables(
     config: &Json,
     planned: &[(&str, &str)],
@@ -874,7 +875,7 @@ pub fn unset_variables(
 }
 
 /// `a real deploy would need $A and $B, which are unset`
-/// (`unset_variables_warning`), counting past three.
+/// counting past three.
 pub fn unset_warning(names: &[String]) -> String {
     let shown: Vec<String> = names.iter().map(|name| format!("${name}")).collect();
     if shown.len() > 3 {
@@ -945,7 +946,7 @@ mod tests {
     }
 
     #[test]
-    fn tenants_are_skipped_as_the_oracle_skips_them() {
+    fn tenants_are_skipped_when_unlisted_or_manual() {
         let listed = ["a".to_owned()];
         assert_eq!(tenant_skip_reason("a", true, &listed), None);
         assert_eq!(

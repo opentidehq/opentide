@@ -1,5 +1,4 @@
-//! A platform's `[[modifiers]]` applied to a rule for one tenant
-//! (`deployment/planning.py` `TideDeployment.modifiers_resolver`): each
+//! A platform's `[[modifiers]]` applied to a rule for one tenant: each
 //! modifier whose conditions hold rewrites keys of the rule's platform block
 //! before the rule is sent there. `validate query --live` checks the queries
 //! a deploy sends, so it reads the block as modified.
@@ -15,7 +14,7 @@ use opentide_schema::platforms::{PlatformId, PlatformKey};
 use crate::json::{Json, Object};
 
 /// The top-level keys of `platform`'s block model, attribute and serialised
-/// names (`_typed_platform_config_roots`). A plugin's platform has no model
+/// names. A plugin's platform has no model
 /// here: [`apply`] then skips no root.
 pub fn typed_roots(platform: PlatformId) -> Vec<&'static str> {
     let fields: &[(&str, &str)] = match platform {
@@ -135,8 +134,7 @@ fn unroll(key: &str, value: Json) -> Object {
     unrolled
 }
 
-/// *base* updated from *update*, mappings merged rather than replaced
-/// (`_deep_update`).
+/// *base* updated from *update*, mappings merged rather than replaced.
 fn deep_update(base: &mut Object, update: &Object) {
     for (key, value) in update {
         if let Json::Object(inner) = value {

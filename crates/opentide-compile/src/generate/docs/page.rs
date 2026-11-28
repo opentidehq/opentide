@@ -1,4 +1,4 @@
-//! Page layout (`documentation/markdown/page.py`): one title, a lead, a
+//! Page layout: one title, a lead, a
 //! contents line, ordered sections.
 //!
 //! Every page is assembled here, so the three families and the folder

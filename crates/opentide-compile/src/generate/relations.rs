@@ -1,5 +1,5 @@
-//! An object's parents and children (`generation/framework.py` `get_type`,
-//! `parents`, `childs` and its reverse relation index).
+//! An object's parents and children, the children read through a reverse
+//! relation index.
 //!
 //! | Parent | Children | Read from the child |
 //! |--------|----------|---------------------|
@@ -171,7 +171,7 @@ impl<'i> Relations<'i> {
         })
     }
 
-    /// The type of `uuid` (`get_type`): its schema's family, else `signal` for
+    /// The type of `uuid`: its schema's family, else `signal` for
     /// a signal or `rule` for a body with `configurations`.
     ///
     /// # Errors
@@ -205,7 +205,7 @@ impl<'i> Relations<'i> {
         )))
     }
 
-    /// The direct children of `uuid` (`childs`).
+    /// The direct children of `uuid`.
     ///
     /// # Errors
     ///
@@ -220,7 +220,7 @@ impl<'i> Relations<'i> {
             .unwrap_or_default())
     }
 
-    /// The parents of `uuid` (`parents`): an objective's threats, a signal's
+    /// The parents of `uuid`: an objective's threats, a signal's
     /// objective, a rule's detection model.
     ///
     /// # Errors

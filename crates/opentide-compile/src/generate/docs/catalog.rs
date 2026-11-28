@@ -1,7 +1,5 @@
 //! The objects a documentation run writes pages for, read into their models,
-//! and the relations between them the pages show
-//! (`documentation/catalog.py`, `generation/framework.py` `relations_list`,
-//! `keep_active_rules`, `chain_resolver`).
+//! and the relations between them the pages show.
 
 use std::collections::{HashMap, HashSet};
 
@@ -254,9 +252,8 @@ impl<'i> Catalog<'i> {
     ///
     /// # Errors
     ///
-    /// An object that does not read into its model, as the oracle's
-    /// `ValidationError` names the first error of the first such object:
-    /// rules first, then threats, then objectives.
+    /// The first object that does not read into its model, with its first
+    /// error: rules are read first, then threats, then objectives.
     pub fn build(index: &'i Index, statuses: Statuses) -> Result<Self, PhaseError> {
         let mut rules = Vec::new();
         let mut written = HashMap::new();
@@ -785,7 +782,7 @@ impl<'i> Catalog<'i> {
         graph
     }
 
-    /// A rule page's own path (`_add_rule_lineage`): the threats, its
+    /// A rule page's own path: the threats, its
     /// objective, its signal, the rule. Sibling rules of the objective are
     /// left out: they belong on the objective's page, and on a rule page
     /// they buried the rule itself.
@@ -914,8 +911,8 @@ enum Tree {
     Leaf,
 }
 
-/// Sets `key` as a dict does: a key met again keeps its place, its value
-/// replaced.
+/// Sets `key` as an insertion-ordered map does: a key met again keeps its
+/// place, its value replaced.
 fn insert(entries: &mut Vec<(String, Tree)>, key: String, value: Tree) {
     if let Some(slot) = entries.iter_mut().find(|(existing, _)| *existing == key) {
         slot.1 = value;
@@ -1023,7 +1020,7 @@ fn rule_model(document: &opentide_schema::node::Document) -> Result<RuleModel, P
 
 /// The document's model, read and then checked against the model's
 /// constraints (garde, with the pins of the revision `metadata.schema`
-/// names), as the oracle's pydantic model validates both.
+/// names): an object must pass both to be documented.
 fn typed<T>(document: &opentide_schema::node::Document) -> Result<T, PhaseError>
 where
     T: opentide_schema::FromNode + garde::Validate<Context = Pins>,

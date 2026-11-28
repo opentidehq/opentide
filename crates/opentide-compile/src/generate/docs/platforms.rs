@@ -1,4 +1,4 @@
-//! What the pages know about each platform (`documentation/facts/platforms.py`):
+//! What the pages know about each platform:
 //! the name a page shows, and the language of each block setting that holds
 //! code, so a query is fenced and captioned in its own language (KQL, SPL,
 //! ES|QL, YARA) rather than as text.

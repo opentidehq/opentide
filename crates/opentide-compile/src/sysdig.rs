@@ -1,7 +1,6 @@
-//! The Sysdig Secure body (`platforms/sysdig/compile.py`, sysdig-1.0): the
-//! Falco rule a block deploys, with the block's own macros and lists written
-//! in as Falco's rule loader would expand them (`platforms/sysdig/expansion.py`),
-//! and the `/api/secure/rules` payload (`api_body`).
+//! The Sysdig Secure body (sysdig-1.0): the Falco rule a block deploys, with
+//! the block's own macros and lists written in as Falco's rule loader would
+//! expand them, and the `/api/secure/rules` payload (`api_body`).
 //!
 //! Falco's loader rules (`resolve_list`, `compile_list_infos`, the value-list
 //! passes) are `opentide_core::falco`'s; the scan for the macros a condition
@@ -386,7 +385,7 @@ impl Expander {
 }
 
 /// The `name` and `key` entries of a block's `macros` or `lists`, a later
-/// entry of the same name replacing the earlier one in place (a dict).
+/// entry of the same name replacing the earlier one in place.
 fn definitions(block: &Json, list: &str, key: &str) -> Vec<(String, Json)> {
     let mut out: Vec<(String, Json)> = Vec::new();
     if let Some(Json::Array(entries)) = block.get(list) {
@@ -560,7 +559,7 @@ fn block_of(rule: &Rule) -> Result<&Json, CompileError> {
     })
 }
 
-/// The strategy the block's status maps to (`_strategy`).
+/// The strategy the block's status maps to.
 pub fn strategy(cx: &Context<'_>, rule: &Rule) -> Result<StatusStrategy, CompileError> {
     let status = block_of(rule)?
         .get("status")

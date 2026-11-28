@@ -1,6 +1,5 @@
-//! The git baseline: the rule files a run changed (`deployment/git_repo.py`
-//! `diff_calculation`, `split_changed_rule_paths`, `deployment/ci.py`), read
-//! with gitoxide's crates (`gix-discover`, `gix-ref`, `gix-odb`, `gix-diff`,
+//! The git baseline: the rule files a run changed, read with gitoxide's
+//! crates (`gix-discover`, `gix-ref`, `gix-odb`, `gix-diff`,
 //! `gix-revision`), the git implementation in Rust, without the `git` program.
 //! `gix-discover` finds the checkout and its git directory (linked worktrees
 //! included); `gix-revision`'s rev-spec parser reads the revisions a run
@@ -208,7 +207,8 @@ impl GitError {
 
 /// The checkout at or above `start`: its work tree and its git directory
 /// (for a linked worktree, the worktree's own one). A bare repository is no
-/// checkout. Discovery crosses file systems, as the oracle's did. The
+/// checkout. Discovery crosses file systems (`cross_fs`), so a checkout
+/// above a mount point is still found. The
 /// environment steers it as it steers git (#2049): `GIT_DIR`,
 /// `GIT_WORK_TREE` and `GIT_CEILING_DIRECTORIES`, a relative path read
 /// against `start`, the directory opentide ran git in.
@@ -886,7 +886,7 @@ fn parents(repo: &Repo, id: ObjectId) -> Option<Vec<ObjectId>> {
     repo.commit(id).map(|commit| commit.parents)
 }
 
-/// HEAD's first parent when the checkout holds it (`_production_base`):
+/// HEAD's first parent when the checkout holds it:
 /// `None` for the first commit; an error when a shallow clone names a parent
 /// it does not hold, which must not read as an empty diff.
 fn production_base(repo: &Repo, head: ObjectId) -> Result<Option<ObjectId>, GitError> {
@@ -921,7 +921,7 @@ const SHALLOW_HINT: &str = "the checkout is shallow, so it does not hold the com
 
 /// The first parent of the merge commit a request run builds, when `merge`
 /// has two parents, the first is in the checkout, and the second is `head`
-/// when given (`_merge_first_parent`).
+/// when given.
 fn merge_first_parent(repo: &Repo, merge: Option<&str>, head: Option<&str>) -> Option<ObjectId> {
     let merge = ObjectId::from_hex(merge?.as_bytes()).ok()?;
     let found = parents(repo, merge)?;
@@ -957,7 +957,7 @@ fn all_zeros(sha: &str) -> bool {
     sha.trim_matches('0').is_empty()
 }
 
-/// The branch tip before a GitHub push (`_github_push_before`): the push
+/// The branch tip before a GitHub push: the push
 /// event's `before`.
 fn github_push_before(repo: &Repo, env: Env<'_>) -> PushBefore {
     let Some(before) = event(env).and_then(|event| {
@@ -1049,7 +1049,7 @@ fn last_commit_only(why: &str) -> String {
     )
 }
 
-/// A pull request's base and head commits from the event (`_github_event_request_shas`).
+/// A pull request's base and head commits from the event.
 fn github_request_shas(repo: &Repo, env: Env<'_>) -> Option<(String, String)> {
     let event = event(env)?;
     let request = event.get("pull_request")?;
@@ -1065,8 +1065,8 @@ fn merge_base(repo: &Repo, a: ObjectId, b: ObjectId) -> Option<ObjectId> {
 }
 
 /// The request's base and head from `origin/<target>` and `origin/<source>`,
-/// as the checkout holds them. The oracle fetched `origin` first; this
-/// compile reads no network, so a checkout must hold both branches.
+/// as the checkout holds them. Nothing is fetched (this crate reads no
+/// network), so the checkout must already hold both branches.
 fn origin_request(
     repo: &Repo,
     source: &str,
@@ -1648,10 +1648,9 @@ fn no_commits_yet(searched: &Path) -> GitError {
 
 // --- the push's diff up to HEAD (`changed_through_head`) -------------------
 
-/// What an object id or a reference names, as Dulwich's `repo[name]` finds
-/// it: 40 hex digits are an object id; anything else, or an id the store does
-/// not hold, is a reference's exact name, symbolic references followed and
-/// annotated tags peeled. `None` when neither finds an object.
+/// What an object id or a reference names: 40 hex digits are an object id;
+/// anything else, or an id the store does not hold, is a reference's exact
+/// name, symbolic references followed and annotated tags peeled. `None` when neither finds an object.
 fn exact_object(repo: &Repo, name: &str) -> Option<ObjectId> {
     let mut buf = Vec::new();
     if name.len() == 40
@@ -1661,7 +1660,8 @@ fn exact_object(repo: &Repo, name: &str) -> Option<ObjectId> {
         return Some(id);
     }
     let mut reference = repo.refs.try_find(name).ok()??;
-    // A partial name searched under `refs/` is not the exact name Dulwich reads.
+    // Only the exact name counts: a partial name the store finds under
+    // `refs/` (`main` for `refs/heads/main`) names nothing here.
     if reference.name.as_bstr() != name.as_bytes().as_bstr() {
         return None;
     }
@@ -1673,9 +1673,9 @@ fn is_commit(repo: &Repo, id: ObjectId) -> bool {
     repo.commit(id).is_some()
 }
 
-/// `DulwichRepo.commit(text)`: the commit an object id or a reference's exact
-/// name holds; `Could not find git commit <text>` when nothing is found, and
-/// `Object <text> is not a commit` for a tag, tree or blob.
+/// The commit an object id or a reference's exact name holds; `Could not
+/// find git commit <text>` when nothing is found, and `Object <text> is not
+/// a commit` for a tag, tree or blob.
 fn dulwich_commit(repo: &Repo, text: &str) -> Result<ObjectId, GitError> {
     match exact_object(repo, text) {
         Some(id) if is_commit(repo, id) => Ok(id),
@@ -1684,9 +1684,9 @@ fn dulwich_commit(repo: &Repo, text: &str) -> Result<ObjectId, GitError> {
     }
 }
 
-/// The reference name Dulwich tries for `rev` (`_normalize_ref`): `refs/...`
-/// as written, `origin/<branch>` under `refs/remotes/`, `HEAD`, and anything
-/// else as a branch.
+/// The reference name tried first for `rev`: `refs/...` as written,
+/// `origin/<branch>` under `refs/remotes/`, `HEAD`, and anything else as a
+/// branch.
 fn normalized_ref(rev: &str) -> String {
     if rev.starts_with("refs/") || rev == "HEAD" {
         rev.to_owned()
@@ -1697,10 +1697,10 @@ fn normalized_ref(rev: &str) -> String {
     }
 }
 
-/// The commit `--since` names (`_resolve_commit`): a full commit id, a
-/// reference's exact name, or a branch, `origin/<branch>` or `refs/...` name,
-/// an annotated tag peeled. Short ids and revision syntax (`HEAD~1`) name no
-/// commit here, as they named none for the oracle.
+/// The commit `--since` names: a full commit id, a reference's exact name, or
+/// a branch, `origin/<branch>` or `refs/...` name, an annotated tag peeled.
+/// Short ids and revision syntax (`HEAD~1`) are not read: unless a reference
+/// has that exact name, they fail with `Could not find git commit <rev>`.
 fn since_commit(repo: &Repo, rev: &str) -> Result<ObjectId, GitError> {
     if let Some(id) = exact_object(repo, rev).filter(|id| is_commit(repo, *id)) {
         return Ok(id);
@@ -1733,7 +1733,7 @@ fn trigger_variable(ci: Ci) -> &'static str {
     }
 }
 
-/// Where the triggering push's diff starts (`_push_baseline`): on GitLab
+/// Where the triggering push's diff starts: on GitLab
 /// `CI_COMMIT_BEFORE_SHA` unless it is unset or all zeros, else the
 /// triggering commit's first parent; `None` when that commit is the first.
 fn push_baseline(repo: &Repo, ci: Ci, env: Env<'_>) -> Result<Option<ObjectId>, GitError> {
@@ -1815,12 +1815,12 @@ pub fn changed_through_head(
 }
 
 /// Splits changed paths into the rule files directly in `folder` (the rules
-/// folder, workspace-relative) and those in its subfolders
-/// (`split_changed_rule_paths`): a path matches when `folder` is one of its
-/// whole leading components, at the top level or below it.
+/// folder, workspace-relative) and those in its subfolders: a path matches
+/// when `folder` is one of its whole leading components, at the top level or
+/// below it.
 #[expect(
     clippy::case_sensitive_file_extension_comparisons,
-    reason = "the oracle's pattern is case-sensitive: `rule.YAML` is not a rule file"
+    reason = "a rule file is `*.yaml` or `*.yml`, case-sensitive: `rule.YAML` is not one"
 )]
 pub fn split_rule_paths(changed: &[String], folder: &str) -> (Vec<String>, Vec<String>) {
     let folder = folder.trim_matches('/');
@@ -1964,10 +1964,9 @@ pub fn uncommitted_warning(
     ))
 }
 
-// --- the default-branch baseline (`core/git_baseline.py`) ---------------------
+// --- the default-branch baseline ---------------------------------------------
 
-/// The message of a run that needs a commit to compare with
-/// (`NO_GIT_MESSAGE`).
+/// The message of a run that needs a commit to compare with.
 pub const NO_GIT_MESSAGE: &str =
     "changed-object discovery requires a git repository with at least one commit";
 
@@ -2659,8 +2658,8 @@ fn changed_in_folders_against(
         };
         for entry in entries.into_iter().flatten() {
             let entry = entry.map_err(|error| unreadable(&real, &error))?;
-            // A name that is not UTF-8 is left out with a warning, as
-            // the oracle leaves it out.
+            // Files are compared by UTF-8 name: one whose name is not UTF-8
+            // is left out, with a `git_path_not_utf8` warning.
             let Ok(name) = entry.file_name().into_string() else {
                 tracing::warn!("git_path_not_utf8");
                 continue;
@@ -2727,9 +2726,10 @@ fn changed_in_folders_against(
 }
 
 /// The git ignore rule that hides `.opentide/states/deployment/` from git
-/// (`states/deployment.py` `IgnoreRule`): its pattern, and the file and
-/// line it is on when it is in the work tree's `.gitignore` files or the
-/// repository's `info/exclude`.
+/// (its shards must be committed, so a deploy refuses to run under it, and
+/// so does a state migration): its pattern, and the file and line it is on
+/// when it is in the work tree's `.gitignore` files or the repository's
+/// `info/exclude`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct IgnoreRule {
     /// The pattern, as written.
@@ -2881,8 +2881,8 @@ pub fn state_ignore(workspace: &Path) -> Option<IgnoreRule> {
             })
             .filter(|text| !text.is_empty())
             .unwrap_or_else(|| pattern.clone());
-        // Named only when the file is the work tree's or `info/exclude`
-        // (`_locate_pattern`); `core.excludesFile` is outside both.
+        // Named only when the file is the work tree's or `info/exclude`;
+        // `core.excludesFile` is outside both.
         let located = source.as_ref().and_then(|source| {
             // `top` is canonical, which on Windows is a verbatim path
             // (`\\?\C:\...`); `info/exclude` comes by the git dir

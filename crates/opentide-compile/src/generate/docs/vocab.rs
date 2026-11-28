@@ -1,5 +1,4 @@
-//! Vocabulary entries as pages show them (`documentation/vocabulary.py`
-//! `enrich`, `generation/framework.py` `get_vocab_entry`).
+//! Vocabulary entries as pages show them.
 
 use opentide_schema::vocab::{Entry, Vocabularies};
 

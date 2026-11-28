@@ -35,7 +35,7 @@ VENDOR_ORACLE="as the oracle probes|The oracle the lazy catalog is held to"
 # Mentions of the retired Python CLI each crate still has, until it is swept.
 declare -A RETIRED_BASELINE=(
   [opentide-cli]=169
-  [opentide-compile]=121
+  [opentide-compile]=7
   [opentide-schema]=0
 )
 tracked_py="$(git -C "$root" ls-files '*.py')"

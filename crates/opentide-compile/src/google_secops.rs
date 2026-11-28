@@ -1,12 +1,11 @@
-//! Google Security Operations (google-secops-1.0), ported from 0.28.0's
-//! `platforms/google_secops/compile.py`: the YARA-L text a rule deploys
-//! (`opentide-schema`'s assembled rule, fed with the facts it derives from
-//! the rule), the run state a status strategy deploys (`run_state`,
+//! Google Security Operations (google-secops-1.0): the YARA-L text a rule
+//! deploys (`opentide-schema`'s assembled rule, fed with the facts it derives
+//! from the rule), the run state a status strategy deploys (`run_state`,
 //! `RunState.changes`), and the Chronicle API's resource names and request
 //! bodies the connector sends.
 //!
 //! The text is the same on every tenant: `compile_offline` is the
-//! `rules.create` body (`{"text": ...}`), as 0.28.0's preview shows it.
+//! `rules.create` body (`{"text": ...}`), which the dry run shows.
 
 use opentide_schema::node::{Entry, Mark, Node, Value};
 use opentide_schema::objects::platform::google_secops::assemble::{

@@ -1,5 +1,5 @@
 //! What telemetry a workspace declares, and which detections use it
-//! (`cli/services/visibility.py`, #776): the report `generate explorer
+//! (#776): the report `generate explorer
 //! --include-visibility` writes.
 //!
 //! `visibility.toml` declares each log source: its `name` is the dataset (a
@@ -146,7 +146,7 @@ pub struct Inputs {
     pub problem: Option<String>,
 }
 
-/// A value or values as a list (`_as_list`): a blank string is none.
+/// A value or values as a list: a blank string is none.
 fn as_list(node: Option<&Node>) -> Vec<&Node> {
     match node.map(|node| &node.value) {
         Some(Value::Str(text)) if !text.trim().is_empty() => node.into_iter().collect(),

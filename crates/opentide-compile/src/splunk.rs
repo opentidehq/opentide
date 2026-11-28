@@ -1,7 +1,4 @@
-//! Splunk: the saved search a deploy writes on one tenant
-//! (`platforms/splunk/deployer.py` `config_mdr`, `_apply_flat_modifiers`,
-//! `_build_actions_config`, `_apply_saved_search`; `client.py`
-//! `create_query`, `cron_to_timeframe`, `splunk_timerange`).
+//! Splunk: the saved search a deploy writes on one tenant.
 //!
 //! A write's `url` is the one the Splunk client sends to: the tenant's
 //! saved searches under its app's namespace ([`saved_searches`]), and the
@@ -334,10 +331,10 @@ pub fn marked_rule(description: &str) -> Option<&str> {
         .filter(|uuid| !uuid.is_empty())
 }
 
-/// The saved search's settings from the block (0.28.1's `config_mdr`).
+/// The saved search's settings from the block.
 #[expect(
     clippy::too_many_lines,
-    reason = "one setting after another, in the oracle's order"
+    reason = "one setting after another, in the order the request sends them"
 )]
 fn saved_search_settings(
     cx: &Context<'_>,
@@ -613,7 +610,7 @@ fn member(value: &Json, key: &str) -> Json {
     value.get(key).cloned().unwrap_or(Json::Null)
 }
 
-/// Applies the platform's `[[modifiers]]` (`_apply_flat_modifiers`): a
+/// Applies the platform's `[[modifiers]]`: a
 /// default modifier fills gaps, any other overrides; `allowed_actions`
 /// narrows the actions. The actions left allowed.
 fn apply_modifiers(
@@ -678,7 +675,7 @@ fn apply_modifiers(
     allowed
 }
 
-/// The actions the saved search runs (`_build_actions_config`).
+/// The actions the saved search runs.
 fn actions_config(
     config: &mut Object,
     settings: &Settings,

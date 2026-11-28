@@ -1,9 +1,10 @@
-//! `deploy --dry-run`'s result (`cli/services/deploy.py` `run_deploy` with
-//! `dry_run`): the plan, every planned change, the tenants each rule reaches,
-//! and each rule's payload, with the warnings a real run would hit.
+//! `deploy --dry-run`'s result: the plan, every planned change, the tenants
+//! each rule reaches, and each rule's payload, with the warnings a real run
+//! would hit.
 //!
-//! The keys are the command's result payload, in the oracle's order; the
-//! CLI wraps them in its envelope. Nothing is sent and nothing is written.
+//! The keys are the command's result payload, in a fixed order that the
+//! `--json` snapshot cases hold; the CLI wraps them in its envelope. Nothing
+//! is sent and nothing is written.
 
 use std::path::{Path, PathBuf};
 
@@ -152,7 +153,7 @@ pub struct Outcome {
     pub payload: Object,
     /// The process exit code.
     pub exit_code: i32,
-    /// The counts behind the outcome (`_summary`).
+    /// The counts behind the outcome.
     pub summary: Option<Json>,
     /// `_outcome_kind`: `plan` for a plan.
     pub outcome_kind: Option<&'static str>,
@@ -229,8 +230,8 @@ pub fn rules_folder(workspace: &Workspace) -> (PathBuf, String) {
 }
 
 /// The rule files `--file` and `--uuid` (`request.files`, `request.uuids`)
-/// select among `local`'s, and each value that selects none
-/// (`_selected_rule_scope`); `deploy` and `validate query` share it.
+/// select among `local`'s, and each value that selects none; `deploy` and
+/// `validate query` share it.
 pub fn selected_scope(
     fs: &dyn FileSystem,
     workspace: &Workspace,
@@ -473,7 +474,7 @@ pub fn run(
         Err(PlanError::Failed(message)) => {
             let mut outcome = Outcome::failed(message, 1);
             if selecting {
-                // `run_deploy` names a selection's scope on a failed plan too.
+                // A selection's scope is named on a failed plan too.
                 outcome.payload.insert("scope".into(), "selected".into());
             }
             let mut warnings: Vec<String> = no_commits.into_iter().collect();
@@ -914,10 +915,11 @@ fn diagnostic(platform: &str, entry: &Json, root: &Path) -> Json {
     Json::Object(out)
 }
 
-/// A run that planned nothing (`_nothing_to_deploy`).
+/// A run that planned nothing: `skipped`, or `failed` when planning reported
+/// rule errors, with an empty plan and the warnings [`finish`] adds.
 #[expect(
     clippy::too_many_arguments,
-    reason = "the oracle's run state, passed through once"
+    reason = "the run's state, passed through once"
 )]
 fn nothing(
     message: &str,
@@ -979,11 +981,11 @@ fn nothing(
     outcome
 }
 
-/// What `run_deploy` adds after the plan: the selection's scope, the
+/// What a run adds after the plan: the selection's scope, the
 /// warnings before the plan's own, and the blocks a status kept out.
 #[expect(
     clippy::too_many_arguments,
-    reason = "the oracle's run state, passed through once"
+    reason = "the run's state, passed through once"
 )]
 fn finish(
     outcome: &mut Outcome,
@@ -1024,7 +1026,7 @@ fn finish(
     }
 }
 
-/// The warnings a failed plan still reports (`run_deploy` after `_deploy`).
+/// The warnings a failed plan still reports.
 fn finish_failure(
     outcome: &mut Outcome,
     workspace: &Workspace,
@@ -1065,7 +1067,7 @@ pub fn unread_files(workspace: &Workspace, cwd: &Path) -> Vec<String> {
         .collect()
 }
 
-/// Counts the blocks a status kept out of the plan (`_report_skipped`).
+/// Counts the blocks a status kept out of the plan.
 fn report_skipped(
     outcome: &mut Outcome,
     skipped: &[plan::Skipped],

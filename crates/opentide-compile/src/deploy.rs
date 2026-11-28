@@ -1,7 +1,6 @@
 //! What the deployers whose body is built from a tenant share: the writes a
 //! deploy sends for one rule to one tenant, what the deployment state makes
-//! of it (create, update or delete, `deployment/external_ids.py`
-//! `plan_external_id`) and a tenant's settings.
+//! of it (create, update or delete) and a tenant's settings.
 
 use opentide_schema::platforms::PlatformKey;
 
@@ -102,8 +101,8 @@ pub enum Action {
     Delete(String),
 }
 
-/// The strategy of `status`, or the error the oracle's `check_status` raises,
-/// in `display`'s words.
+/// The strategy of `status`, or a failure in `display`'s words that says why
+/// the status has none.
 pub fn strategy(
     cx: &Context<'_>,
     display: &str,
@@ -219,8 +218,8 @@ pub fn rule_value<'r>(rule: &'r Rule, path: &[&str]) -> Option<&'r Json> {
     (!value.is_null()).then_some(value)
 }
 
-/// The rule's techniques it inherits through its detection model
-/// (`techniques_resolver`), or the error the oracle's resolver raises.
+/// The rule's techniques it inherits through its detection model, or a
+/// failure in `display`'s words whose message is the missing key, quoted.
 pub fn inherited_techniques(
     cx: &Context<'_>,
     display: &str,

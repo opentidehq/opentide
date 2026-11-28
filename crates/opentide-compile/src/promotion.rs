@@ -1,4 +1,4 @@
-//! Status promotion (`mutation/promotion.py`, UC-4.6c, #979): a RELEASE
+//! Status promotion (UC-4.6c, #979): a RELEASE
 //! deploy on a push in CI moves the platform blocks of the rule files the push
 //! changed to the promotion target (`[promotion]` in `deployment.toml`),
 //! before it plans.
@@ -36,13 +36,13 @@ pub struct Settings {
     pub enabled: bool,
     /// `promotion_target`, when it is a string.
     pub target: Option<String>,
-    /// `promotion_target` as the oracle's log writes it, whatever its type:
-    /// `None` when it is not set (`invalid_promotion_target`).
+    /// `promotion_target` as written, whatever its type, `null` when it is
+    /// not set: what an invalid target's event reports.
     pub target_value: Json,
-    /// Every configured status name, in order (`VALID_STATUSES`).
+    /// Every configured status name, in order.
     pub valid: Vec<String>,
     /// The statuses a promotion never moves: those whose strategy is
-    /// RELEASE, DELETION or DISABLEMENT (`NON_PROMOTABLE_STATUSES`).
+    /// RELEASE, DELETION or DISABLEMENT.
     pub non_promotable: Vec<String>,
 }
 
@@ -278,8 +278,9 @@ pub fn promote_block_statuses(
                 let Value::Map(fields) = &platform.value.value else {
                     continue;
                 };
-                // A plain key YAML 1.1 reads as another type (`yes`, `1_0`)
-                // is no string to the oracle either.
+                // A plain key that YAML 1.1 reads as another type (`yes`,
+                // `1_0`) is not a string key: promoting a status under it is
+                // `Error::NonStringKey`.
                 let plain = !span(source, &offsets, &platform.key)
                     .trim_start()
                     .starts_with(['"', '\'', '!']);
@@ -398,7 +399,7 @@ pub fn placed(error: &node::LoadError) -> String {
     }
 }
 
-/// Whether YAML 1.1's implicit resolvers (PyYAML's) read the plain scalar
+/// Whether YAML 1.1's implicit resolvers read the plain scalar
 /// `text` as something other than a string: a boolean, an integer, a float,
 /// null, a timestamp, the merge key or the value key.
 fn yaml11_non_string(text: &str) -> bool {
@@ -587,8 +588,8 @@ mod tests {
                 "{key}"
             );
         }
-        // A refusal is found first, as the oracle composes every block
-        // before it looks one up.
+        // A refusal wins over a non-string key: every block is checked
+        // before a status is looked up.
         let refused =
             "name: R\nconfigurations:\n  1:\n    status: STAGING\n  s:\n    status: &a STAGING\n";
         assert!(matches!(
