@@ -1,7 +1,8 @@
-//! `deploy`'s refusals and failures, built as a [`CommandResult`], print the
-//! document, the outcome line and the CI job summary their `_`-keys printed
-//! (#1949): each case holds the keys the run used to build, key for key,
-//! next to the typed result that replaced them.
+//! `deploy`'s results, built as a [`CommandResult`], print the document, the
+//! outcome line and the CI job summary their `_`-keys printed (#1949): each
+//! case holds the keys the run used to build, key for key, next to the typed
+//! result that replaced them, read by the old reader
+//! (`CommandResult::from_fields`, kept for tests).
 
 use super::*;
 use crate::json::document_text;
@@ -305,4 +306,176 @@ fn a_promotion_that_cannot_be_put_back_fails_the_run() {
     let mut typed = CommandResult::from_fields(&before);
     settled().apply(&mut typed, &mut Vec::new());
     same(&old, &typed);
+}
+
+/// A run's shared parts, with non-ASCII data.
+fn ran() -> Ran {
+    Ran {
+        deployed: vec!["sentinel_é".to_owned()],
+        plan: Json::object([("sentinel_é", Json::Array(vec![Json::str("ü😀")]))]),
+        strategies: Json::Array(vec![Json::str("PRODUCTION")]),
+        changes: Json::Array(vec![Json::object([("id", Json::str("ü😀"))])]),
+        results: Json::Array(vec![Json::object([
+            ("id", Json::str("ü😀")),
+            ("status", Json::str("failed")),
+        ])]),
+        summary: vec![
+            ("create".to_owned(), Json::Int(1)),
+            ("seconds".to_owned(), Json::Float(0.25)),
+            ("platforms".to_owned(), Json::Int(1)),
+            ("tenants".to_owned(), Json::Int(1)),
+        ],
+    }
+}
+
+fn summary_json(ran: &Ran) -> Json {
+    Json::object(ran.summary.clone())
+}
+
+fn failure_entries() -> Vec<(String, Json)> {
+    vec![
+        (
+            "règle ü😀 on lé: refusée".to_owned(),
+            Json::object([("id", Json::str("ü😀")), ("error", Json::str("refusée"))]),
+        ),
+        (
+            "tenant lé: 401".to_owned(),
+            Json::object([("tenant", Json::str("lé")), ("error", Json::str("401"))]),
+        ),
+    ]
+}
+
+fn entries() -> Json {
+    Json::Array(
+        failure_entries()
+            .into_iter()
+            .map(|(_, entry)| entry)
+            .collect(),
+    )
+}
+
+#[test]
+fn a_run_a_platform_stopped_fails_naming_the_rule_it_stopped_on() {
+    let message = "Deployment to sentinel_é failed: refusé 😀";
+    // The stop came on no rule.
+    let old = vec![
+        key("status", Json::str("failed")),
+        key("message", Json::str(message)),
+        key("deployed", Json::Array(vec![Json::str("sentinel_é")])),
+        key("dry_run", Json::Bool(false)),
+        key("plan", ran().plan),
+        key("strategies", ran().strategies),
+        key("changes", ran().changes),
+        key("results", ran().results),
+        key("_summary", summary_json(&ran())),
+        key("_exit_code", Json::Int(1)),
+        key("failures", entries()),
+    ];
+    let typed = ran().stopped(message.to_owned(), None, failure_entries());
+    same(&old, &typed);
+    // The stop came on a rule: the outcome message, its error and
+    // `issues_found`.
+    let outcome = "Failed: 1 rule ✗ 😀";
+    let error = "Deployment to sentinel_é failed on Règle: refusé 😀";
+    let old = vec![
+        key("status", Json::str("failed")),
+        key("message", Json::str(outcome)),
+        key("deployed", Json::Array(vec![Json::str("sentinel_é")])),
+        key("dry_run", Json::Bool(false)),
+        key("plan", ran().plan),
+        key("strategies", ran().strategies),
+        key("changes", ran().changes),
+        key("results", ran().results),
+        key("_summary", summary_json(&ran())),
+        key("_exit_code", Json::Int(1)),
+        key("error", Json::str(error)),
+        key("_failure_code", Json::str(crate::commands::ISSUES_FOUND)),
+        key("failures", entries()),
+    ];
+    let typed = ran().stopped(
+        message.to_owned(),
+        Some((outcome.to_owned(), error.to_owned())),
+        failure_entries(),
+    );
+    assert_eq!(
+        same(&old, &typed),
+        "{\"deployed\":[\"sentinel_é\"],\"dry_run\":false,\"plan\":{\"sentinel_é\":\
+         [\"ü😀\"]},\"strategies\":[\"PRODUCTION\"],\"changes\":[{\"id\":\"ü😀\"}],\
+         \"results\":[{\"id\":\"ü😀\",\"status\":\"failed\"}],\"error\":\"Deployment to \
+         sentinel_é failed on Règle: refusé 😀\",\"failures\":[{\"id\":\"ü😀\",\"error\":\
+         \"refusée\"},{\"tenant\":\"lé\",\"error\":\"401\"}],\"ok\":false,\"status\":\
+         \"failed\",\"message\":\"Failed: 1 rule ✗ 😀\",\"schema_version\":1,\"command\":\
+         \"deploy\",\"duration_ms\":0,\"exit_code\":1,\"summary\":{\"create\":1,\
+         \"seconds\":0.25,\"platforms\":1,\"tenants\":1},\"next_actions\":[],\"failure\":\
+         {\"code\":\"issues_found\",\"message\":\"Deployment to sentinel_é failed on \
+         Règle: refusé 😀\",\"argument\":null,\"suggestion\":null,\"crash_log\":null}}\n"
+    );
+}
+
+#[test]
+fn a_run_that_ended_completes_or_fails_with_its_first_failure() {
+    for (failed, rule_failed, failures, warned) in [
+        (false, false, Vec::new(), false),
+        (false, false, Vec::new(), true),
+        (true, true, failure_entries(), true),
+        (true, false, failure_entries(), false),
+    ] {
+        let message = if failed {
+            "Échec 😀"
+        } else {
+            "Deployed 1 rule ✓ 😀"
+        };
+        let mut old = vec![
+            key("message", Json::str(message)),
+            key(
+                "status",
+                Json::str(if failed { "failed" } else { "completed" }),
+            ),
+            key("deployed", Json::Array(vec![Json::str("sentinel_é")])),
+            key("dry_run", Json::Bool(false)),
+            key("plan", ran().plan),
+            key("changes", ran().changes),
+            key("_summary", summary_json(&ran())),
+            key("_exit_code", Json::Int(i64::from(failed))),
+            key("results", ran().results),
+        ];
+        if failed && rule_failed {
+            old.push(key(
+                "_failure_code",
+                Json::str(crate::commands::ISSUES_FOUND),
+            ));
+        }
+        if let Some((first, _)) = failures.first() {
+            let more = more_failures(failures.len());
+            old.push(key("error", Json::str(format!("{first}{more}"))));
+            old.push(key("failures", entries()));
+        }
+        if warned {
+            old.push(key(
+                "warnings",
+                Json::Array(vec![Json::str("Some rules reported deployment warnings")]),
+            ));
+        }
+        old.push(key("strategies", ran().strategies));
+        let typed = ran().ended(&Ending {
+            message: message.to_owned(),
+            failed,
+            rule_failed,
+            failures,
+            warned,
+        });
+        let document = same(&old, &typed);
+        if !failed && !warned {
+            assert_eq!(
+                document,
+                "{\"deployed\":[\"sentinel_é\"],\"dry_run\":false,\"plan\":{\"sentinel_é\":\
+                 [\"ü😀\"]},\"changes\":[{\"id\":\"ü😀\"}],\"results\":[{\"id\":\"ü😀\",\
+                 \"status\":\"failed\"}],\"strategies\":[\"PRODUCTION\"],\"ok\":true,\
+                 \"status\":\"completed\",\"message\":\"Deployed 1 rule ✓ 😀\",\
+                 \"schema_version\":1,\"command\":\"deploy\",\"duration_ms\":0,\
+                 \"exit_code\":0,\"summary\":{\"create\":1,\"seconds\":0.25,\"platforms\":1,\
+                 \"tenants\":1},\"next_actions\":[],\"failure\":null}\n"
+            );
+        }
+    }
 }
