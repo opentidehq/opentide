@@ -5,9 +5,8 @@
 
 use crate::syntax::{SyntaxKind as K, SyntaxNode, lex};
 use opentide_parse::{
-    Event, Grammar, Input, Parse, Parser, TokenSet, build, debug_errors, debug_tree,
+    Event, Grammar, Input, LastParse, Parse, Parser, TokenSet, build, debug_errors, debug_tree,
 };
-use std::cell::RefCell;
 use std::rc::Rc;
 
 /// Nesting (`(`, `field:(`, `field:{`) deeper than this is one error. The
@@ -35,26 +34,10 @@ pub(crate) type Parsed = (SyntaxNode, Parse);
 /// text, epic #1219's one-parse memo).
 pub(crate) fn parse_memo(source: &str) -> Rc<Parsed> {
     thread_local! {
-        static LAST: RefCell<Option<(String, Rc<Parsed>)>> = const { RefCell::new(None) };
+        static LAST: LastParse<Parsed> = const { LastParse::new() };
     }
-    LAST.with(|last| {
-        let mut last = last.borrow_mut();
-        if let Some((text, parsed)) = last.as_ref()
-            && text == source
-        {
-            return Rc::clone(parsed);
-        }
-        let parsed = Rc::new(parse(source, true));
-        // A text past the cap is not kept: an idle thread would hold it and
-        // its tree until its next query.
-        *last = (source.len() <= MEMO_MAX).then(|| (source.to_owned(), Rc::clone(&parsed)));
-        parsed
-    })
+    LAST.with(|last| last.get(source, |source| parse(source, true)))
 }
-
-/// The largest text [`parse_memo`] keeps, in bytes. Detection queries are a
-/// few kilobytes.
-pub(crate) const MEMO_MAX: usize = 64 * 1024;
 
 /// Parses `source` (with Kibana's trailing-keyword masking when `mask`).
 pub(crate) fn parse(source: &str, mask: bool) -> (SyntaxNode, Parse) {

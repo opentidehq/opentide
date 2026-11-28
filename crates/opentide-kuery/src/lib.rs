@@ -1280,7 +1280,7 @@ mod tests {
         assert!(std::rc::Rc::ptr_eq(&first, &parser::parse_memo(src)));
         assert!(!std::rc::Rc::ptr_eq(&first, &parser::parse_memo("a:1")));
         // A text past the cap is parsed but not kept.
-        let large = "a:1 or ".repeat(parser::MEMO_MAX / 7 + 1) + "b:2";
+        let large = "a:1 or ".repeat(opentide_parse::MEMO_MAX / 7 + 1) + "b:2";
         let once = parser::parse_memo(&large);
         assert!(!std::rc::Rc::ptr_eq(&once, &parser::parse_memo(&large)));
     }

@@ -57,6 +57,7 @@ pub mod conformance;
 mod debug;
 mod green;
 mod input;
+mod memo;
 mod parser;
 mod token_set;
 mod tree;
@@ -64,6 +65,7 @@ mod walk;
 
 pub use debug::{debug_error_kinds, debug_errors, debug_kinds, debug_tree, describe_expected};
 pub use input::{Grammar, Input, Lexeme, lex};
+pub use memo::{LastParse, MEMO_MAX};
 pub use parser::{CompletedMarker, ErrorKind, Event, Marker, Parser, TREE_BUDGET};
 pub use token_set::TokenSet;
 pub use tree::{MAX_TREE_DEPTH, Parse, SyntaxError, build};
