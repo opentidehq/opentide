@@ -102,7 +102,6 @@ crates/opentide-schema/src/objects/platform/tests.rs sysdig_each_constraint_repo
 crates/opentide-schema/tests/yaml_table.rs every_case_is_compared_with_the_oracle_and_every_difference_is_explained
 crates/opentide-tide/tests/query_extraction.rs expected
 crates/opentide-workspace/src/catalogue.rs build_from
-crates/opentide-workspace/src/index.rs references
 crates/opentide-workspace/src/lint/mod.rs filename_findings
 crates/opentide-workspace/src/lint/mod.rs lint_with
 crates/opentide-workspace/src/validate/annotate.rs annotate_one
