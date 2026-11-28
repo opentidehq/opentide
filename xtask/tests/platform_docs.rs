@@ -8,6 +8,10 @@
 //! column that disagrees.
 
 #![expect(
+    clippy::string_slice,
+    reason = "a test: a slice off a char boundary panics, and a panic is a failed test"
+)]
+#![expect(
     clippy::expect_used,
     reason = "test helpers: a panic naming the missing page or section is how the test fails"
 )]

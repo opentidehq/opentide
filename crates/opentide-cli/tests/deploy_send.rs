@@ -11,6 +11,10 @@
 //! only when the platform accepted the rule) run against a scripted deployer.
 
 #![cfg(unix)]
+#![expect(
+    clippy::string_slice,
+    reason = "a test: a slice off a char boundary panics, and a panic is a failed test"
+)]
 #![expect(clippy::unwrap_used, reason = "a test: a failed set-up is a failure")]
 
 use std::io::Write as _;

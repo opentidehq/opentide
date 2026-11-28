@@ -5,6 +5,10 @@
 //! (#1431 follow-up), or, before #1431, on the query's first character.
 
 #![expect(
+    clippy::string_slice,
+    reason = "a test: a slice off a char boundary panics, and a panic is a failed test"
+)]
+#![expect(
     clippy::unwrap_used,
     clippy::cast_possible_truncation,
     reason = "test helpers: a panic fails the test, and the texts are short"

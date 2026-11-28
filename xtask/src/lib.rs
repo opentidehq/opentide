@@ -4,12 +4,6 @@
 //! The library holds what the commands compute, so that tests drive it
 //! without a workspace or a subprocess; `main.rs` reads the inputs and prints.
 
-// Slicing a `str` by byte index panics off a char boundary, and this crate
-// reads the repository's files and tools' output: every slice is checked or
-// says why it is safe (#1946; the lint moves to `[workspace.lints]` once every
-// crate is clean).
-#![warn(clippy::string_slice)]
-
 pub mod astgen;
 pub mod bench;
 pub mod cassettes;

@@ -16,10 +16,6 @@
     clippy::too_many_lines,
     reason = "engine dispatchers match every node kind in one function"
 )]
-// Slicing a `str` by byte index panics off a char boundary, and this crate
-// reads user documents: every slice is checked or says why it is safe
-// (#1946; the lint moves to `[workspace.lints]` once every crate is clean).
-#![warn(clippy::string_slice)]
 
 mod bitdefender;
 mod elastic;

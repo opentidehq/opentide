@@ -6,6 +6,11 @@
 //! corpus yet: the SPL grammar still reports `spl_parse_error` on these
 //! operators.
 
+#![expect(
+    clippy::string_slice,
+    reason = "a test: a slice off a char boundary panics, and a panic is a failed test"
+)]
+
 use opentide_analysis::{AnalyzeRequest, MemoryWorkspace, analyze};
 use opentide_core::{Diagnostic, LanguageId, Severity, codes};
 use std::path::PathBuf;

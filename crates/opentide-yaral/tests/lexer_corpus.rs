@@ -2,6 +2,11 @@
 //! has no error token, and the highlight keyword table names every reserved
 //! word.
 
+#![expect(
+    clippy::string_slice,
+    reason = "a test: a slice off a char boundary panics, and a panic is a failed test"
+)]
+
 use opentide_yaral::{lexer, syntax};
 use std::path::{Path, PathBuf};
 use syntax::SyntaxKind as K;

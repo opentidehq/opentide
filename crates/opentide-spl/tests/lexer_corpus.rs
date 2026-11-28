@@ -2,6 +2,11 @@
 //! losslessly, a valid one without an error token, and so does every prefix
 //! of one. (Reading files is the tests' job: `src/` is I/O-free.)
 
+#![expect(
+    clippy::string_slice,
+    reason = "a test: a slice off a char boundary panics, and a panic is a failed test"
+)]
+
 use opentide_spl::syntax::{SyntaxKind as K, lex};
 
 /// Every `.spl` file under the test data, with whether it is meant to

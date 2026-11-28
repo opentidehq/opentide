@@ -2,6 +2,11 @@
 //! table is a token of the lexer, and the lexer cuts no other fixed token (an operator, a
 //! bracket, a delimiter, a sigil) the table lacks.
 
+#![expect(
+    clippy::string_slice,
+    reason = "a test: a slice off a char boundary panics, and a panic is a failed test"
+)]
+
 use opentide_cql::{lexer, syntax};
 
 use opentide_core::LanguageId;

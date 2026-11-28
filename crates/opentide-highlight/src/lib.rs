@@ -10,10 +10,6 @@
     missing_docs,
     reason = "imported from language-server with public items undocumented: crates/AGENTS.md, Lints"
 )]
-// Slicing a `str` by byte index panics off a char boundary, and this crate
-// reads user text: every slice is checked or says why it is safe (#1946;
-// the lint moves to `[workspace.lints]` once every crate is clean).
-#![warn(clippy::string_slice)]
 
 mod engine;
 mod function_names;

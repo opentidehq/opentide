@@ -4,6 +4,11 @@
 //! what the tree's errors say (#1571, ADR 0014 §4). The engine crate reads
 //! no file (`scripts/engine/check-io-free.sh`); this test reads the corpus.
 
+#![expect(
+    clippy::string_slice,
+    reason = "a test: a slice off a char boundary panics, and a panic is a failed test"
+)]
+
 use std::path::Path;
 
 fn texts() -> Vec<String> {

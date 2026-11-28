@@ -6,6 +6,10 @@
 //! `OPENTIDE_REPLAY_FIXTURES` ([`generated`]).
 
 #![allow(dead_code, reason = "each test binary uses part of the helpers")]
+#![expect(
+    clippy::string_slice,
+    reason = "a test: a slice off a char boundary panics, and a panic is a failed test"
+)]
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};

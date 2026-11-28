@@ -4,6 +4,11 @@
 //! file's count differs from the number of rows the listing gives it, so the
 //! listing cannot fall behind the code.
 
+#![expect(
+    clippy::string_slice,
+    reason = "a test: a slice off a char boundary panics, and a panic is a failed test"
+)]
+
 use std::collections::BTreeMap;
 use std::error::Error;
 use std::path::{Path, PathBuf};

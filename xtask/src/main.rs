@@ -4,12 +4,6 @@
 //! command is not implemented yet, 2 on a usage error or when the check could
 //! not run (no `cargo metadata`, an unreadable file).
 
-// Slicing a `str` by byte index panics off a char boundary, and this crate
-// reads the repository's files and tools' output: every slice is checked or
-// says why it is safe (#1946; the lint moves to `[workspace.lints]` once every
-// crate is clean).
-#![warn(clippy::string_slice)]
-
 use anyhow::{Context, Result, bail};
 use clap::{Args, Parser, Subcommand};
 use std::ffi::OsString;
