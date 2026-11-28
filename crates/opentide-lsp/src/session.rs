@@ -324,8 +324,9 @@ pub(crate) fn root_key(path: &str) -> String {
 pub(crate) enum Sighting {
     /// The root had this catalog already.
     Same,
-    /// The first catalog the root has had: what an analysis read before it
-    /// was the engine's compiled-in snapshot.
+    /// The first catalog the root has had, and it holds something else than
+    /// the engine's compiled-in snapshot, which is what an analysis read
+    /// before it.
     First,
     /// Another catalog than the root had: every analysis of it reads it.
     Changed,
@@ -385,8 +386,11 @@ pub(crate) struct CatalogSightings(HashMap<Option<usize>, Arc<opentide_analysis:
 
 impl CatalogSightings {
     /// `installed` is what the engine has installed (what the analyses made
-    /// so far read): a root whose catalog is that is not a root whose
-    /// analyses change, however it is the first the session sees of it.
+    /// so far read; `None`: its compiled-in snapshot): a root whose catalog
+    /// is that is not a root whose analyses change, however it is the first
+    /// the session sees of it. The bundled configuration's catalogs, which
+    /// arrive from the warm-up thread, are the compiled-in snapshot but for
+    /// their version label (#2169).
     pub(crate) fn saw(
         &mut self,
         root: Option<usize>,
@@ -402,7 +406,7 @@ impl CatalogSightings {
             known => {
                 let first = known.is_none();
                 self.0.insert(root, Arc::clone(catalog));
-                if first && installed.is_some_and(same) {
+                if first && installed.map_or_else(|| crate::models::is_compiled_in(catalog), same) {
                     Sighting::Same
                 } else if first {
                     Sighting::First
