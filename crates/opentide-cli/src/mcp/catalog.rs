@@ -12,7 +12,7 @@ use opentide_workspace::coverage::{match_technique, rule_technique_index, techni
 use opentide_workspace::{Index, Workspace, fields};
 
 use super::tools::{Context, next_action, validation_next_actions};
-use crate::json::Json;
+use crate::json::{Json, Object};
 
 /// The object families the catalogue tools read, in the order they search them.
 pub const FAMILIES: [&str; 3] = ["rule", "threat", "objective"];
@@ -566,38 +566,38 @@ pub fn get_chaining(index: &Index, uuid: &str, depth: usize) -> Json {
     // Only the chaining relations: an object without one has `lineage` for
     // its graph, and repeating it under every member made the answer grow
     // with the square of the lineage.
-    let chaining_index: Vec<(String, Json)> = index
+    let chaining_index: Object = index
         .chaining
         .iter()
         .filter(|(uuid, relation)| !relation.is_empty() && present.contains(*uuid))
         .map(|(uuid, relation)| (uuid.clone(), narrow_relation(relation)))
         .collect();
-    let mut payload = vec![
+    let mut payload = Object::from([
         ("uuid".to_owned(), Json::str(node.uuid)),
         ("found".to_owned(), Json::Bool(true)),
         ("type".to_owned(), Json::str(node.family)),
         ("graph".to_owned(), graph),
-        ("chaining_index".to_owned(), Json::object(chaining_index)),
-    ];
+        ("chaining_index".to_owned(), Json::Object(chaining_index)),
+    ]);
     if let Some(signal) = resolved_from {
-        payload.push((
+        payload.insert(
             "resolved_from".to_owned(),
             Json::object([("type", Json::str("signal")), ("uuid", Json::str(signal))]),
-        ));
+        );
     }
     if let Some(lineage) = &lineage {
-        payload.push(("lineage".to_owned(), lineage_json(lineage)));
+        payload.insert("lineage".to_owned(), lineage_json(lineage));
     }
     if truncated {
-        payload.push(("truncated".to_owned(), Json::Bool(true)));
-        payload.push((
+        payload.insert("truncated".to_owned(), Json::Bool(true));
+        payload.insert(
             "hint".to_owned(),
             Json::str(format!(
                 "The lineage goes on beyond {depth} hop(s): call get_chaining again with a larger depth to follow it."
             )),
-        ));
+        );
     }
-    Json::object(payload)
+    Json::Object(payload)
 }
 
 fn strings(items: impl IntoIterator<Item = String>) -> Json {
@@ -665,7 +665,7 @@ fn platform_state(
     block: Option<&Node>,
     external_ids: Option<&IndexMap<String, String>>,
 ) -> Json {
-    let ids: Vec<(String, Json)> = external_ids
+    let ids: Object = external_ids
         .map(|ids| {
             ids.iter()
                 .map(|(tenant, id)| (tenant.clone(), Json::str(id)))
@@ -679,34 +679,33 @@ fn platform_state(
         Some(Value::Seq(items)) => items.iter().map(|item| node_json(item)).collect(),
         _ => Vec::new(),
     };
-    let rule_id = if ids.len() == 1 {
-        ids[0].1.clone()
-    } else {
-        Json::Null
+    let rule_id = match ids.values().next() {
+        Some(id) if ids.len() == 1 => id.clone(),
+        _ => Json::Null,
     };
-    let mut state = vec![
+    let mut state = Object::from([
         (
             "deployed".to_owned(),
             Json::Bool(!ids.is_empty() || !tenants.is_empty()),
         ),
         ("rule_id".to_owned(), rule_id),
-        ("external_ids".to_owned(), Json::object(ids)),
+        ("external_ids".to_owned(), Json::Object(ids)),
         ("tenants".to_owned(), Json::Array(tenants)),
-    ];
+    ]);
     // A platform that addresses its rules without a vendor id has no state to
     // read: a deploy leaves no trace here, and `deployed` only says the rule's
     // block names tenants.
     if opentide_schema::platforms::external_id_kind(name)
         == opentide_schema::platforms::ExternalId::None
     {
-        state.push(("note".to_owned(), Json::Str(format!(
+        state.insert("note".to_owned(), Json::Str(format!(
             "opentide records no deployment state for {name}: it addresses its rules without a vendor id, \
              so a deploy leaves nothing here and deployed only says the rule's block names tenants. \
              Ask the tenant: validate_query or run_query with live true; deploy_rule with dry_run true \
              previews what a deploy sends."
-        ))));
+        )));
     }
-    Json::object(state)
+    Json::Object(state)
 }
 
 /// `deployment_status`: where the rule `uuid` is deployed.
@@ -735,7 +734,7 @@ pub fn deployment_status(workspace: &Workspace, uuid: &str) -> Json {
                 ])),
             ),
         };
-    let mut platforms: Vec<(String, Json)> = Vec::new();
+    let mut platforms = Object::new();
     // The platform blocks: `configurations`, else the legacy `platforms`,
     // whichever is a table with a block in it. A value of any other type
     // holds no block, so it does not hide the other key.
@@ -752,26 +751,24 @@ pub fn deployment_status(workspace: &Workspace, uuid: &str) -> Json {
         for entry in blocks {
             let name = entry.key.value.to_string();
             let block = matches!(entry.value.value, Value::Map(_)).then_some(entry.value.as_ref());
-            platforms.push((
-                name.clone(),
-                platform_state(&name, block, recorded.get(&name)),
-            ));
+            let state = platform_state(&name, block, recorded.get(&name));
+            platforms.insert(name, state);
         }
     }
     for (name, ids) in &recorded {
-        if !platforms.iter().any(|(key, _)| key == name) {
-            platforms.push((name.clone(), platform_state(name, None, Some(ids))));
+        if !platforms.contains_key(name) {
+            platforms.insert(name.clone(), platform_state(name, None, Some(ids)));
         }
     }
-    let mut payload = vec![
-        ("platforms".to_owned(), Json::object(platforms)),
+    let mut payload = Object::from([
+        ("platforms".to_owned(), Json::Object(platforms)),
         ("uuid".to_owned(), Json::str(uuid)),
         ("found".to_owned(), Json::Bool(true)),
-    ];
+    ]);
     if let Some(error) = state_error {
-        payload.push(("state_error".to_owned(), error));
+        payload.insert("state_error".to_owned(), error);
     }
-    Json::object(payload)
+    Json::Object(payload)
 }
 
 /// The platforms opentide knows (`Opentide.Platforms`), in the platform table's order.
