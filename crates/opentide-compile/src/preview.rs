@@ -588,31 +588,34 @@ fn sent_to(cx: &Context<'_>, platform: PlatformId, rule: &Rule, tenant: &str) ->
 /// deploy reads beside it, compiled as the deploy compiles it
 /// ([`GoogleSecops`]) for each tenant the run sends the rule to, with that
 /// tenant's modifiers, so a tenant whose modifiers break the rule fails the
-/// dry run. The body shown is the first tenant's, and the entry names that
-/// `tenant`. With no tenant, it is [`preview`]'s.
+/// dry run, naming that tenant. The body shown is the first tenant's, and
+/// the entry names that `tenant`. With no tenant, it is [`preview`]'s.
 fn google_secops_preview(cx: &Context<'_>, rule: &Rule, tenants: &[String]) -> Json {
     let reached: Vec<&str> = tenants
         .iter()
         .map(String::as_str)
         .filter(|name| deploy::tenant(cx, &PlatformId::GoogleSecops.into(), name).is_some())
         .collect();
-    let Some(first) = reached.first() else {
+    let Some((first, rest)) = reached.split_first() else {
         return preview(cx, &PlatformId::GoogleSecops.into(), rule);
     };
-    let mut shown = None;
-    for name in &reached {
+    let compile = |name: &str| {
         let sent = sent_to(cx, PlatformId::GoogleSecops, rule, name);
-        match GoogleSecops::compile(cx, &sent, ()) {
-            Ok(payload) => {
-                shown.get_or_insert(payload);
-            }
-            Err(error) => return failure(rule, &error),
+        GoogleSecops::compile(cx, &sent, ()).map_err(|mut error| {
+            error.reason = format!("{} (tenant '{name}')", error.reason);
+            error
+        })
+    };
+    let shown = match compile(first) {
+        Ok(payload) => payload,
+        Err(error) => return failure(rule, &error),
+    };
+    for name in rest {
+        if let Err(error) = compile(name) {
+            return failure(rule, &error);
         }
     }
-    let mut entry = compiled(
-        rule,
-        shown.map_or(Json::Null, |payload| GoogleSecops::body(&payload)),
-    );
+    let mut entry = compiled(rule, GoogleSecops::body(&shown));
     if let Json::Object(fields) = &mut entry {
         fields.insert("tenant".into(), (*first).into());
     }
