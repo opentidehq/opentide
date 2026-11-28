@@ -249,7 +249,8 @@ pub struct Summary {
     pub load_errors: usize,
 }
 
-/// The catalogue.
+/// The workspace's objects and the links between them, as `info catalog`
+/// lists them.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[non_exhaustive]
 pub struct Catalogue {

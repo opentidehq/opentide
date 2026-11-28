@@ -36,7 +36,7 @@ const VOCAB_SHAPE_ERRORS: [&str; 2] = ["vocab_list_type", "vocab_packed_names"];
 /// What the per-object checks read about the whole workspace, built once
 /// per run (`PreflightGraph`).
 pub struct Graph<'a> {
-    /// The index.
+    /// The workspace's loaded objects.
     pub index: &'a Index,
     /// The bundled vocabularies and the workspace's object vocabularies.
     pub vocabularies: Vocabularies,
