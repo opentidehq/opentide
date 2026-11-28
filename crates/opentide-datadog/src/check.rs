@@ -525,7 +525,10 @@ fn shorten(text: &str) -> String {
         .unwrap_or("");
     let one_line: String = prefix.split_whitespace().collect::<Vec<_>>().join(" ");
     match one_line.char_indices().nth(40) {
-        Some((at, _)) => format!("{}…", &one_line[..at]),
+        Some((at, _)) => format!(
+            "{}…",
+            one_line.split_at_checked(at).map_or("", |(head, _)| head)
+        ),
         None => one_line,
     }
 }
