@@ -1,6 +1,7 @@
 //! Google Security Operations' sender (`GoogleSecopsDeploy`): the [`Sender`]
 //! methods that deploy the rules of `--platform google_secops`.
 
+use opentide_compile::compiler::{Compiler, GoogleSecops};
 use opentide_connectors::connector::{
     DeployError, DeployFailure, DeployOutcome, DeployRequest, DeployScope, Deployer,
 };
@@ -153,10 +154,10 @@ impl Sender<'_, '_> {
             }
         };
         // The plan's payload: the text, and the run state, run
-        // frequency and sections the deploy reads beside it.
-        let payload = match opentide_compile::google_secops::compile_deployment(self.compile, rule)
-        {
-            Ok(payload) => payload,
+        // frequency and sections the deploy reads beside it. The dry run's
+        // compile ([`Compiler`]), so it shows this payload.
+        let payload = match GoogleSecops::compile(self.compile, rule, ()) {
+            Ok(compiled) => GoogleSecops::body(&compiled),
             Err(error) => {
                 tracing::error!(
                     uuid = rule.uuid.as_str(),
