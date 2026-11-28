@@ -198,11 +198,14 @@ fn batch_of<T: DeserializeOwned>(
 /// The preamble does not deserialise as `T`, or the text is not in the form
 /// the module describes.
 pub fn preamble<T: DeserializeOwned>(text: &str) -> Result<T, CatalogError> {
-    // Headers start their line: the preamble ends at the first `[[`.
+    // Headers start their line: the preamble ends at the first `[[`, and
+    // keeps the `\n` before it, so a CRLF line ending stays whole.
     let head = if text.starts_with("[[") {
         ""
     } else {
-        text.split_once("\n[[").map_or(text, |(head, _)| head)
+        memchr::memmem::find(text.as_bytes(), b"\n[[")
+            .and_then(|at| text.get(..=at))
+            .unwrap_or(text)
     };
     let mut body = String::new();
     each_line(head, |line, _, kind| {
@@ -475,6 +478,24 @@ mod tests {
             array_items::<toml::Value>(&crlf, "t").unwrap(),
             array_items::<toml::Value>(TEXT, "t").unwrap()
         );
+    }
+
+    /// A CRLF catalog's preamble reads as the same text with LF: the line
+    /// before the first `[[` keeps its whole line ending, never a bare `\r`.
+    #[test]
+    fn a_crlf_preamble_reads_as_lf() {
+        #[derive(Debug, serde::Deserialize, PartialEq)]
+        struct Preamble {
+            classes: Vec<String>,
+            name: String,
+        }
+        let lf = "# c\nclasses = [\"é\", \"😀\"]\nname = \"x\"\n[[t]]\nk = 1\n";
+        let crlf = lf.replace('\n', "\r\n");
+        let from_lf: Preamble = preamble(lf).unwrap();
+        let from_crlf: Preamble = preamble(&crlf).unwrap();
+        assert_eq!(from_crlf, from_lf);
+        assert_eq!(from_lf.classes, ["é", "😀"]);
+        assert_eq!(from_lf.name, "x");
     }
 
     /// The preamble may hold values over several lines and tables before
