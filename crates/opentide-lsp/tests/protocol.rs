@@ -4533,6 +4533,11 @@ fn a_keystroke_runs_the_engine_on_the_object_it_changed_alone() {
             "capabilities": watching_relative(),
             "rootUri": file_uri(&scratch.0)
         }));
+        // The bundled configuration's catalogs come from the warm-up
+        // thread; installed after the first pulls, they are a new
+        // environment, and the keystroke would run the engine on every
+        // object again (#2164). The counts start with them in place.
+        lsp.request("opentide/__catalogs", Value::Null);
         for (uri, text) in texts {
             open(&mut lsp, uri, "opentide-yaml", text);
         }
