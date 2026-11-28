@@ -63,7 +63,6 @@ crates/opentide-cli/tests/harfanglab_yara.rs validate_and_lint_report_what_0_28_
 crates/opentide-cli/tests/interrupt.rs ctrl_c_during_a_tenant_query_stops_the_run_with_interrupted_and_130
 crates/opentide-cli/tests/query.rs calls_that_cannot_run_are_refused_with_the_value_at_fault
 crates/opentide-cli/tests/render.rs render_ci_sinks_escaping_caps_and_summaries
-crates/opentide-compile/src/dry_run.rs run
 crates/opentide-compile/src/elastic.rs compile
 crates/opentide-compile/src/generate/visibility.rs report
 crates/opentide-compile/src/git.rs diff_range

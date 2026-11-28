@@ -3,6 +3,11 @@
 //! with its capture, and no bracket or delimiter is highlighted that the
 //! table (the TextMate grammar's input) does not list.
 
+#![expect(
+    clippy::string_slice,
+    reason = "a test: a slice off a char boundary panics, and a panic is a failed test"
+)]
+
 use opentide_core::LanguageId;
 use opentide_falco::highlight_captures;
 use opentide_highlight::keywords;

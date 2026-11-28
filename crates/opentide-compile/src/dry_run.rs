@@ -350,7 +350,11 @@ fn config_path(fs: &dyn FileSystem, workspace: &Workspace, platform: &str) -> St
 
 /// Runs a dry run. `changed` answers the rule files the run changed;
 /// `is_set` whether an environment variable is set.
-#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
+#[expect(
+    clippy::too_many_lines,
+    reason = "the dry run's outcome built key by key in the payload's order; each step that \
+              computes is a helper (#1959)"
+)]
 pub fn run(
     workspace: &Workspace,
     owned: &Owned,
@@ -359,88 +363,18 @@ pub fn run(
     is_set: &dyn Fn(&str) -> bool,
 ) -> Outcome {
     let fs = workspace.fs().as_ref();
-    if let Some(value) = request
-        .removed_plan
-        .as_deref()
-        .filter(|value| !value.trim().is_empty())
-    {
-        return Outcome::usage(
-            strategy::removed_plan_message(Some(value), false),
-            Usage {
-                code: "usage_invalid_value",
-                argument: None,
-                suggestion: None,
-            },
-        );
-    }
-    if request.strategies.is_empty() {
-        return Outcome::usage(
-            STRATEGY_REQUIRED.to_owned(),
-            Usage {
-                code: "usage_missing_option",
-                argument: Some("--strategy"),
-                suggestion: None,
-            },
-        );
-    }
-    let runs: RunStrategies =
-        match strategy::parse_strategies(&request.strategies, &owned.statuses, "--strategy") {
-            Ok(runs) => runs,
-            Err(message) => {
-                return Outcome::usage(
-                    message,
-                    Usage {
-                        code: "usage_invalid_choice",
-                        argument: Some("--strategy"),
-                        suggestion: strategy_suggestion(&request.strategies),
-                    },
-                );
-            }
-        };
+    let runs = match run_strategies(request, owned) {
+        Ok(runs) => runs,
+        Err(outcome) => return *outcome,
+    };
     let (rules_dir, folder) = rules_folder(workspace);
-    let local = plan::local_scope(fs, &rules_dir, &folder);
     let selecting = !request.uuids.is_empty() || !request.files.is_empty();
     let reads_changes = !selecting && !request.all;
-    let mut no_commits: Option<String> = None;
-    let scope = if selecting {
-        let (scope, unmatched) = selected_scope(fs, workspace, &local, request, &request.cwd);
-        if !unmatched.is_empty() {
-            let mut outcome = Outcome::failed(
-                format!(
-                    "No rule file directly in {folder} matched: {}",
-                    unmatched.join(", ")
-                ),
-                1,
-            );
-            outcome.payload.insert("scope".into(), "selected".into());
-            outcome.payload.insert("unmatched".into(), unmatched.into());
-            outcome.payload.insert("dry_run".into(), Json::Bool(true));
-            return outcome;
-        }
-        scope
-    } else if request.all {
-        local
-    } else {
-        match changed(&rules_dir, &folder) {
-            Ok((scope, warning)) => {
-                no_commits = warning;
-                scope
-            }
-            Err(ScopeError { message, exit_code }) => {
-                let mut outcome = Outcome::failed(message, exit_code);
-                let mut own = Vec::new();
-                let mut warnings = Vec::new();
-                finish_failure(
-                    &mut outcome,
-                    workspace,
-                    &request.cwd,
-                    &mut warnings,
-                    &mut own,
-                );
-                return outcome;
-            }
-        }
-    };
+    let (scope, no_commits) =
+        match run_scope(workspace, request, changed, &rules_dir, &folder, selecting) {
+            Ok(read) => read,
+            Err(outcome) => return *outcome,
+        };
     // The commits changed no rule file: say so, rather than blame a status.
     let unchanged = reads_changes && scope.files.is_empty() && scope.nested.is_empty();
     let enabled = plan::enabled_with(
@@ -584,109 +518,17 @@ pub fn run(
         })
         .collect::<Vec<_>>()
         .join("; ");
-    // Tenants each rule reaches, per platform with tenants.
-    let mut targets: IndexMap<String, IndexMap<String, Vec<String>>> = IndexMap::new();
-    // The rules no tenant of a platform takes, as the deploy skips them:
-    // (platform, uuid, reason).
-    let mut unrouted: Vec<(String, String, String)> = Vec::new();
-    for (platform, uuids) in &deployment {
-        if tenantless.contains(&platform) {
-            continue;
-        }
-        let tenants: Vec<Tenant> = plan::tenants(&config, &PlatformKey::new(platform))
-            .into_iter()
-            .map(Tenant::from_json)
-            .collect();
-        let mut per_tenant: IndexMap<String, Vec<String>> = IndexMap::new();
-        for uuid in uuids {
-            let Some(rule) = index.get("rule", uuid).and_then(|object| object.root()) else {
-                continue;
-            };
-            let block = Json::from_node(rule)
-                .get("configurations")
-                .and_then(|configurations| configurations.get(platform))
-                .cloned()
-                .unwrap_or(Json::Null);
-            let status = block
-                .get("status")
-                .and_then(Json::as_str)
-                .unwrap_or_default();
-            let Ok(strategy) = owned.statuses.strategy(status) else {
-                continue;
-            };
-            let routed = plan::rule_tenants(&tenants, &block, strategy, &runs, request.wide);
-            if routed.is_empty() {
-                unrouted.push((
-                    platform.clone(),
-                    crate::rule::canonical_uuid(uuid),
-                    plan::unrouted_reason(
-                        platform,
-                        &tenants,
-                        &block,
-                        status,
-                        strategy,
-                        &runs,
-                        request.wide,
-                    ),
-                ));
-            }
-            for tenant in routed {
-                per_tenant
-                    .entry(tenant.name.clone())
-                    .or_default()
-                    .push(crate::rule::canonical_uuid(uuid));
-            }
-        }
-        targets.insert(platform.clone(), per_tenant);
-    }
+    let (targets, unrouted) = route(
+        workspace,
+        owned,
+        &config,
+        &deployment,
+        &tenantless,
+        &runs,
+        request.wide,
+    );
     let workspace_root = workspace.root().to_path_buf();
-    let mut planned: Vec<Change> = Vec::new();
-    for (platform, uuids) in &deployment {
-        // A platform whose tenants were resolved plans what they take; a
-        // rule none takes is reported as the deploy skips it (#1653).
-        let pairs: Vec<(Option<String>, String)> = match targets.get(platform) {
-            Some(tenants) => tenants
-                .iter()
-                .flat_map(|(tenant, ids)| ids.iter().map(|id| (Some(tenant.clone()), id.clone())))
-                .collect(),
-            None => uuids.iter().map(|uuid| (None, uuid.clone())).collect(),
-        };
-        for (tenant, uuid) in pairs {
-            let data = index
-                .get("rule", &uuid)
-                .and_then(|object| object.root())
-                .map(Json::from_node);
-            let name = data
-                .as_ref()
-                .and_then(|data| data.get("name"))
-                .and_then(Json::as_str)
-                .unwrap_or(&uuid)
-                .to_owned();
-            let status = data
-                .as_ref()
-                .and_then(|data| data.get("configurations"))
-                .and_then(|configurations| configurations.get(platform))
-                .and_then(|block| block.get("status"))
-                .and_then(Json::as_str)
-                .unwrap_or_default()
-                .to_owned();
-            let known = || match &tenant {
-                Some(tenant) => plan::state_id(fs, &workspace_root, &uuid, platform, tenant),
-                None => None,
-            };
-            let action = plan::action(&owned.statuses, platform, tenant.is_some(), &status, &known);
-            planned.push(Change {
-                platform: platform.clone(),
-                tenant,
-                uuid,
-                name,
-                status,
-                action,
-                fails: false,
-                retired: false,
-            });
-        }
-    }
+    let mut planned = planned_changes(workspace, owned, &deployment, &targets);
     let tenant_count: usize = targets.values().map(IndexMap::len).sum();
     let mut payloads = Object::new();
     let mut deployed: Vec<String> = Vec::new();
@@ -781,46 +623,14 @@ pub fn run(
         ));
     }
     if !unrouted.is_empty() {
-        payload.insert(
-            "unrouted".into(),
-            Json::Array(
-                unrouted
-                    .iter()
-                    .map(|(platform, uuid, reason)| {
-                        let mut entry = Object::new();
-                        entry.insert("platform".into(), platform.clone().into());
-                        entry.insert("uuid".into(), uuid.clone().into());
-                        entry.insert("reason".into(), reason.clone().into());
-                        Json::Object(entry)
-                    })
-                    .collect(),
-            ),
-        );
+        payload.insert("unrouted".into(), unrouted_json(&unrouted));
     }
     if !own_warnings.is_empty() {
         payload.insert("warnings".into(), own_warnings.clone().into());
     }
     payload.insert("strategies".into(), run_names.into());
     payload.insert("payloads".into(), Json::Object(payloads));
-    payload.insert(
-        "tenants".into(),
-        Json::Object(
-            targets
-                .iter()
-                .map(|(platform, tenants)| {
-                    (
-                        platform.clone(),
-                        Json::Object(
-                            tenants
-                                .iter()
-                                .map(|(tenant, ids)| (tenant.clone(), Json::from(ids.clone())))
-                                .collect(),
-                        ),
-                    )
-                })
-                .collect(),
-        ),
-    );
+    payload.insert("tenants".into(), tenants_json(&targets));
     if !missing.is_empty() {
         payload.insert("missing_tenants".into(), Json::Object(missing));
         payload.insert("advice".into(), advice.into());
@@ -868,6 +678,274 @@ pub fn run(
         outcome.payload.insert("detail".into(), detail.into());
     }
     outcome
+}
+
+/// The rule files the run reads, and the warning of a change range that has
+/// no commits: the selected files (`--uuid`, `--file`), every rule file
+/// (`--all`), or the files the commits changed. A selection that matches no
+/// file, or changes that cannot be read, is the run's failed outcome.
+fn run_scope(
+    workspace: &Workspace,
+    request: &Request,
+    changed: ChangedScope<'_>,
+    rules_dir: &Path,
+    folder: &str,
+    selecting: bool,
+) -> Result<(Scope, Option<String>), Box<Outcome>> {
+    let fs = workspace.fs().as_ref();
+    let local = plan::local_scope(fs, rules_dir, folder);
+    let mut no_commits: Option<String> = None;
+    let scope = if selecting {
+        let (scope, unmatched) = selected_scope(fs, workspace, &local, request, &request.cwd);
+        if !unmatched.is_empty() {
+            let mut outcome = Outcome::failed(
+                format!(
+                    "No rule file directly in {folder} matched: {}",
+                    unmatched.join(", ")
+                ),
+                1,
+            );
+            outcome.payload.insert("scope".into(), "selected".into());
+            outcome.payload.insert("unmatched".into(), unmatched.into());
+            outcome.payload.insert("dry_run".into(), Json::Bool(true));
+            return Err(Box::new(outcome));
+        }
+        scope
+    } else if request.all {
+        local
+    } else {
+        match changed(rules_dir, folder) {
+            Ok((scope, warning)) => {
+                no_commits = warning;
+                scope
+            }
+            Err(ScopeError { message, exit_code }) => {
+                let mut outcome = Outcome::failed(message, exit_code);
+                let mut own = Vec::new();
+                let mut warnings = Vec::new();
+                finish_failure(
+                    &mut outcome,
+                    workspace,
+                    &request.cwd,
+                    &mut warnings,
+                    &mut own,
+                );
+                return Err(Box::new(outcome));
+            }
+        }
+    };
+    Ok((scope, no_commits))
+}
+
+/// The run's strategies, or the usage error that refuses the request: the
+/// removed plan variable set, no `--strategy`, or a `--strategy` that names
+/// no strategy.
+fn run_strategies(request: &Request, owned: &Owned) -> Result<RunStrategies, Box<Outcome>> {
+    if let Some(value) = request
+        .removed_plan
+        .as_deref()
+        .filter(|value| !value.trim().is_empty())
+    {
+        return Err(Box::new(Outcome::usage(
+            strategy::removed_plan_message(Some(value), false),
+            Usage {
+                code: "usage_invalid_value",
+                argument: None,
+                suggestion: None,
+            },
+        )));
+    }
+    if request.strategies.is_empty() {
+        return Err(Box::new(Outcome::usage(
+            STRATEGY_REQUIRED.to_owned(),
+            Usage {
+                code: "usage_missing_option",
+                argument: Some("--strategy"),
+                suggestion: None,
+            },
+        )));
+    }
+    strategy::parse_strategies(&request.strategies, &owned.statuses, "--strategy").map_err(
+        |message| {
+            Box::new(Outcome::usage(
+                message,
+                Usage {
+                    code: "usage_invalid_choice",
+                    argument: Some("--strategy"),
+                    suggestion: strategy_suggestion(&request.strategies),
+                },
+            ))
+        },
+    )
+}
+
+/// The change each rule makes on each tenant its platform reaches (`targets`),
+/// or on its platform alone when the platform has no tenants: the action read
+/// from its status and the id deployment state records.
+fn planned_changes(
+    workspace: &Workspace,
+    owned: &Owned,
+    deployment: &IndexMap<String, Vec<String>>,
+    targets: &IndexMap<String, IndexMap<String, Vec<String>>>,
+) -> Vec<Change> {
+    let fs = workspace.fs().as_ref();
+    let index = workspace.index();
+    let workspace_root = workspace.root().to_path_buf();
+    let mut planned: Vec<Change> = Vec::new();
+    for (platform, uuids) in deployment {
+        // A platform whose tenants were resolved plans what they take; a
+        // rule none takes is reported as the deploy skips it (#1653).
+        let pairs: Vec<(Option<String>, String)> = match targets.get(platform) {
+            Some(tenants) => tenants
+                .iter()
+                .flat_map(|(tenant, ids)| ids.iter().map(|id| (Some(tenant.clone()), id.clone())))
+                .collect(),
+            None => uuids.iter().map(|uuid| (None, uuid.clone())).collect(),
+        };
+        for (tenant, uuid) in pairs {
+            let data = index
+                .get("rule", &uuid)
+                .and_then(|object| object.root())
+                .map(Json::from_node);
+            let name = data
+                .as_ref()
+                .and_then(|data| data.get("name"))
+                .and_then(Json::as_str)
+                .unwrap_or(&uuid)
+                .to_owned();
+            let status = data
+                .as_ref()
+                .and_then(|data| data.get("configurations"))
+                .and_then(|configurations| configurations.get(platform))
+                .and_then(|block| block.get("status"))
+                .and_then(Json::as_str)
+                .unwrap_or_default()
+                .to_owned();
+            let known = || match &tenant {
+                Some(tenant) => plan::state_id(fs, &workspace_root, &uuid, platform, tenant),
+                None => None,
+            };
+            let action = plan::action(&owned.statuses, platform, tenant.is_some(), &status, &known);
+            planned.push(Change {
+                platform: platform.clone(),
+                tenant,
+                uuid,
+                name,
+                status,
+                action,
+                fails: false,
+                retired: false,
+            });
+        }
+    }
+    planned
+}
+
+/// The payload's `unrouted`: each rule no tenant of its platform takes, with
+/// why.
+fn unrouted_json(unrouted: &[(String, String, String)]) -> Json {
+    Json::Array(
+        unrouted
+            .iter()
+            .map(|(platform, uuid, reason)| {
+                let mut entry = Object::new();
+                entry.insert("platform".into(), platform.clone().into());
+                entry.insert("uuid".into(), uuid.clone().into());
+                entry.insert("reason".into(), reason.clone().into());
+                Json::Object(entry)
+            })
+            .collect(),
+    )
+}
+
+/// The payload's `tenants`: per platform, the rules each tenant takes.
+fn tenants_json(targets: &IndexMap<String, IndexMap<String, Vec<String>>>) -> Json {
+    Json::Object(
+        targets
+            .iter()
+            .map(|(platform, tenants)| {
+                (
+                    platform.clone(),
+                    Json::Object(
+                        tenants
+                            .iter()
+                            .map(|(tenant, ids)| (tenant.clone(), Json::from(ids.clone())))
+                            .collect(),
+                    ),
+                )
+            })
+            .collect(),
+    )
+}
+
+/// [`route`]'s answer: the tenants each rule reaches, per platform, and the
+/// rules no tenant takes, with why.
+type Routes = (
+    IndexMap<String, IndexMap<String, Vec<String>>>,
+    Vec<(String, String, String)>,
+);
+
+/// Tenants each rule reaches, per platform with tenants, and the rules no
+/// tenant of a platform takes, as the deploy skips them: (platform, uuid,
+/// reason). A tenantless platform is in neither.
+fn route(
+    workspace: &Workspace,
+    owned: &Owned,
+    config: &Json,
+    deployment: &IndexMap<String, Vec<String>>,
+    tenantless: &[&String],
+    runs: &RunStrategies,
+    wide: bool,
+) -> Routes {
+    let index = workspace.index();
+    // Tenants each rule reaches, per platform with tenants.
+    let mut targets: IndexMap<String, IndexMap<String, Vec<String>>> = IndexMap::new();
+    // The rules no tenant of a platform takes, as the deploy skips them:
+    // (platform, uuid, reason).
+    let mut unrouted: Vec<(String, String, String)> = Vec::new();
+    for (platform, uuids) in deployment {
+        if tenantless.contains(&platform) {
+            continue;
+        }
+        let tenants: Vec<Tenant> = plan::tenants(config, &PlatformKey::new(platform))
+            .into_iter()
+            .map(Tenant::from_json)
+            .collect();
+        let mut per_tenant: IndexMap<String, Vec<String>> = IndexMap::new();
+        for uuid in uuids {
+            let Some(rule) = index.get("rule", uuid).and_then(|object| object.root()) else {
+                continue;
+            };
+            let block = Json::from_node(rule)
+                .get("configurations")
+                .and_then(|configurations| configurations.get(platform))
+                .cloned()
+                .unwrap_or(Json::Null);
+            let status = block
+                .get("status")
+                .and_then(Json::as_str)
+                .unwrap_or_default();
+            let Ok(strategy) = owned.statuses.strategy(status) else {
+                continue;
+            };
+            let routed = plan::rule_tenants(&tenants, &block, strategy, runs, wide);
+            if routed.is_empty() {
+                unrouted.push((
+                    platform.clone(),
+                    crate::rule::canonical_uuid(uuid),
+                    plan::unrouted_reason(platform, &tenants, &block, status, strategy, runs, wide),
+                ));
+            }
+            for tenant in routed {
+                per_tenant
+                    .entry(tenant.name.clone())
+                    .or_default()
+                    .push(crate::rule::canonical_uuid(uuid));
+            }
+        }
+        targets.insert(platform.clone(), per_tenant);
+    }
+    (targets, unrouted)
 }
 
 /// What a dry run says of the Splunk saved searches it cannot see.

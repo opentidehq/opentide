@@ -143,13 +143,6 @@ impl Live {
     }
 }
 
-/// The envelope of a service's result built as keys in order, `_`-keys
-/// included ([`CommandResult::from_fields`]): `deploy`'s, until it builds a
-/// [`CommandResult`] itself (#1949).
-pub fn report_of(command: &str, result: &[(String, Json)]) -> Report {
-    CommandResult::from_fields(result).report(command)
-}
-
 /// The keys every live result starts with (its `status` aside).
 fn head(platform: Option<&str>) -> Vec<(String, Json)> {
     vec![
@@ -3188,7 +3181,7 @@ mod tests {
         ];
         assert_eq!(
             document_of(checked_result("splunk", &report, &reach, 5.0).report(COMMAND)),
-            document_of(report_of(COMMAND, &keys))
+            document_of(CommandResult::from_fields(&keys).report(COMMAND))
         );
         // A run that sent nothing: exit 2, `no_tenant_reached`.
         let keys: Vec<(String, Json)> = vec![
@@ -3212,7 +3205,7 @@ mod tests {
         ];
         assert_eq!(
             document_of(no_tenant_reached("é", 3, &runs, false).report(COMMAND)),
-            document_of(report_of(COMMAND, &keys))
+            document_of(CommandResult::from_fields(&keys).report(COMMAND))
         );
     }
 
@@ -3238,7 +3231,7 @@ mod tests {
         ];
         assert_eq!(
             document_of(refused.result("splunk").report(COMMAND)),
-            document_of(report_of(COMMAND, &keys))
+            document_of(CommandResult::from_fields(&keys).report(COMMAND))
         );
     }
 
@@ -3260,15 +3253,14 @@ mod tests {
             .map(|(k, _)| k.as_str())
             .collect();
         assert_eq!(keys, ["platform", "mode", "supported"]);
-        let skipped = report_of(
-            COMMAND,
-            &[
-                ("status".into(), Json::str("skipped")),
-                ("_exit_code".into(), Json::Int(2)),
-            ],
-        );
+        let skipped = CommandResult::from_fields(&[
+            ("status".into(), Json::str("skipped")),
+            ("_exit_code".into(), Json::Int(2)),
+        ])
+        .report(COMMAND);
         assert_eq!(skipped.outcome.failure.unwrap().code, "not_run");
-        let passed = report_of(COMMAND, &[("status".into(), Json::str("passed"))]);
+        let passed =
+            CommandResult::from_fields(&[("status".into(), Json::str("passed"))]).report(COMMAND);
         assert!(passed.outcome.failure.is_none());
         assert!(tenant_names(&[]).is_empty());
     }

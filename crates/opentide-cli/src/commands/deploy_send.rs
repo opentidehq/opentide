@@ -1269,39 +1269,21 @@ fn deploy(
     let seconds = started.elapsed().as_secs_f64();
     let results = log.results.clone();
     let platforms = order.len();
-    let common = |result: &mut Vec<(String, Json)>| {
-        result.push((
-            "deployed".into(),
-            Json::Array(deployed.iter().map(Json::str).collect()),
-        ));
-        result.push(("dry_run".into(), Json::Bool(false)));
-        result.push(("plan".into(), plan_payload.clone()));
+    let ran = Ran {
+        deployed,
+        plan: plan_payload,
+        strategies: run_names,
+        changes: Json::Array(
+            changes
+                .iter()
+                .map(|change| convert(&change.to_json()))
+                .collect(),
+        ),
+        results: Json::Array(results.iter().map(RuleResult::to_json).collect()),
+        summary: run_summary(&results, platforms, tenant_count, seconds),
     };
-    let changes_json = Json::Array(
-        changes
-            .iter()
-            .map(|change| convert(&change.to_json()))
-            .collect(),
-    );
-    let results_json = Json::Array(results.iter().map(RuleResult::to_json).collect());
     if let Some((system, raised)) = failure {
         let error = raised.error();
-        let mut result = vec![
-            ("status".to_owned(), Json::str("failed")),
-            (
-                "message".into(),
-                Json::str(format!("Deployment to {system} failed: {error}")),
-            ),
-        ];
-        common(&mut result);
-        result.push(("strategies".into(), run_names));
-        result.push(("changes".into(), changes_json));
-        result.push(("results".into(), results_json));
-        result.push((
-            "_summary".into(),
-            run_summary(&results, platforms, tenant_count, seconds),
-        ));
-        result.push(("_exit_code".into(), Json::Int(1)));
         // The rule the stop came on: its error is the stop's own (a rule
         // refused before it on the same platform is not the culprit).
         let culprit = results.iter().rev().find(|result| {
@@ -1309,26 +1291,12 @@ fn deploy(
                 && result.status == "failed"
                 && result.error.as_deref() == Some(raised.describe().as_str())
         });
-        if let Some(culprit) = culprit {
+        if culprit.is_some() {
             tracing::debug!(
                 system = system.as_str(),
                 detail = error.as_str(),
                 "platform_deployment_failed"
             );
-            set(
-                &mut result,
-                "message",
-                Json::str(outcome_message(&results, seconds, true)),
-            );
-            result.push((
-                "error".into(),
-                Json::str(format!(
-                    "Deployment to {system} failed on {}: {}",
-                    culprit.name,
-                    culprit.error.clone().unwrap_or_default()
-                )),
-            ));
-            result.push(("_failure_code".into(), Json::str(super::ISSUES_FOUND)));
         } else {
             tracing::error!(
                 system = system.as_str(),
@@ -1347,11 +1315,21 @@ fn deploy(
             });
         }
         let failures = failures(&results, &unusable, &refused_rules);
-        result.push((
-            "failures".into(),
-            Json::Array(failures.into_iter().map(|(_, failure)| failure).collect()),
-        ));
-        return CommandResult::from_fields(&result);
+        let culprit = culprit.map(|culprit| {
+            (
+                outcome_message(&results, seconds, true),
+                format!(
+                    "Deployment to {system} failed on {}: {}",
+                    culprit.name,
+                    culprit.error.clone().unwrap_or_default()
+                ),
+            )
+        });
+        return ran.stopped(
+            format!("Deployment to {system} failed: {error}"),
+            culprit,
+            failures,
+        );
     }
     let outcome_failed = sender.failed || refused;
     let any_failed = results.iter().any(|result| result.status == "failed");
@@ -1366,46 +1344,132 @@ fn deploy(
     } else {
         outcome_message(&results, seconds, outcome_failed)
     };
-    let mut result = vec![
-        ("message".to_owned(), Json::str(message)),
-        (
-            "status".into(),
-            Json::str(if outcome_failed {
-                "failed"
-            } else {
-                "completed"
-            }),
-        ),
-    ];
-    common(&mut result);
-    result.push(("changes".into(), changes_json));
-    result.push((
-        "_summary".into(),
-        run_summary(&results, platforms, tenant_count, seconds),
-    ));
-    result.push(("_exit_code".into(), Json::Int(i64::from(outcome_failed))));
-    result.push(("results".into(), results_json));
-    if outcome_failed && any_failed {
-        result.push(("_failure_code".into(), Json::str(super::ISSUES_FOUND)));
+    ran.ended(&Ending {
+        message,
+        failed: outcome_failed,
+        rule_failed: any_failed,
+        failures,
+        warned: sender.warned,
+    })
+}
+
+/// What a run that sent to its platforms ends with, however it ends.
+struct Ran {
+    /// `deployed`: the platforms the run deployed to.
+    deployed: Vec<String>,
+    /// `plan`: each platform's rules.
+    plan: Json,
+    /// `strategies`.
+    strategies: Json,
+    /// `changes`: the plan's rows.
+    changes: Json,
+    /// `results`: a row per rule and tenant.
+    results: Json,
+    /// `summary` ([`run_summary`]).
+    summary: Vec<(String, Json)>,
+}
+
+/// How a run that sent to every platform ended.
+struct Ending {
+    /// `message`.
+    message: String,
+    /// The run failed: a rule, a tenant or a platform, or planning.
+    failed: bool,
+    /// A rule failed (`issues_found`).
+    rule_failed: bool,
+    /// Each failure, its line and its `failures` entry ([`failures`]).
+    failures: Vec<(String, Json)>,
+    /// Some rules reported deployment warnings.
+    warned: bool,
+}
+
+impl Ran {
+    /// The keys every such result starts with.
+    fn head(&self) -> Vec<(String, Json)> {
+        vec![
+            (
+                "deployed".into(),
+                Json::Array(self.deployed.iter().map(Json::str).collect()),
+            ),
+            ("dry_run".into(), Json::Bool(false)),
+            ("plan".into(), self.plan.clone()),
+        ]
     }
-    if let Some((first, _)) = failures.first() {
-        // The run's error names its first failure, and how many more there
-        // were.
-        let more = more_failures(failures.len());
-        result.push(("error".into(), Json::str(format!("{first}{more}"))));
-        result.push((
+
+    /// A run a platform stopped: failed, exit 1, with `message`, or, when
+    /// the stop came on a rule (`culprit`: the run's outcome message and the
+    /// rule's error), that message, the error and `issues_found`.
+    fn stopped(
+        self,
+        message: String,
+        culprit: Option<(String, String)>,
+        failures: Vec<(String, Json)>,
+    ) -> CommandResult {
+        let mut result = failed(&message);
+        result.data = self.head();
+        result.data.push(("strategies".into(), self.strategies));
+        result.data.push(("changes".into(), self.changes));
+        result.data.push(("results".into(), self.results));
+        result.summary = self.summary;
+        if let Some((outcome, error)) = culprit {
+            result.message = Some(outcome);
+            result.data.push(("error".into(), Json::Str(error)));
+            result.failure.code = Some(super::ISSUES_FOUND.to_owned());
+        }
+        result.data.push((
             "failures".into(),
             Json::Array(failures.into_iter().map(|(_, failure)| failure).collect()),
         ));
+        result
     }
-    if sender.warned {
-        result.push((
-            "warnings".into(),
-            Json::Array(vec![Json::str("Some rules reported deployment warnings")]),
-        ));
+
+    /// A run that sent to every platform: completed, or failed (exit 1) with
+    /// `issues_found` when a rule failed; the first failure is its `error`.
+    fn ended(self, ending: &Ending) -> CommandResult {
+        let (status, exit) = if ending.failed {
+            (Status::Failed, ExitCode::Failure)
+        } else {
+            (Status::Completed, ExitCode::Success)
+        };
+        let mut result = CommandResult {
+            status,
+            message: Some(ending.message.clone()),
+            exit,
+            summary: self.summary.clone(),
+            data: self.head(),
+            ..CommandResult::default()
+        };
+        result.data.push(("changes".into(), self.changes));
+        result.data.push(("results".into(), self.results));
+        if ending.failed && ending.rule_failed {
+            result.failure.code = Some(super::ISSUES_FOUND.to_owned());
+        }
+        if let Some((first, _)) = ending.failures.first() {
+            // The run's error names its first failure, as the Python
+            // deployer's did when that failure stopped it.
+            let more = more_failures(ending.failures.len());
+            result
+                .data
+                .push(("error".into(), Json::str(format!("{first}{more}"))));
+            result.data.push((
+                "failures".into(),
+                Json::Array(
+                    ending
+                        .failures
+                        .iter()
+                        .map(|(_, failure)| failure.clone())
+                        .collect(),
+                ),
+            ));
+        }
+        if ending.warned {
+            result
+                .warnings
+                .push("Some rules reported deployment warnings".to_owned());
+        }
+        result.data.push(("strategies".into(), self.strategies));
+        result
     }
-    result.push(("strategies".into(), names(&runs)));
-    CommandResult::from_fields(&result)
 }
 
 /// The files a status promotion rewrote: put back as they were before the
@@ -1759,8 +1823,13 @@ fn run_counts(results: &[RuleResult]) -> IndexMap<&'static str, usize> {
     counts
 }
 
-/// The JSON `summary` of a real run (`run_summary`).
-fn run_summary(results: &[RuleResult], platforms: usize, tenants: usize, seconds: f64) -> Json {
+/// The `summary` of a real run (`run_summary`).
+fn run_summary(
+    results: &[RuleResult],
+    platforms: usize,
+    tenants: usize,
+    seconds: f64,
+) -> Vec<(String, Json)> {
     let counts = run_counts(results);
     let mut members: Vec<(String, Json)> = counts
         .iter()
@@ -1772,7 +1841,7 @@ fn run_summary(results: &[RuleResult], platforms: usize, tenants: usize, seconds
     ));
     members.push(("platforms".into(), Json::from(platforms)));
     members.push(("tenants".into(), Json::from(tenants)));
-    Json::object(members)
+    members
 }
 
 /// The run's last line, for a pass and for a failure alike (`outcome_message`).
@@ -3721,9 +3790,7 @@ mod tests {
         );
         let refs: Vec<&RuleResult> = results.iter().collect();
         assert_eq!(counts_text(&refs), "2 deployed, 1 failed, 1 not attempted");
-        let Json::Object(summary) = run_summary(&results, 1, 1, 0.0) else {
-            panic!("an object")
-        };
+        let summary = run_summary(&results, 1, 1, 0.0);
         let keys: Vec<&str> = summary.iter().map(|(key, _)| key.as_str()).collect();
         assert_eq!(
             keys,

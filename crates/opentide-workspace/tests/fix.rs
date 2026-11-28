@@ -2,6 +2,11 @@
 //! a byte outside the fix spans, and the result parses; a file that changed
 //! after it was read is not written; the fixes run through `validate`.
 
+#![expect(
+    clippy::string_slice,
+    reason = "a test: a slice off a char boundary panics, and a panic is a failed test"
+)]
+
 use std::path::Path;
 
 use opentide_schema::node;

@@ -16,12 +16,6 @@
 //! [`opentide`](https://docs.rs/opentide) crate, its Rust SDK, instead (its
 //! `cli` feature).
 
-// Slicing a `str` by byte index panics off a char boundary, and this crate
-// reads user documents and arguments: every slice is checked or says why it
-// is safe (#1946; the lint moves to `[workspace.lints]` once every crate is
-// clean).
-#![warn(clippy::string_slice)]
-
 pub mod app;
 pub mod catalog;
 pub mod commands;

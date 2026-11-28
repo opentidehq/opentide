@@ -413,6 +413,105 @@ fn search_body_writes_utc() {
     );
 }
 
+/// #1951: the block is read by `ExabeamConfig`, the model `validate` checks
+/// it with. A block whose shape the model refuses fails with
+/// `compile_failed` at the field the rule got wrong, where it used to deploy
+/// with a fallback (`testMode: false`, the key dropped, the severity or the
+/// outcome sent as written).
+#[test]
+fn a_block_the_model_refuses_fails_at_its_field() {
+    for (extra, field, reason) in [
+        (
+            "    test_mode: 'yes'\n",
+            "test_mode",
+            "Input should be a valid boolean",
+        ),
+        (
+            "    surprisé: 😀\n",
+            "surprisé",
+            "Extra inputs are not permitted",
+        ),
+        ("    severity: urgent\n", "severity", "Input should be"),
+        ("    outcome: page\n", "outcome", "Input should be"),
+        (
+            "    email:\n      recipients: soc@example.com\n",
+            "email.recipients",
+            "Input should be a valid list",
+        ),
+    ] {
+        let text = block_rule(&format!("{ONE_SEQUENCE}{extra}"), "");
+        let error = with_rule(&text, UUID, |cx, rule| {
+            compile_rule(cx, rule, StatusStrategy::Release, None).unwrap_err()
+        });
+        let at: Vec<&str> = ["configurations", "exabeam"]
+            .into_iter()
+            .chain(field.split('.'))
+            .collect();
+        assert_eq!(error.code, "compile_failed", "{field}: {error}");
+        assert_eq!(error.field, at, "{field}: {error}");
+        assert!(
+            error
+                .reason
+                .contains(&format!("configurations.exabeam.{field}: {reason}")),
+            "{field}: {error}"
+        );
+        assert!(
+            error
+                .hint
+                .as_deref()
+                .is_some_and(|hint| hint.contains("opentide validate")),
+            "{field}: {error}"
+        );
+    }
+}
+
+/// #1951: a value only the block's own check refuses (`exabeam_group_by`:
+/// four fields; `exabeam_duration`: a delay past 180 minutes) is compiled as
+/// before; `validate` reports it. Values are sent as the rule writes them:
+/// non-ASCII text, a threshold's numbers in their shortest form, day numbers.
+#[test]
+fn a_value_the_check_refuses_compiles_and_values_are_kept() {
+    let rule = block_rule(
+        "    name: Échecs 😀\n    sequences:\n    - query: ' user:\"é😀\" '\n      name: \
+         Séquence\n      group_by: [a, b, c, d]\n      threshold:\n        function: value\n        \
+         field: dest_é\n        operator: in\n        value: [0.5, 2.0, 3, é😀]\n        within: \
+         1h\n    delay: 200m\n    email:\n      recipients: [sé@example.com]\n      subject: Sujet \
+         😀\n      attach_csv: true\n    schedule:\n    - every: month\n      days: [1, 31]\n      \
+         last_day: true\n      from: \"00:00Z\"\n      to: \"06:00Z\"\n",
+        "",
+    );
+    let body = json(&body(&rule, StatusStrategy::Release, None));
+    assert_eq!(body["name"], "Échecs 😀");
+    let sequence = &body["sequencesConfig"]["sequences"][0];
+    assert_eq!(sequence["name"], "Séquence");
+    assert_eq!(sequence["query"], "user:\"é😀\"");
+    let condition = &sequence["condition"];
+    assert_eq!(
+        condition["groupBy"],
+        serde_json::json!(["a", "b", "c", "d"])
+    );
+    assert_eq!(condition["field"], "dest_é");
+    assert_eq!(condition["value"], "0.5,2,3,é😀");
+    assert_eq!(
+        body["delayConfig"],
+        serde_json::json!({"delay": true, "delayTimeInMinutes": 200})
+    );
+    assert_eq!(
+        body["sequencesConfig"]["outcomes"]["email"],
+        serde_json::json!({
+            "recipients": ["sé@example.com"], "subject": "Sujet 😀", "attachCsv": true
+        })
+    );
+    assert_eq!(
+        body["scheduleConfig"]["recurrences"][0]["daysInMonth"],
+        serde_json::json!([1, 31])
+    );
+    assert_eq!(
+        body["scheduleConfig"]["recurrences"][0]["lastDayOfMonth"],
+        true
+    );
+}
+
 #[test]
 fn a_rule_without_a_block_is_refused() {
     let text = block_rule(ONE_SEQUENCE, "");
@@ -463,16 +562,24 @@ fn the_deployment_follows_the_status() {
     assert_eq!(error.code, "compile_failed");
 }
 
-/// A status that is not a string is named in its JSON form, `true` or
-/// `null` when missing, never `True` or `None` (#1068).
+/// A status that is not a string, or none, is a fault of the block's shape
+/// that `ExabeamConfig` refuses at `status` (#1951), never named `True` or
+/// `None` (#1068).
 #[test]
-fn a_status_is_named_in_its_json_form() {
-    for (status, named) in [("    status: true\n", "true"), ("", "null")] {
+fn a_status_that_is_not_text_is_refused_at_its_field() {
+    for (status, named) in [
+        (
+            "    status: true\n",
+            "configurations.exabeam.status: Input should be a valid string",
+        ),
+        ("", "configurations.exabeam.status: Field required"),
+    ] {
         let text = block_rule(ONE_SEQUENCE, "").replace("    status: STAGING\n", status);
         let error = with_rule(&text, UUID, |cx, rule| {
             exabeam::compile_deployment(cx, rule, None).unwrap_err()
         });
         assert_eq!(error.code, "compile_failed");
+        assert_eq!(error.field, ["configurations", "exabeam", "status"]);
         assert!(error.reason.contains(named), "{}", error.reason);
         assert!(
             !error.reason.contains("True") && !error.reason.contains("None"),

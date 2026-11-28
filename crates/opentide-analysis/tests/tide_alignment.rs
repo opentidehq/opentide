@@ -4,6 +4,11 @@
 //! the grammar's scopes to, so it must be what the server sends. A key's colon
 //! and a list dash get no token.
 
+#![expect(
+    clippy::string_slice,
+    reason = "a test: a slice off a char boundary panics, and a panic is a failed test"
+)]
+
 use opentide_analysis::highlight;
 use opentide_core::LanguageId;
 use opentide_highlight::{LSP_TOKEN_TYPES, lsp_capture_has_semantic_token, lsp_token_type_index};

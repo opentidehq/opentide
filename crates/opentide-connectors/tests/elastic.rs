@@ -4,6 +4,10 @@
 //! Python client's, in order (a JSON body as the same data), the retries of a gateway's
 //! answer included.
 
+#![expect(
+    clippy::string_slice,
+    reason = "a test: a slice off a char boundary panics, and a panic is a failed test"
+)]
 #![expect(clippy::unwrap_used, reason = "a test: a failed set-up is a failure")]
 
 mod support;
