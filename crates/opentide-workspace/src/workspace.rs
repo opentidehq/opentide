@@ -271,15 +271,29 @@ impl Workspace {
             self.lint_records.forget_listing();
         }
         let scans = Arc::clone(&self.scans);
-        let files = listed(&scans);
-        let keep: HashSet<&PathBuf> = files.iter().collect();
-        self.parsed
-            .retain(|path, _| keep.contains(path) && !stale.contains(path));
-        let missing: Vec<PathBuf> = files
-            .iter()
-            .filter(|path| !self.parsed.contains_key(*path))
-            .cloned()
-            .collect();
+        let missing: Vec<PathBuf> = if rescan {
+            let files = listed(&scans);
+            let keep: HashSet<&PathBuf> = files.iter().collect();
+            self.parsed
+                .retain(|path, _| keep.contains(path) && !stale.contains(path));
+            files
+                .iter()
+                .filter(|path| !self.parsed.contains_key(*path))
+                .cloned()
+                .collect()
+        } else {
+            // The listing is the last one, and `parsed` holds each file it
+            // lists and nothing else (each refresh reads every listed file it
+            // does not hold, a file it cannot read included): what is missing
+            // is what `stale` names, and nothing else is dropped. Listing and
+            // hashing every file again made a third of an edit's cost at
+            // 5,000 objects (#2122).
+            stale
+                .iter()
+                .filter(|path| self.parsed.remove(*path).is_some())
+                .cloned()
+                .collect()
+        };
         let fresh = read_and_parse(self.fs.as_ref(), &missing);
         self.stats.file_reads += fresh.len();
         self.stats.parses += fresh.len();
@@ -562,6 +576,26 @@ fn needs_every_check(before: &Index, after: &Index, paths: &HashSet<PathBuf>) ->
     })
 }
 
+/// The files an invalidation read again, asked about once for each object of
+/// the index. An edit reads one file again: comparing it with each object's
+/// path is cheaper than hashing that path, every component of it, which made
+/// these walks a third of an edit's bookkeeping at 5,000 objects (#2122). A
+/// set of many files is hashed as before; the answer is the set's either way.
+struct Reread<'a>(&'a HashSet<PathBuf>);
+
+impl Reread<'_> {
+    /// How many files are compared one by one before the set is hashed.
+    const COMPARED: usize = 16;
+
+    fn contains(&self, path: &Path) -> bool {
+        if self.0.len() <= Self::COMPARED {
+            self.0.iter().any(|reread| reread == path)
+        } else {
+            self.0.contains(path)
+        }
+    }
+}
+
 /// What the other objects' checks read of the objects in `paths`, in each
 /// index: whether it is the same before and after, then what the cross-rule
 /// checks read of their platform blocks.
@@ -570,6 +604,7 @@ fn what_others_read(before: &Index, after: &Index, paths: &HashSet<PathBuf>) -> 
     // a signal of such an object.
     type Facts = BTreeSet<(u8, String, String, String)>;
     fn identity(index: &Index, paths: &HashSet<PathBuf>) -> Facts {
+        let paths = Reread(paths);
         let mut facts = Facts::new();
         let mut owners: HashSet<&str> = HashSet::new();
         for (family, objects) in &index.objects {
@@ -603,6 +638,7 @@ fn what_others_read(before: &Index, after: &Index, paths: &HashSet<PathBuf>) -> 
     }
     /// The platform blocks the cross-rule checks compare, by rule.
     fn blocks(index: &Index, paths: &HashSet<PathBuf>) -> Facts {
+        let paths = Reread(paths);
         let mut facts = Facts::new();
         for object in index
             .objects
@@ -636,6 +672,7 @@ fn what_others_read(before: &Index, after: &Index, paths: &HashSet<PathBuf>) -> 
 /// that were read again: the objects in them (in either index), the objects
 /// that reference or are referenced by those, and the signals they own.
 fn affected(before: &Index, after: &Index, paths: &HashSet<PathBuf>) -> BTreeSet<String> {
+    let paths = Reread(paths);
     let mut out: BTreeSet<String> = BTreeSet::new();
     for index in [before, after] {
         for objects in index.objects.values() {

@@ -573,7 +573,65 @@ pub fn lint(
 /// Object files already parsed, by path: what a [`crate::Workspace`]'s
 /// index holds. Lint reads such a file from its parse, not the disk; the
 /// parse is the same (`load::parse` reads a file as lint does).
-type Parses = std::collections::HashMap<PathBuf, std::sync::Arc<node::Document>>;
+///
+/// The first few files are looked for one by one, then a table of every
+/// file is made once: an editor's run reports on the file it edits, and
+/// made a table of every object file for it on each keystroke (#2122).
+#[derive(Default)]
+struct Parses<'a> {
+    sources: &'a [crate::index::Source],
+    looked_up: std::sync::atomic::AtomicUsize,
+    table: std::sync::OnceLock<
+        std::collections::HashMap<&'a Path, &'a std::sync::Arc<node::Document>>,
+    >,
+}
+
+impl<'a> Parses<'a> {
+    /// How many files are looked for one by one before the table is made.
+    const LOOKED_UP_ONE_BY_ONE: usize = 8;
+
+    /// None: every file is read from the disk.
+    fn new() -> Self {
+        Self::default()
+    }
+
+    /// The documents of `sources`, the last one where several name a file.
+    fn of(sources: &'a [crate::index::Source]) -> Self {
+        Self {
+            sources,
+            ..Self::default()
+        }
+    }
+
+    /// The parse of `path`, if there is one.
+    fn get(&self, path: &Path) -> Option<&'a std::sync::Arc<node::Document>> {
+        if self.sources.is_empty() {
+            return None;
+        }
+        if self.table.get().is_none()
+            && self
+                .looked_up
+                .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+                < Self::LOOKED_UP_ONE_BY_ONE
+        {
+            return self
+                .sources
+                .iter()
+                .rev()
+                .find(|source| source.path == path)
+                .map(|source| &source.document);
+        }
+        self.table
+            .get_or_init(|| {
+                self.sources
+                    .iter()
+                    .map(|source| (source.path.as_path(), &source.document))
+                    .collect()
+            })
+            .get(path)
+            .copied()
+    }
+}
 
 /// What a host that runs `lint` again and again over one workspace
 /// ([`crate::Workspace::editor_lint`], once per keystroke) keeps between runs:
@@ -635,9 +693,9 @@ impl RecordCache {
     }
 
     /// Forgets the files `parses` does not hold any more.
-    fn retain(&self, parses: &Parses) {
+    fn retain(&self, parses: &Parses<'_>) {
         if let Ok(mut cache) = self.records.lock() {
-            cache.retain(|path, _| parses.contains_key(path));
+            cache.retain(|path, _| parses.get(path).is_some());
         }
     }
 
@@ -697,7 +755,7 @@ fn lint_with(
     root: &Path,
     config: &LintConfig,
     options: &LintOptions<'_>,
-    parses: &Parses,
+    parses: &Parses<'_>,
     cache: Option<&RecordCache>,
 ) -> LintReport {
     let target = fs.resolve(root);
@@ -762,7 +820,7 @@ fn lint_with(
             .par_iter()
             .map(|path| {
                 let light = !in_scope(path);
-                match (cache.filter(|_| light), parses.get(*path)) {
+                match (cache.filter(|_| light), parses.get(path)) {
                     (Some(cache), Some(document)) => cache.record(path, document, || {
                         load_record(fs, &target, path, Some(document), true)
                     }),
@@ -802,7 +860,13 @@ fn lint_with(
             record.document = None;
         }
     }
-    if let Some(cache) = cache {
+    // A run that read every object file forgets the ones that are gone. One
+    // that read only the files it reports on keeps the others: a kept record
+    // stands only for the document it was made from, so one of a file gone
+    // is never used, and the next run over every file forgets it.
+    if let Some(cache) = cache
+        && candidates.len() == object_files.len()
+    {
         cache.retain(parses);
     }
     let shown: Vec<usize> = (0..records.len())
@@ -965,7 +1029,7 @@ fn editor_findings(
     config: &LintConfig,
     files: Option<Vec<PathBuf>>,
     named: bool,
-    parses: &Parses,
+    parses: &Parses<'_>,
     cache: Option<&RecordCache>,
 ) -> Vec<LintFinding> {
     let checks: Vec<LintCheck> = enabled_checks(config)
@@ -1076,10 +1140,17 @@ fn narrow_selected(
     options: &LintOptions<'_>,
 ) -> Option<Result<Option<Narrowed>, Box<LintReport>>> {
     let selected = options.selected.as_ref()?;
-    let known: std::collections::HashSet<&PathBuf> = candidates.iter().collect();
+    // An editor selects the file it edits: a few files are looked for in the
+    // listing one by one, not by hashing every file it lists (#2122).
+    let known: Option<std::collections::HashSet<&PathBuf>> =
+        (selected.len() > 16).then(|| candidates.iter().collect());
+    let listed = |path: &PathBuf| match &known {
+        Some(known) => known.contains(path),
+        None => candidates.contains(path),
+    };
     let unmatched: Vec<String> = selected
         .iter()
-        .filter(|path| !known.contains(path))
+        .filter(|path| !listed(path))
         .map(|path| relative(target, path))
         .collect();
     if !unmatched.is_empty() {
@@ -2256,12 +2327,7 @@ impl crate::Workspace {
         ) else {
             return Vec::new();
         };
-        let parses: Parses = self
-            .index()
-            .sources
-            .iter()
-            .map(|source| (source.path.clone(), std::sync::Arc::clone(&source.document)))
-            .collect();
+        let parses = Parses::of(&self.index().sources);
         // The files as the index names them: a symbolic link is named by its
         // link, and a file asked for by what it resolves to.
         let selected = files.map(|files| {
