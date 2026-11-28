@@ -408,11 +408,12 @@ mod tests {
         let macro_source = include_str!("syntax.rs");
         let mut rest = text.as_str();
         let mut tokens = BTreeSet::new();
-        while let Some(open) = rest.find('\'') {
-            let after = &rest[open + 1..];
-            let Some(close) = after.find('\'') else { break };
-            tokens.insert(after[..close].to_owned());
-            rest = &after[close + 1..];
+        while let Some((_, after)) = rest.split_once('\'') {
+            let Some((token, next)) = after.split_once('\'') else {
+                break;
+            };
+            tokens.insert(token.to_owned());
+            rest = next;
         }
         assert!(tokens.len() > 60, "{} tokens", tokens.len());
         for token in &tokens {
