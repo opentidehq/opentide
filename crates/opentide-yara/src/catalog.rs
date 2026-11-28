@@ -73,7 +73,7 @@ impl Catalog {
 
 /// `sections[].name` -> `sections[]`; `imphash` -> `""`.
 pub fn parent_of(path: &str) -> &str {
-    path.rfind('.').map_or("", |i| &path[..i])
+    path.rsplit_once('.').map_or("", |(parent, _)| parent)
 }
 
 /// The last segment of a path, without `[]` or `{}`.
