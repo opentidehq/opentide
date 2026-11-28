@@ -825,6 +825,26 @@ pub fn compile(
     ])
 }
 
+/// A rule compiled for one tenant ([`crate::compiler::Splunk`]): the
+/// writes a deploy that creates its saved search sends ([`compile`]).
+pub type Compiled = Vec<Write>;
+
+/// The settings a deploy sends for the saved search the `writes` create
+/// ([`compile`]): every update's body after the create, merged in order, so
+/// the late settings follow the others and the `search` comes first. An
+/// empty object when there is nothing to send.
+pub fn settings_body(writes: &[Write]) -> Json {
+    let mut settings = Object::new();
+    for write in writes.iter().skip(1) {
+        if let Json::Object(members) = &write.body {
+            for (key, value) in members {
+                settings.insert(key.clone(), value.clone());
+            }
+        }
+    }
+    Json::Object(settings)
+}
+
 /// The port a tenant that names none is reached on.
 pub const DEFAULT_PORT: &str = "8089";
 
