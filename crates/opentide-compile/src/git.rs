@@ -2018,6 +2018,114 @@ pub fn origin_url(start: &Path) -> Option<String> {
     Some(String::from_utf8_lossy(&url).into_owned())
 }
 
+/// Whether `start` is in a git checkout (`git rev-parse --git-dir`).
+pub fn in_repository(start: &Path) -> bool {
+    discover(start).is_some()
+}
+
+/// The local branches of the checkout at or above `start`, loose and
+/// packed, sorted by name as `git for-each-ref refs/heads/` lists them;
+/// empty outside a checkout.
+pub fn local_branches(start: &Path) -> Vec<String> {
+    let Ok(repo) = open(start) else {
+        return Vec::new();
+    };
+    let Ok(platform) = repo.refs.iter() else {
+        return Vec::new();
+    };
+    let Ok(prefix) = <&gix_path::RelativePath>::try_from("refs/heads/") else {
+        return Vec::new();
+    };
+    let Ok(references) = platform.prefixed(prefix) else {
+        return Vec::new();
+    };
+    let mut names: Vec<String> = references
+        .filter_map(Result::ok)
+        .filter_map(|reference| {
+            reference
+                .name
+                .as_bstr()
+                .to_str()
+                .ok()?
+                .strip_prefix("refs/heads/")
+                .map(str::to_owned)
+        })
+        .collect();
+    names.sort();
+    names.dedup();
+    names
+}
+
+/// The value `git config --get <key>` prints from `start`: the last one set
+/// in the system, global and, in a checkout, repository configuration, then
+/// in the `GIT_CONFIG_COUNT` overrides. The files are found through `env`
+/// (`HOME`, `XDG_CONFIG_HOME`, `GIT_CONFIG_GLOBAL`, `GIT_CONFIG_NOSYSTEM`,
+/// `GIT_CONFIG_SYSTEM`), as git finds them in its own environment. Includes
+/// are followed; conditional ones (`includeIf`) are not.
+pub fn config_value(start: &Path, key: &str, env: Env<'_>) -> Option<String> {
+    if let Some(value) = config_override(key, env) {
+        return Some(value);
+    }
+    let mut var = |name: &str| env(name).map(std::ffi::OsString::from);
+    let mut metas: Vec<gix_config::file::Metadata> = [
+        gix_config::Source::GitInstallation,
+        gix_config::Source::System,
+        gix_config::Source::Git,
+        gix_config::Source::User,
+    ]
+    .into_iter()
+    .filter_map(|source| {
+        let path = source.storage_location(&mut var)?;
+        path.is_file()
+            .then(|| gix_config::file::Metadata::from(source).at(path))
+    })
+    .collect();
+    if let Some((_, git_dir)) = discover(start) {
+        let common = match gix_discover::path::from_plain_file_relative_to_file(
+            &git_dir.join("commondir"),
+        ) {
+            Some(Ok(common)) => common,
+            _ => git_dir.clone(),
+        };
+        metas.push(
+            gix_config::file::Metadata::from(gix_config::Source::Local).at(common.join("config")),
+        );
+    }
+    metas.retain(|meta| meta.path.as_deref().is_some_and(Path::is_file));
+    let home = env("HOME").map(PathBuf::from);
+    let options = gix_config::file::init::Options {
+        includes: gix_config::file::includes::Options::follow_without_conditional(home.as_deref()),
+        ..Default::default()
+    };
+    let config = gix_config::File::from_paths_metadata(metas, options).ok()??;
+    let value = config.string(key)?;
+    Some(String::from_utf8_lossy(&value).into_owned())
+}
+
+/// The last `GIT_CONFIG_KEY_<n>` naming `key` among the first
+/// `GIT_CONFIG_COUNT`, with its value: section and name compared without
+/// case, as git compares them.
+fn config_override(key: &str, env: Env<'_>) -> Option<String> {
+    let count: usize = env("GIT_CONFIG_COUNT")?.trim().parse().ok()?;
+    let normal = |key: &str| -> String {
+        let mut parts: Vec<String> = key.split('.').map(str::to_owned).collect();
+        let last = parts.len().saturating_sub(1);
+        for (index, part) in parts.iter_mut().enumerate() {
+            if index == 0 || index == last {
+                *part = part.to_ascii_lowercase();
+            }
+        }
+        parts.join(".")
+    };
+    let wanted = normal(key);
+    (0..count).rev().find_map(|index| {
+        let name = env(&format!("GIT_CONFIG_KEY_{index}"))?;
+        (normal(&name) == wanted)
+            .then(|| env(&format!("GIT_CONFIG_VALUE_{index}")))
+            .flatten()
+    })
+}
+
 /// A file changed against the baseline: where it is, and its bytes at the
 /// baseline, when the baseline has it.
 #[derive(Debug, Clone, PartialEq, Eq)]
