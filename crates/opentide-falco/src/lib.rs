@@ -30,6 +30,10 @@
     clippy::too_many_lines,
     reason = "engine dispatchers match every node kind in one function"
 )]
+// Slicing a `str` by byte index panics off a char boundary, and this crate
+// reads user conditions: every slice is checked or says why it is safe (#1946;
+// the lint moves to `[workspace.lints]` once every crate is clean).
+#![warn(clippy::string_slice)]
 use opentide_core::{ByteSpan, CompletionItem, Diagnostic, Range, Severity, codes, span_to_range};
 use opentide_highlight::{HighlightSpec, HighlightToken, tokens_from_spans};
 use std::collections::BTreeMap;
@@ -46,6 +50,15 @@ pub mod parser;
 pub use catalog::{Catalog, DEFAULT_SOURCE, Field, Kind, Lookup};
 #[doc(hidden)]
 pub use cst::{debug_parse, highlight_captures, hover_target, tree_fields, tree_has_error};
+
+/// `text[start..end]`, a range this crate computes: a match's bounds, a
+/// character's, or an ASCII byte's, so its ends are char boundaries. A range
+/// that is not fails a debug assertion and reads as empty.
+pub(crate) fn cut(text: &str, start: usize, end: usize) -> &str {
+    let piece = text.get(start..end);
+    debug_assert!(piece.is_some(), "{start}..{end} in {} bytes", text.len());
+    piece.unwrap_or_default()
+}
 
 /// The operators a modifier (`oneof`, `anyof`, `allof`) can follow: Falco's
 /// `cmpop_supports_modifier`.
@@ -244,10 +257,12 @@ fn resolve_list(t: &mut Expanded, name: &str, items: &[String]) {
                     e += 1;
                 }
             }
+            // `s` and `e` start as a match's bounds and move over ASCII
+            // blanks and commas: char boundaries.
             let mut text = String::new();
             let mut map = Vec::new();
             let mut map_end = Vec::new();
-            text.push_str(&t.text[..s]);
+            text.push_str(cut(&t.text, 0, s));
             map.extend_from_slice(&t.map[..s]);
             map_end.extend_from_slice(&t.map_end[..s]);
             if s > 0 {
@@ -260,7 +275,7 @@ fn resolve_list(t: &mut Expanded, name: &str, items: &[String]) {
             text.push(' ');
             map.extend(std::iter::repeat_n(origin.0, inserted));
             map_end.extend(std::iter::repeat_n(origin.1, inserted));
-            text.push_str(&t.text[e..]);
+            text.push_str(cut(&t.text, e, t.text.len()));
             map.extend_from_slice(&t.map[e..]);
             map_end.extend_from_slice(&t.map_end[e..]);
             t.text = text;
@@ -269,6 +284,11 @@ fn resolve_list(t: &mut Expanded, name: &str, items: &[String]) {
             // libs: `start += sub.length() + 1`, then searches from `start + 1`.
             next = s + sub.len() + 1 + 1;
         }
+        // `next` may fall inside a character (after a list at the start of
+        // the text, or past a name's multi-byte first character): Falco
+        // searches bytes from there, which finds what starts at the next
+        // character.
+        let next = t.text.ceil_char_boundary(next);
         start = t
             .text
             .get(next..)
@@ -378,8 +398,8 @@ pub(crate) fn expand_lists(text: &str, ctx: &Context) -> Expanded {
 
 /// Length of a leading `and` / `or` (after blanks) that a tuning starts with.
 fn leading_bool_op(text: &str) -> Option<(usize, usize)> {
-    let start = text.len() - text.trim_start().len();
-    let rest = &text[start..];
+    let rest = text.trim_start();
+    let start = text.len() - rest.len();
     for kw in ["and", "or"] {
         if let Some(after) = rest.strip_prefix(kw)
             && after.starts_with([' ', '\t', '\n', '\r', '('])
@@ -648,10 +668,13 @@ pub fn occurs_delimited(text: &str, name: &str) -> bool {
     }
     let delim = |c: Option<char>| c.is_none_or(|c| " \t\n\r(),=".contains(c));
     let mut from = 0;
-    while let Some(at) = text[from..].find(name) {
+    // `from` is ceiled to a char boundary, and a match's bounds are ones.
+    while let Some(at) = cut(text, from, text.len()).find(name) {
         let start = from + at;
         let end = start + name.len();
-        if delim(text[..start].chars().next_back()) && delim(text[end..].chars().next()) {
+        if delim(cut(text, 0, start).chars().next_back())
+            && delim(cut(text, end, text.len()).chars().next())
+        {
             return true;
         }
         from = text.ceil_char_boundary(start + 1);
@@ -1134,7 +1157,8 @@ fn analyze_output_lines(text: &str, ctx: &Context) -> AnalyzeResult {
             ));
             break;
         }
-        let rest = &text[k..];
+        // Past `%` and ASCII digits.
+        let rest = cut(text, k, text.len());
         if let Some(p) = OUTPUT_PLACEHOLDERS.iter().find(|p| rest.starts_with(**p)) {
             diagnostics.push(Diagnostic::warning(
                 codes::FALCO_DEPRECATED_FIELD,
@@ -1695,8 +1719,11 @@ pub fn completions(text: &str, offset: usize, ctx: &Context) -> Vec<CompletionIt
         .last()
         .map(|(i, _)| i)
         .unwrap_or(before.len());
-    let prefix = &before[prefix_start..];
-    let head = &before[..prefix_start];
+    // `prefix_start` comes from `char_indices`.
+    let (head, prefix) = (
+        cut(before, 0, prefix_start),
+        cut(before, prefix_start, before.len()),
+    );
     let catalog = Catalog::cached();
     let toks = lex_head(head);
     let mut items = Vec::new();
@@ -1773,8 +1800,11 @@ pub fn output_completions(text: &str, offset: usize, ctx: &Context) -> Vec<Compl
         .last()
         .map(|(i, _)| i)
         .unwrap_or(before.len());
-    let prefix = &before[prefix_start..];
-    let head = &before[..prefix_start];
+    // `prefix_start` comes from `char_indices`.
+    let (head, prefix) = (
+        cut(before, 0, prefix_start),
+        cut(before, prefix_start, before.len()),
+    );
     if !(head.ends_with('%') || head.ends_with("%(")) {
         return Vec::new();
     }
@@ -2312,6 +2342,89 @@ mod tests {
         assert!(completions(src, inside, &ctx).is_empty());
         assert!(output_completions(src, inside, &ctx).is_empty());
         assert_eq!(hover(src, inside, &ctx), None);
+    }
+
+    /// Found turning on `clippy::string_slice` (#1946): after a list at the
+    /// start of the text, or a name that starts with a multi-byte character,
+    /// the search went on from inside a character, which `get` read as the
+    /// end of the text: the occurrences after it stayed unexpanded. Falco's
+    /// byte search finds them.
+    #[test]
+    fn a_list_expands_after_a_multi_byte_character() {
+        let expand = |text: &str, name: &str| {
+            let mut t = Expanded::new(text);
+            resolve_list(&mut t, name, &["a".to_owned(), "b c".to_owned()]);
+            t.text
+        };
+        assert_eq!(expand("l é in (l)", "l"), "a, \"b c\" é in ( a, \"b c\" )");
+        assert_eq!(expand("éx é (é)", "é"), "éx a, \"b c\" ( a, \"b c\" )");
+        assert_eq!(expand("😀x (😀)", "😀"), "😀x ( a, \"b c\" )");
+    }
+
+    /// Conditions and outputs with multi-byte text in every place the crate
+    /// cuts: the field classes' arguments (`evt.arg`, `evt.type.is`,
+    /// `proc.aname`, `proc.env`, `thread.cgroup`, `fd.types`, a plugin
+    /// field), list expansion, field names used as values, tunings and output
+    /// placeholders. The ranges are checked in debug builds (`cut`).
+    const MULTI_BYTE: &[&str] = &[
+        "evt.arg[é😀] = é and evt.arg.é😀 = 😀 and evt.rawarg.😀 = 1 and evt.around[é]",
+        "evt.type.is.é😀 and proc.aname[é😀] = x and proc.env[😀] = é and proc.env[é",
+        "thread.cgroup.é😀 = x and fd.types[é😀] = 1 and fd.types[😀 and container.mount[é😀] = x",
+        "é😀_list and proc.name in (é😀_list, é😀) and fd.name = proc.name[é😀] and fd.name = \"proc.args[😀]\"",
+        "and é😀 = 1 or proc.name pmatch (é😀) and fd.name regex '^é😀.*$' and proc.cmdline contains \"😀",
+    ];
+    const MULTI_BYTE_OUTPUTS: &[&str] = &[
+        "%é😀 %proc.name[é😀] %evt.arg.😀 %12é %container.info😀 %(é😀 %proc.aname[😀] é%",
+        "*user=%user.name😀 cmd=%proc.cmdline é😀 %fd.types[é😀]%",
+    ];
+
+    #[test]
+    fn multi_byte_text_is_read_whole_everywhere() {
+        let mut ctx = Context::default();
+        ctx.lists.insert(
+            "é😀_list".to_owned(),
+            vec!["é😀".to_owned(), "a b".to_owned()],
+        );
+        ctx.macros
+            .insert("é😀".to_owned(), "proc.name = é😀".to_owned());
+        for (texts, output) in [(MULTI_BYTE, false), (MULTI_BYTE_OUTPUTS, true)] {
+            for text in texts {
+                let result = if output {
+                    analyze_output(text, &ctx)
+                } else {
+                    analyze_with(text, &ctx)
+                };
+                for token in &result.tokens {
+                    assert!(
+                        text.get(token.span.start..token.span.end).is_some(),
+                        "{text}"
+                    );
+                }
+                let _ = check_position_names(text, &ctx);
+                let _ = fields(text);
+                for (offset, _) in text.char_indices().chain([(text.len(), ' ')]) {
+                    let _ = hover(text, offset, &ctx);
+                    let _ = completions(text, offset, &ctx);
+                    let _ = output_completions(text, offset, &ctx);
+                    let prefix = text.get(..offset).unwrap();
+                    let _ = analyze_with(prefix, &ctx);
+                    let _ = analyze_output(prefix, &ctx);
+                    let _ = occurs_delimited(text, prefix);
+                    let _ = occurs_delimited(text, text.get(offset..).unwrap());
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn helpers_read_multi_byte_text() {
+        assert_eq!(cut("é😀x", 0, 2), "é");
+        assert_eq!(cut("é😀x", 2, 7), "😀x");
+        assert!(occurs_delimited("é (😀) x", "😀"));
+        assert!(!occurs_delimited("é😀 x", "😀"));
+        assert!(occurs_delimited("é😀 x é😀", "é😀"));
+        assert_eq!(leading_bool_op(" \u{a0}and x"), Some((3, 6)));
+        assert_eq!(leading_bool_op("\t and (x"), Some((2, 5)));
     }
 }
 
