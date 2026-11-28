@@ -147,7 +147,7 @@ fn list_in_order(value: Option<&Json>, fields: Fields) -> Vec<Json> {
     }
 }
 
-/// The value at `key`, unless absent or `null` (the model dump drops `None`).
+/// The value at `key`, unless absent or `null`: an explicit `null` reads as unset.
 fn get<'j>(object: &'j Json, key: &str) -> Option<&'j Json> {
     object.get(key).filter(|value| !value.is_null())
 }
