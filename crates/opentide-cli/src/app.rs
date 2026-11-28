@@ -7,6 +7,7 @@
 //! the Python and npm launchers and the tests all run the same code.
 
 use crate::catalog;
+use crate::commands::result::{ExitCode, Status};
 use crate::crash::{self, Facts, Internal};
 use crate::env::Env;
 use crate::envelope::{Failure, INTERRUPTED_EXIT_CODE, NextAction, Outcome, USAGE_EXIT_CODE, code};
@@ -236,7 +237,7 @@ impl Run<'_> {
                 let text = document_text(&outcome.document(self.duration_ms()), self.indent);
                 out.write_all(text.as_bytes())?;
             }
-            _ if outcome.failure.is_some() && outcome.exit_code != 0 => {
+            _ if outcome.failure.is_some() && outcome.exit() != ExitCode::Success => {
                 let message = outcome
                     .failure
                     .as_ref()
@@ -301,7 +302,8 @@ impl Run<'_> {
         err: &mut dyn Write,
     ) -> std::io::Result<i32> {
         if self.mode == Mode::Json {
-            let outcome = Outcome::failed(&problem.command, USAGE_EXIT_CODE, problem.failure);
+            let outcome =
+                Outcome::failed(&problem.command, ExitCode::Usage.code(), problem.failure);
             return self.emit(&outcome, &[], out, err);
         }
         let console = self.console(self.host.stderr_tty);
@@ -466,7 +468,7 @@ impl Run<'_> {
                 };
                 Outcome {
                     command: String::new(),
-                    status: "completed".into(),
+                    status: Status::Completed.as_str().into(),
                     message: format!("Installed {shell} completion in {shown}"),
                     data: vec![
                         ("shell".into(), crate::json::Json::Str(shell.to_owned())),
@@ -475,7 +477,7 @@ impl Run<'_> {
                             crate::json::Json::Str(installed.path.to_string_lossy().into_owned()),
                         ),
                     ],
-                    exit_code: 0,
+                    exit_code: ExitCode::Success.code(),
                     summary: Vec::new(),
                     next_actions: vec![next],
                     failure: None,
@@ -582,7 +584,7 @@ impl Run<'_> {
             };
             let mut failure = Failure::new(code::USAGE_INVALID_VALUE, message);
             failure.argument = Some(named.into());
-            let mut outcome = Outcome::failed("", USAGE_EXIT_CODE, failure);
+            let mut outcome = Outcome::failed("", ExitCode::Usage.code(), failure);
             let reason = match named {
                 "--repo" => "--repo takes the folder with .opentide/ in it",
                 "OPENTIDE_REPO_ROOT" => {
@@ -599,7 +601,7 @@ impl Run<'_> {
                 "--quiet and --verbose cannot be used together",
             );
             failure.argument = Some("--verbose".into());
-            let outcome = Outcome::failed("", USAGE_EXIT_CODE, failure);
+            let outcome = Outcome::failed("", ExitCode::Usage.code(), failure);
             return self.emit(&outcome, &[], out, err);
         }
         // The commands dispatched by their clap derive structs (`tree.rs`).
@@ -637,10 +639,10 @@ impl Run<'_> {
                 let count = catalog::entries(&self.root).len();
                 let outcome = Outcome {
                     command: "commands".into(),
-                    status: "completed".into(),
+                    status: Status::Completed.as_str().into(),
                     message: format!("{count} commands"),
                     data,
-                    exit_code: 0,
+                    exit_code: ExitCode::Success.code(),
                     summary,
                     next_actions: Vec::new(),
                     failure: None,
@@ -1223,7 +1225,7 @@ impl Run<'_> {
         use crate::commands::validate_query::{Args, COMMAND, Context, plugin_live, refusal, run};
         if let Some(problem) = refusal(validate, query) {
             let failure = Failure::new(code::USAGE_INVALID_VALUE, problem);
-            return crate::commands::Report::failed(COMMAND, USAGE_EXIT_CODE, failure);
+            return crate::commands::Report::failed(COMMAND, ExitCode::Usage.code(), failure);
         }
         let parsed = Args::from_cli(validate, query);
         let plugin = parsed
@@ -1508,7 +1510,7 @@ impl Run<'_> {
                     format!("Metadata deployment is not implemented for {platform}"),
                 );
                 self.emit(
-                    &Outcome::failed("deploy metadata", USAGE_EXIT_CODE, failure),
+                    &Outcome::failed("deploy metadata", ExitCode::Usage.code(), failure),
                     &[],
                     out,
                     err,
@@ -1608,7 +1610,7 @@ impl Run<'_> {
             )?;
             err.flush()?;
         }
-        if !run.refused && outcome.exit_code != USAGE_EXIT_CODE {
+        if !run.refused && outcome.exit() != ExitCode::Usage {
             let markdown = summary::fit(
                 &summary::deploy_summary(&run.result, None, Some(true)),
                 summary::MAX_SUMMARY_BYTES,
@@ -1785,7 +1787,7 @@ impl Run<'_> {
             }
         }
         if let Some(markdown) = &report.ci_summary
-            && outcome.exit_code != USAGE_EXIT_CODE
+            && outcome.exit() != ExitCode::Usage
         {
             use crate::render::{ci, summary};
             let markdown = summary::fit(markdown, summary::MAX_SUMMARY_BYTES);
@@ -1840,7 +1842,7 @@ impl Run<'_> {
                 }
             }
         }
-        if report.body_only && outcome.exit_code == 0 {
+        if report.body_only && outcome.exit() == ExitCode::Success {
             out.flush()?;
             err.flush()?;
             return Ok(outcome.exit_code);
@@ -2081,7 +2083,7 @@ impl Run<'_> {
         let usage = |message: String| {
             let mut failure = crate::envelope::Failure::new(code::USAGE_INVALID_VALUE, message);
             failure.argument = None;
-            crate::commands::Report::failed(path, USAGE_EXIT_CODE, failure)
+            crate::commands::Report::failed(path, ExitCode::Usage.code(), failure)
         };
         if let Some(refusal) = refusal {
             return usage(refusal);
@@ -3986,10 +3988,10 @@ mod tests {
         let success = ran("mcp start", &[], false, |run, out, err| {
             let outcome = Outcome {
                 command: "mcp start".into(),
-                status: "completed".into(),
+                status: Status::Completed.as_str().into(),
                 message: "done".into(),
                 data: Vec::new(),
-                exit_code: 0,
+                exit_code: ExitCode::Success.code(),
                 summary: Vec::new(),
                 next_actions: Vec::new(),
                 failure: None,

@@ -10,6 +10,7 @@
 use std::path::{Component, Path, PathBuf};
 use std::sync::{Arc, Mutex, PoisonError};
 
+use crate::commands::result::ExitCode;
 use crate::envelope::{Failure, INTERRUPTED_EXIT_CODE, Outcome, USAGE_EXIT_CODE, code};
 use crate::json::{Json, Object};
 
@@ -248,7 +249,8 @@ impl HostRunner {
             Some(Ok(captured)) if !cancelled => captured,
             Some(Err(_)) => {
                 let problem = Failure::new(code::INTERNAL, "the Rust run panicked");
-                let outcome = Outcome::failed(&plan.words.join(" "), 1, problem);
+                let outcome =
+                    Outcome::failed(&plan.words.join(" "), ExitCode::Failure.code(), problem);
                 return RunOutcome::Built {
                     document: outcome.document(0),
                     exit_code: 1,
