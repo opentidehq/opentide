@@ -59,7 +59,8 @@ pub(crate) fn check_string(node: &ast::String, source: &str, out: &mut Vec<Diagn
         let bad = match next {
             b'b' | b't' | b'n' | b'f' | b'r' | b'"' | b'\'' | b'\\' => false,
             b'u' => {
-                let rest = &t[i + 2..];
+                // `i` is a `\\` byte and `i + 1` the ASCII `u`.
+                let rest = crate::cut(t, i + 2, t.len());
                 let digits = rest
                     .strip_prefix('{')
                     .and_then(|r| r.split_once('}'))
@@ -74,7 +75,10 @@ pub(crate) fn check_string(node: &ast::String, source: &str, out: &mut Vec<Diagn
             let at = span(node).start + i;
             // The escaped character may be several bytes (`\é`): the span and the message
             // take all of it.
-            let escaped = t[i + 1..].chars().next().unwrap_or(next as char);
+            let escaped = crate::cut(t, i + 1, t.len())
+                .chars()
+                .next()
+                .unwrap_or(next as char);
             out.push(Diagnostic::error(
                 codes::EQL_PARSE_ERROR,
                 format!(

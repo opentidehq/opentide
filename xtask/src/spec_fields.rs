@@ -126,7 +126,10 @@ fn last_cell(line: &str) -> &str {
             start = index + 1;
         }
     }
-    &inner[start..]
+    // Past an ASCII `|`.
+    inner
+        .split_at_checked(start)
+        .map_or(inner, |(_, cell)| cell)
 }
 
 /// The rows of one spec page that describe a model.
@@ -603,5 +606,12 @@ mod tests {
             "{:?}",
             platform_blocks(&models)
         );
+    }
+
+    #[test]
+    fn the_last_cell_reads_multi_byte_text() {
+        assert_eq!(last_cell("| é | 😀 \\| é |"), " 😀 \\| é ");
+        assert_eq!(last_cell("é😀"), "é😀");
+        assert_eq!(last_cell("|é|😀|"), "😀");
     }
 }

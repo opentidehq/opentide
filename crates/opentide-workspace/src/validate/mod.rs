@@ -1822,6 +1822,10 @@ struct ListedPaths<'a> {
     fs: &'a dyn FileSystem,
     links: &'a HashMap<PathBuf, PathBuf>,
     folders: RefCell<HashMap<PathBuf, PathBuf>>,
+    /// The last folder resolved, and what it resolves to: a family's files
+    /// are listed one folder after another, and comparing a folder with the
+    /// last one is cheaper than hashing it for each object (#2122).
+    last: RefCell<Option<(PathBuf, PathBuf)>>,
 }
 
 impl<'a> ListedPaths<'a> {
@@ -1830,6 +1834,7 @@ impl<'a> ListedPaths<'a> {
             fs,
             links,
             folders: RefCell::default(),
+            last: RefCell::default(),
         }
     }
 
@@ -1844,11 +1849,20 @@ impl<'a> ListedPaths<'a> {
         if folder.as_os_str().is_empty() {
             return self.fs.resolve(path);
         }
-        self.folders
+        if let Some((last, resolved)) = self.last.borrow().as_ref()
+            && last == folder
+        {
+            return resolved.join(name);
+        }
+        let resolved = self
+            .folders
             .borrow_mut()
             .entry(folder.to_path_buf())
             .or_insert_with(|| self.fs.resolve(folder))
-            .join(name)
+            .clone();
+        let path = resolved.join(name);
+        *self.last.borrow_mut() = Some((folder.to_path_buf(), resolved));
+        path
     }
 }
 
@@ -2178,6 +2192,108 @@ mod tests {
             large < small * 8,
             "{small} steps for 100 rules, {large} for 400"
         );
+    }
+
+    /// #2122: a run places its findings from the index's documents, looked
+    /// up one by one for the first files and from a table of every file
+    /// after (`annotate::Sources`). A run over every object (findings in
+    /// more files than are looked up one by one, a UUID written twice) and
+    /// runs narrowed to each file place each finding at the same line and
+    /// column, the displaced duplicate's from its own text.
+    #[test]
+    fn findings_are_placed_alike_in_a_full_run_and_in_one_narrowed_to_a_file() {
+        use std::sync::Arc;
+
+        use crate::fs::{FileSystem, MemoryFs};
+        use crate::root::RootOptions;
+        use crate::workspace::{Options as WorkspaceOptions, Workspace};
+
+        const RULES: usize = 12;
+        let fs = Arc::new(MemoryFs::new());
+        fs.create_dir("/ws/.opentide/configurations");
+        fs.create_dir("/ws/objects/rules");
+        for i in 0..RULES {
+            // The last two rules share a UUID that is not one, so that the
+            // displaced file has a finding of its own; each rule's padding
+            // moves its fields to lines of its own.
+            let uuid = if i < RULES - 2 {
+                format!("00000000-0000-4000-8000-{i:012}")
+            } else {
+                "pas-un-uuid-é".to_owned()
+            };
+            let padding = "# é😀\n".repeat(i);
+            fs.write(
+                format!("/ws/objects/rules/r{i}.yaml"),
+                format!(
+                    "{padding}name: Règle é😀 {i}\nmetadata:\n  uuid: {uuid}\n  \
+                     schema: rule::1.1\nstatus: NOPE\nconfigurations:\n  sentinel:\n    \
+                     enabled: 3\n"
+                ),
+            );
+        }
+        let ws = Workspace::open(
+            Arc::clone(&fs) as Arc<dyn FileSystem>,
+            WorkspaceOptions {
+                roots: RootOptions {
+                    repo: Some(PathBuf::from("/ws")),
+                    cwd: PathBuf::from("/ws"),
+                    ..RootOptions::default()
+                },
+            },
+        )
+        .unwrap();
+        type Placed = (
+            Option<PathBuf>,
+            String,
+            Vec<String>,
+            Option<usize>,
+            Option<usize>,
+        );
+        let placed = |validation: Validation| -> BTreeSet<Placed> {
+            validation
+                .report
+                .issues
+                .into_iter()
+                .chain(validation.report.warnings)
+                .map(|d| (d.file_path, d.code, d.field_path, d.line, d.column))
+                .collect()
+        };
+        let full = placed(validate(&ws, &Options::default()));
+        let files: BTreeSet<&PathBuf> = full.iter().filter_map(|p| p.0.as_ref()).collect();
+        assert_eq!(files.len(), RULES, "{full:#?}");
+        assert!(
+            full.iter()
+                .all(|(file, _, _, line, _)| file.is_none() || line.is_some()),
+            "{full:#?}"
+        );
+        assert!(
+            full.iter().any(|(_, code, _, _, _)| code == "duplicate_id"),
+            "{full:#?}"
+        );
+        for file in files {
+            let selection = Selection {
+                files: vec![file.display().to_string()],
+                ..Selection::default()
+            };
+            let narrowed = placed(validate(
+                &ws,
+                &Options {
+                    selection: Some(&selection),
+                    ..Options::default()
+                },
+            ));
+            // What has no file (`scope_no_match` for the displaced file,
+            // which holds no object) is placed nowhere.
+            let narrowed: Vec<&Placed> = narrowed.iter().filter(|p| p.0.is_some()).collect();
+            assert!(!narrowed.is_empty(), "{}", file.display());
+            for finding in narrowed {
+                assert!(
+                    full.contains(finding),
+                    "{finding:?}, placed in a run narrowed to {}, is not in the full run's",
+                    file.display()
+                );
+            }
+        }
     }
 
     #[test]

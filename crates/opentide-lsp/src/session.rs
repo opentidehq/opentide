@@ -295,8 +295,11 @@ pub(crate) fn names_tide_schema(text: &str) -> bool {
 /// (`file:///c%3A/w/x.yaml`) name one file once.
 pub(crate) fn path_key(path: &str) -> String {
     let mut key = path.replace('\\', "/");
-    if key.as_bytes().get(1) == Some(&b':') {
-        key[..1].make_ascii_lowercase();
+    // An ASCII second byte: the first is a whole character.
+    if key.as_bytes().get(1) == Some(&b':')
+        && let Some(drive) = key.get_mut(..1)
+    {
+        drive.make_ascii_lowercase();
     }
     key
 }
@@ -3119,5 +3122,13 @@ mod tests {
         assert_eq!(root_key("c:/"), "c:/");
         assert_eq!(root_key("C:"), "c:/");
         assert_eq!(root_key(r"c:\"), "c:/");
+    }
+
+    #[test]
+    fn a_path_key_lowers_only_an_ascii_drive_letter() {
+        assert_eq!(path_key("C:\\dét\\😀"), "c:/dét/😀");
+        assert_eq!(path_key("É:/x"), "É:/x");
+        assert_eq!(path_key("😀:/x"), "😀:/x");
+        assert_eq!(path_key("/é"), "/é");
     }
 }

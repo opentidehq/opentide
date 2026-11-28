@@ -16,9 +16,8 @@ use opentide_parse::ast::AstNode;
 pub(crate) fn string_value(raw: &str) -> Option<String> {
     if let Some(body) = raw.strip_prefix("\"\"\"") {
         // Content, closing `"""`, then up to two extra quotes in the value.
-        let close = body.find("\"\"\"")?;
-        let extra = &body[close + 3..];
-        return Some(format!("{}{extra}", &body[..close]));
+        let (content, extra) = body.split_once("\"\"\"")?;
+        return Some(format!("{content}{extra}"));
     }
     let body = raw.strip_prefix('"')?.strip_suffix('"')?;
     let mut out = String::with_capacity(body.len());
@@ -117,7 +116,7 @@ pub(crate) fn check_regex(
             continue;
         };
         let at = crate::nav::span(value.syntax());
-        let Some(pattern) = string_value(&source[at.start..at.end]) else {
+        let Some(pattern) = string_value(crate::cut(source, at.start, at.end)) else {
             continue;
         };
         let f = scan(&pattern);
@@ -187,6 +186,11 @@ mod tests {
         assert_eq!(string_value(r#""""a\.b""""#).as_deref(), Some(r"a\.b"));
         assert_eq!(string_value("\"\"\"a\"\"\"\"").as_deref(), Some("a\""));
         assert_eq!(string_value(r#""\u{41}""#).as_deref(), Some("A"));
+        assert_eq!(
+            string_value("\"\"\"é😀\"\"\"\"😀").as_deref(),
+            Some("é😀\"😀")
+        );
+        assert_eq!(string_value("\"\"\"é😀").as_deref(), None);
     }
 
     /// Operator behaviour checked with Lucene 10.5.2 `RegExp(p, ALL |

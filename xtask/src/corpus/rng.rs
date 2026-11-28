@@ -91,14 +91,14 @@ impl Rng {
         bytes[8..].copy_from_slice(&low.to_be_bytes());
         bytes[6] = (bytes[6] & 0x0f) | 0x40;
         bytes[8] = (bytes[8] & 0x3f) | 0x80;
-        let hex = opentide_core::text::hex(&bytes);
+        let hex = |range: std::ops::Range<usize>| opentide_core::text::hex(&bytes[range]);
         format!(
             "{}-{}-{}-{}-{}",
-            &hex[0..8],
-            &hex[8..12],
-            &hex[12..16],
-            &hex[16..20],
-            &hex[20..32]
+            hex(0..4),
+            hex(4..6),
+            hex(6..8),
+            hex(8..10),
+            hex(10..16)
         )
     }
 }
@@ -123,8 +123,11 @@ mod tests {
         for _ in 0..100 {
             let uuid = rng.uuid();
             assert_eq!(uuid.len(), 36);
-            assert_eq!(&uuid[14..15], "4");
-            assert!(matches!(&uuid[19..20], "8" | "9" | "a" | "b"), "{uuid}");
+            assert_eq!(uuid.get(14..15), Some("4"));
+            assert!(
+                matches!(uuid.get(19..20), Some("8" | "9" | "a" | "b")),
+                "{uuid}"
+            );
         }
     }
 

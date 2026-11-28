@@ -493,7 +493,7 @@ impl Pattern {
                     s.strip_prefix(t.as_str()).is_some_and(|r| go(rest, r))
                 }
                 Some((Piece::Star, rest)) => {
-                    (0..=s.len()).any(|i| s.is_char_boundary(i) && go(rest, &s[i..]))
+                    (0..=s.len()).any(|i| s.get(i..).is_some_and(|tail| go(rest, tail)))
                 }
             }
         }
@@ -559,14 +559,13 @@ fn keep(parts: &[SyntaxElement], source: &str, input: Option<&[String]>) -> Opti
 pub(crate) fn dissect_keys(pattern: &str) -> Option<Vec<String>> {
     let mut keys: Vec<String> = Vec::new();
     let mut rest = pattern;
-    while let Some(start) = rest.find("%{") {
-        let after = &rest[start + 2..];
-        let end = after.find('}')?;
-        let raw = &after[..end];
-        rest = &after[end + 1..];
+    while let Some((_, after)) = rest.split_once("%{") {
+        let (raw, next) = after.split_once('}')?;
+        rest = next;
         let raw = raw.strip_suffix("->").unwrap_or(raw);
-        let (modifier, name) = match raw.chars().next() {
-            Some(c @ ('+' | '?' | '*' | '&')) => (Some(c), &raw[1..]),
+        let mut chars = raw.chars();
+        let (modifier, name) = match chars.next() {
+            Some(c @ ('+' | '?' | '*' | '&')) => (Some(c), chars.as_str()),
             _ => (None, raw),
         };
         let name = match modifier {
@@ -669,11 +668,9 @@ const GROK_PLAIN: &[&str] = &[
 pub(crate) fn grok_names(pattern: &str) -> Option<Vec<String>> {
     let mut names = Vec::new();
     let mut rest = pattern;
-    while let Some(start) = rest.find("%{") {
-        let after = &rest[start + 2..];
-        let end = after.find('}')?;
-        let inner = &after[..end];
-        rest = &after[end + 1..];
+    while let Some((_, after)) = rest.split_once("%{") {
+        let (inner, next) = after.split_once('}')?;
+        rest = next;
         if inner.contains('=') {
             return None;
         }
@@ -687,14 +684,13 @@ pub(crate) fn grok_names(pattern: &str) -> Option<Vec<String>> {
         }
     }
     let mut rest = pattern;
-    while let Some(start) = rest.find("(?<") {
-        let after = &rest[start + 3..];
+    while let Some((_, after)) = rest.split_once("(?<") {
         rest = after;
         if after.starts_with(['=', '!']) {
             continue;
         }
-        let end = after.find('>')?;
-        names.push(after[..end].to_string());
+        let (name, _) = after.split_once('>')?;
+        names.push(name.to_string());
     }
     Some(names)
 }
@@ -887,5 +883,20 @@ mod tests {
             dissect_keys("%{+ts/2} %{+ts/1} %{a->} %{?x}"),
             Some(vec!["ts".into(), "a".into()])
         );
+    }
+
+    #[test]
+    fn patterns_read_multi_byte_text() {
+        assert_eq!(
+            dissect_keys("é%{+é😀} %{?😀} %{é->}😀%{+😀/2}"),
+            Some(vec!["é😀".to_owned(), "é".to_owned(), "😀".to_owned()])
+        );
+        assert_eq!(dissect_keys("%{é"), None);
+        assert_eq!(
+            grok_names("é%{WORD:é😀} (?<😀>é) (?=é) %{IP:😀:int}"),
+            Some(vec!["é😀".to_owned(), "😀".to_owned(), "😀".to_owned()])
+        );
+        assert_eq!(grok_names("%{é"), None);
+        assert_eq!(grok_names("(?<é"), None);
     }
 }

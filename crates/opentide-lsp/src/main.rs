@@ -2,6 +2,11 @@
 //!
 //! The CLI never speaks JSON-RPC. `--stdio` is the editor protocol.
 
+// Slicing a `str` by byte index panics off a char boundary, and this crate
+// reads editors' documents: every slice is checked or says why it is safe
+// (#1946; the lint moves to `[workspace.lints]` once every crate is clean).
+#![warn(clippy::string_slice)]
+
 use opentide_lsp::server;
 
 use anyhow::{Context, Result};

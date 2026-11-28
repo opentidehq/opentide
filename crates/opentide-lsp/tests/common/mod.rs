@@ -72,6 +72,11 @@ impl Lsp {
     }
 
     pub fn read_any(&mut self) -> Value {
+        serde_json::from_slice(&self.read_frame()).unwrap()
+    }
+
+    /// The body of the next frame, as the server wrote it.
+    pub fn read_frame(&mut self) -> Vec<u8> {
         let mut content_length = None;
         loop {
             let mut header = String::new();
@@ -87,7 +92,7 @@ impl Lsp {
         let len = content_length.expect("Content-Length");
         let mut buf = vec![0u8; len];
         self.reader.read_exact(&mut buf).unwrap();
-        serde_json::from_slice(&buf).unwrap()
+        buf
     }
 
     pub fn request(&mut self, method: &str, params: Value) -> Value {

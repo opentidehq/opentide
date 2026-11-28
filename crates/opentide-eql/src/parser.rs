@@ -128,7 +128,11 @@ pub const UNEXPECTED: &str = "unexpected token";
 fn keywords(source: &str, mut lexemes: Vec<Lexeme>) -> Vec<Lexeme> {
     for lexeme in &mut lexemes {
         if lexeme.kind == K::WORD.raw() {
-            let text = &source[std::ops::Range::<usize>::from(lexeme.range)];
+            let text = crate::cut(
+                source,
+                lexeme.range.start().into(),
+                lexeme.range.end().into(),
+            );
             if let Some((_, kind)) = KEYWORDS.iter().find(|(word, _)| *word == text) {
                 lexeme.kind = kind.raw();
             }

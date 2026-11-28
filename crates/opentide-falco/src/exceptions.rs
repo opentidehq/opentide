@@ -116,8 +116,11 @@ fn valid_lhs(field: &str, source: &str) -> Result<(), String> {
         };
     }
     let (name, arg) = match field.split_once('[') {
-        Some((n, a)) if a.ends_with(']') => (n, Some(&a[..a.len() - 1])),
-        _ => (field, None),
+        Some((n, a)) => match a.strip_suffix(']') {
+            Some(a) => (n, Some(a)),
+            None => (field, None),
+        },
+        None => (field, None),
     };
     crate::compile::resolve(catalog, source, name, arg)
         .map(|_| ())

@@ -10,7 +10,7 @@
 //! edit is [`opentide_compile::promotion`].
 //!
 //! A target that is not a configured status (none set, or not a string) ends
-//! the run with exit 1 and no result document ([`BARE_EXIT`]); a promoted
+//! the run with exit 1 and no result document ([`CommandResult::bare_exit`]); a promoted
 //! block whose key is not a string, and promoted text that does not read
 //! back, fail it with a message ([`Stop::Failed`]).
 
@@ -22,14 +22,11 @@ use opentide_compile::promotion::{self, Error, NOT_PROMOTED_ADVICE, Settings};
 use opentide_schema::node;
 
 use super::deploy_send::Lines;
-use crate::json::Json;
+use super::result::{CommandResult, ExitCode};
 use crate::render::progress::{Step, StepStatus};
 
 /// The step's name.
 pub const STEP: &str = "status promotion";
-/// The result key of a run that ends with its exit code alone: no document,
-/// no outcome line.
-pub const BARE_EXIT: &str = "_bare_exit";
 
 /// What the promotion needs from the run.
 #[derive(Debug)]
@@ -564,20 +561,15 @@ fn plan(promotion: &Promotion<'_>) -> Planned {
     (events, planned, None)
 }
 
-/// The result of a run the promotion stopped.
-pub fn stopped(stop: &Stop) -> Vec<(String, Json)> {
+/// The result of a run the promotion stopped: failed, exit 1; an invalid
+/// target ends the run with its exit code alone.
+pub fn stopped(stop: &Stop) -> CommandResult {
     match stop {
-        Stop::Failed(message) => vec![
-            ("status".to_owned(), Json::str("failed")),
-            ("message".to_owned(), Json::str(message)),
-            ("_exit_code".to_owned(), Json::Int(1)),
-        ],
-        Stop::Exit => vec![
-            ("status".to_owned(), Json::str("failed")),
-            ("message".to_owned(), Json::str("Invalid promotion target")),
-            ("_exit_code".to_owned(), Json::Int(1)),
-            (BARE_EXIT.to_owned(), Json::Bool(true)),
-        ],
+        Stop::Failed(message) => CommandResult::failed(message, ExitCode::Failure),
+        Stop::Exit => CommandResult {
+            bare_exit: true,
+            ..CommandResult::failed("Invalid promotion target", ExitCode::Failure)
+        },
     }
 }
 
@@ -742,7 +734,10 @@ mod tests {
         assert_eq!(after[0], RULE.as_bytes());
         assert!(drawn.contains("✗ status promotion · 1 rule"), "{drawn}");
         let result = stopped(&Stop::Exit);
-        assert!(result.iter().any(|(key, _)| key == BARE_EXIT));
+        assert!(result.bare_exit);
+        let report = result.report("deploy");
+        assert!(report.bare_exit);
+        assert_eq!(report.outcome.exit_code, 1);
     }
 
     #[test]
@@ -772,7 +767,8 @@ mod tests {
             "{message}"
         );
         let result = stopped(&Stop::Failed("b.yaml: rule has no name".into()));
-        assert_eq!(result[1].1, Json::str("b.yaml: rule has no name"));
+        assert_eq!(result.message.as_deref(), Some("b.yaml: rule has no name"));
+        assert!(!result.bare_exit);
     }
 
     /// A rule file that is not YAML, or whose root is no mapping, fails the
