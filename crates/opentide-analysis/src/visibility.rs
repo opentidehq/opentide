@@ -97,7 +97,8 @@ mod tests {
             .nth(col)
             .map(|(i, _)| i)
             .unwrap_or(current.len());
-        let joined = format!("{}{}{}", &current[..byte], edit.new_text, &current[byte..]);
+        let (head, tail) = current.split_at_checked(byte).unwrap();
+        let joined = format!("{head}{}{tail}", edit.new_text);
         lines[line] = joined;
         lines.join("\n")
     }
@@ -127,8 +128,10 @@ FlowType_s = { type = "string" }
         let applied = apply(VISIBILITY, &edit);
         assert!(applied.starts_with(VISIBILITY), "{applied}");
         assert_eq!(
-            &applied[VISIBILITY.len()..],
-            "\n[[logsources]]\nname = \"NTAIpDetails\"\ndescription = \"\"\nsystem = \"sentinel\"\n"
+            applied.strip_prefix(VISIBILITY),
+            Some(
+                "\n[[logsources]]\nname = \"NTAIpDetails\"\ndescription = \"\"\nsystem = \"sentinel\"\n"
+            )
         );
         // The result still parses, with both tables declared, and the new
         // entry does not join the previous one's columns.

@@ -7,7 +7,7 @@
 
 use std::collections::BTreeMap;
 
-use opentide_schema::platforms::PlatformKey;
+use opentide_schema::platforms::{PlatformId, PlatformKey};
 
 use crate::credentials::{self, Credential, Mode, Origin};
 use crate::error::ConnectorError;
@@ -276,9 +276,55 @@ fn ssl(value: &toml::Value, env: &Environment, mode: Mode) -> Result<bool, Strin
     }
 }
 
+/// Microsoft Graph, which Microsoft Defender's tenants are reached through.
+const GRAPH_HOST: &str = "https://graph.microsoft.com";
+/// CrowdStrike's API in its default cloud (US-1).
+const CROWDSTRIKE_HOST: &str = "https://api.crowdstrike.com";
+/// The Log Analytics API, which Microsoft Sentinel's queries run on.
+const LOG_ANALYTICS_HOST: &str = "https://api.loganalytics.io";
+
+/// The address a transport failure is reported at for a tenant of *platform*
+/// configured without a URL (`_DEFAULT_HOSTS`), or `None` for a platform
+/// whose tenants name their own.
+pub const fn default_host(platform: PlatformId) -> Option<&'static str> {
+    match platform {
+        PlatformId::MicrosoftDefender => Some(GRAPH_HOST),
+        PlatformId::Crowdstrike => Some(CROWDSTRIKE_HOST),
+        PlatformId::Sentinel => Some(LOG_ANALYTICS_HOST),
+        PlatformId::Splunk
+        | PlatformId::SentinelOne
+        | PlatformId::Harfanglab
+        | PlatformId::CarbonBlackCloud
+        | PlatformId::Elastic
+        | PlatformId::Sysdig
+        | PlatformId::Bitdefender
+        | PlatformId::Graylog
+        | PlatformId::Exabeam
+        | PlatformId::GoogleSecops
+        | PlatformId::Datadog => None,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_cloud_platforms_have_a_default_host() {
+        assert_eq!(
+            default_host(PlatformId::MicrosoftDefender),
+            Some("https://graph.microsoft.com")
+        );
+        assert_eq!(
+            default_host(PlatformId::Crowdstrike),
+            Some("https://api.crowdstrike.com")
+        );
+        assert_eq!(
+            default_host(PlatformId::Sentinel),
+            Some("https://api.loganalytics.io")
+        );
+        assert_eq!(default_host(PlatformId::Elastic), None);
+    }
 
     #[test]
     fn an_integer_beyond_i64_is_the_nearest_float_in_a_setup_value() {

@@ -87,16 +87,16 @@ pub struct Record {
     pub name: String,
     /// Its page's file name stem, unique in its folder.
     pub slug: String,
-    /// Its model.
+    /// Its document, read into its model's types.
     pub model: Model,
 }
 
 /// A signal, which lives on its objective's page.
 #[derive(Debug, Clone)]
 pub struct SignalRecord {
-    /// Its UUID.
+    /// The `uuid` its objective's `signals` entry gives.
     pub uuid: String,
-    /// Its name.
+    /// The `name` its objective's `signals` entry gives.
     pub name: String,
     /// Its objective.
     pub owner: String,
@@ -109,7 +109,7 @@ pub enum Direction {
     Upstream,
     /// Children, down to the rules.
     Downstream,
-    /// Both.
+    /// Upstream and downstream.
     Both,
 }
 
@@ -160,7 +160,7 @@ pub struct GraphNode {
     pub uuid: String,
     /// Its name.
     pub name: String,
-    /// Its type.
+    /// Its object type, such as `threat`.
     pub object_type: &'static str,
     /// A threat's first kill chain stage.
     pub killchain: Option<String>,
@@ -173,7 +173,7 @@ pub struct GraphEdge {
     pub source: String,
     /// To.
     pub target: String,
-    /// The label.
+    /// The text drawn on the edge, if any.
     pub label: Option<String>,
     /// Drawn both ways.
     pub both_ways: bool,
@@ -868,7 +868,8 @@ pub fn chain_target(entry: &indexmap::IndexMap<String, String>) -> Option<&str> 
     })
 }
 
-/// A rule's `detection_model`.
+/// A rule's `detection_model`, in either rule model version; `None` when it
+/// is unset or `model` is not a rule's.
 pub fn rule_detection_model(model: &Model) -> Option<&str> {
     match model {
         Model::Rule(RuleModel::V1_0(rule)) => rule.detection_model.as_deref(),
