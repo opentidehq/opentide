@@ -8,7 +8,7 @@
 use jsonc_parser::ParseOptions;
 use jsonc_parser::cst::{CstInputValue, CstObject, CstRootNode};
 
-use crate::json::Json;
+use crate::json::{Json, Object};
 
 const BOM: &str = "\u{feff}";
 
@@ -266,12 +266,12 @@ pub fn ordered(text: &str) -> Option<Json> {
 /// One node of the tree as a value.
 fn node_json(node: &jsonc_parser::cst::CstNode) -> Option<Json> {
     if let Some(object) = node.as_object() {
-        let mut members = Vec::new();
+        let mut members = Object::new();
         for prop in object.properties() {
             let name = prop.name()?.decoded_value().ok()?;
-            members.push((name, node_json(&prop.value()?)?));
+            members.insert(name, node_json(&prop.value()?)?);
         }
-        return Some(Json::object(members));
+        return Some(Json::Object(members));
     }
     if let Some(array) = node.as_array() {
         return array

@@ -602,15 +602,15 @@ pub fn migrate(workspace: &Path, rules_dir: &Path) -> Report {
                 file = relative.as_str(),
                 "external_id_unused"
             );
-            let mut members = vec![
+            let mut members = Object::from([
                 ("file".to_owned(), Json::str(&relative)),
                 ("uuid".to_owned(), optional(rule.object_uuid.as_ref())),
-            ];
+            ]);
             if let Json::Object(binding) = binding.json() {
                 members.extend(binding);
             }
             unused.push((
-                Json::object(members),
+                Json::Object(members),
                 format!(
                     "external_id_unused: {} tenant {} id {} removed from {relative} (never read \
                      by its deployer; not stored)",
@@ -741,7 +741,7 @@ fn outcome(
         ("shards_written".to_owned(), int(shards_written)),
         ("rules_edited".to_owned(), int(rules)),
     ]);
-    let mut report = Report::completed(COMMAND, Vec::new());
+    let mut report = Report::completed(COMMAND, Object::new());
     report.outcome.summary = Object::from([
         ("ids".to_owned(), int(ids)),
         ("rules".to_owned(), int(rules)),
@@ -788,7 +788,7 @@ fn refused(rule: &deploy_state::IgnoreRule) -> Report {
         "deployment_state_ignored: {}",
         deploy_state::ignored_message(rule)
     );
-    let mut report = Report::completed(COMMAND, Vec::new());
+    let mut report = Report::completed(COMMAND, Object::new());
     report.outcome.data = Object::from([
         ("code".to_owned(), Json::str("deployment_state_ignored")),
         (

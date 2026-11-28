@@ -1131,7 +1131,7 @@ pub fn ci(args: &CiArgs, cx: &Context<'_>) -> Report {
         match confirm(&shown, &root, cx) {
             Ok(true) => {}
             Ok(false) => {
-                let mut report = Report::completed(COMMAND, Vec::new());
+                let mut report = Report::completed(COMMAND, Object::new());
                 report.outcome.status = Status::Skipped;
                 report.outcome.message = "CI/CD setup cancelled".into();
                 return report;
@@ -1224,7 +1224,7 @@ fn stdout_report(args: &CiArgs, root: &Path, cx: &Context<'_>) -> Report {
         Ok(run) => run,
         Err(report) => return *report,
     };
-    let mut report = Report::completed(COMMAND, Vec::new());
+    let mut report = Report::completed(COMMAND, Object::new());
     report.outcome.message = format!("Printed the {} pipeline", args.provider.label());
     // `body_only` skips the result's own warnings, so they go to stderr here.
     let warnings = unique(run.warnings);

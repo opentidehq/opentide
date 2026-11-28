@@ -96,28 +96,28 @@ impl Record {
 
     /// The record as the result lists it (`as_dict`).
     pub fn to_json(&self) -> OutJson {
-        let mut members = vec![
+        let mut members = Object::from([
             ("object_uuid".to_owned(), OutJson::str(&self.object_uuid)),
             ("integration".to_owned(), OutJson::str(INTEGRATION_MISP)),
             ("target".to_owned(), OutJson::str(&self.target)),
             ("action".to_owned(), OutJson::str(&self.action)),
-        ];
+        ]);
         if let Some(uuid) = &self.remote_event_uuid {
-            members.push(("remote_event_uuid".into(), OutJson::str(uuid)));
+            members.insert("remote_event_uuid".into(), OutJson::str(uuid));
         }
         if let Some(id) = self.remote_event_id {
-            members.push(("remote_event_id".into(), OutJson::Int(id)));
+            members.insert("remote_event_id".into(), OutJson::Int(id));
         }
         if let Some(reason) = &self.reason {
-            members.push(("reason".into(), OutJson::str(reason)));
+            members.insert("reason".into(), OutJson::str(reason));
         }
         if !self.notes.is_empty() {
-            members.push((
+            members.insert(
                 "notes".into(),
                 OutJson::Array(self.notes.iter().map(OutJson::str).collect()),
-            ));
+            );
         }
-        OutJson::object(members)
+        OutJson::Object(members)
     }
 }
 
