@@ -285,10 +285,6 @@ fn set(result: &mut Vec<(String, Json)>, key: &str, value: Json) {
     }
 }
 
-fn convert(value: &CJson) -> Json {
-    super::deploy::convert(value)
-}
-
 fn names(runs: &[StatusStrategy]) -> Json {
     Json::Array(runs.iter().map(|run| Json::str(run.name())).collect())
 }
@@ -543,12 +539,7 @@ fn report_skipped(
     };
     result.data.push((
         "skipped".into(),
-        Json::Array(
-            skipped
-                .iter()
-                .map(|entry| convert(&entry.to_json()))
-                .collect(),
-        ),
+        Json::Array(skipped.iter().map(|entry| entry.to_json()).collect()),
     ));
     // The rows the run skipped (a rule no tenant takes, an `INERT` block),
     // and the rules a status left out that have no such row: a rule is
@@ -912,7 +903,7 @@ fn deploy(
         prune: args.prune,
     });
     plan_warnings.extend(found.warnings.iter().cloned());
-    *retirable = found.retirable_json().as_ref().map(convert);
+    *retirable = found.retirable_json();
     let retiring = !found.retirements.is_empty();
     // The commits changed no rule file: say so, rather than blame a status.
     let unchanged = !selecting && !args.all && scope.files.is_empty() && scope.nested.is_empty();
@@ -1273,12 +1264,7 @@ fn deploy(
         deployed,
         plan: plan_payload,
         strategies: run_names,
-        changes: Json::Array(
-            changes
-                .iter()
-                .map(|change| convert(&change.to_json()))
-                .collect(),
-        ),
+        changes: Json::Array(changes.iter().map(|change| change.to_json()).collect()),
         results: Json::Array(results.iter().map(RuleResult::to_json).collect()),
         summary: run_summary(&results, platforms, tenant_count, seconds),
     };
