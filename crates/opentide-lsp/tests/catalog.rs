@@ -623,3 +623,107 @@ fn a_keystroke_gathers_no_disk_entry_again() {
     }
     assert_eq!(gathered(&mut lsp), before);
 }
+
+/// The bytes of the server's reply to `opentide/catalog` for every root,
+/// asked with request id `id`: two servers asked with the same id answer
+/// the same frame for the same index.
+fn catalog_frame(lsp: &mut Lsp, id: i64) -> Vec<u8> {
+    use std::io::{BufRead, Read};
+    lsp.write(&json!({ "jsonrpc": "2.0", "id": id, "method": "opentide/catalog", "params": {} }));
+    loop {
+        let mut length = None;
+        loop {
+            let mut header = String::new();
+            lsp.reader.read_line(&mut header).unwrap();
+            let header = header.trim_end();
+            if header.is_empty() {
+                break;
+            }
+            if let Some(value) = header.strip_prefix("Content-Length:") {
+                length = Some(value.trim().parse::<usize>().unwrap());
+            }
+        }
+        let mut frame = vec![0u8; length.expect("Content-Length")];
+        lsp.reader.read_exact(&mut frame).unwrap();
+        let message: Value = serde_json::from_slice(&frame).unwrap();
+        if message["id"] == id && message.get("method").is_none() {
+            return frame;
+        }
+    }
+}
+
+/// The index a server keeps across keystrokes (its disk entries shared, the
+/// open document's entry and digest made again, #2002) answers
+/// `opentide/catalog` byte for byte as a server that indexes the same
+/// workspace from scratch: one with the edited text open, and one with it
+/// on disk and nothing open.
+#[test]
+fn an_index_kept_across_keystrokes_answers_the_catalog_a_fresh_index_does() {
+    const RULES: usize = 4;
+    let scratch = workspace("catalog-differential");
+    let root = &scratch.0;
+    for n in 0..RULES {
+        let text = rule(DANGLING)
+            .replace(
+                "00000000-0000-4000-8003-000000000001",
+                &format!("00000000-0000-4000-8003-0000000002{n:02}"),
+            )
+            .replace("name: Sentinel KQL Rule", &format!("name: Rule é😀 {n}"));
+        std::fs::write(root.join(format!("objects/rules/rule-{n}.yaml")), text).unwrap();
+    }
+    let path = root.join("objects/rules/rule-1.0.yaml");
+    let rule_uri = file_uri(&path);
+    // With a file watcher, the index is kept across batches.
+    let params = json!({
+        "capabilities": { "workspace": { "didChangeWatchedFiles": { "dynamicRegistration": true } } },
+        "rootUri": file_uri(root),
+    });
+    let open = |lsp: &mut Lsp, text: &str| {
+        lsp.notify(
+            "textDocument/didOpen",
+            json!({ "textDocument": { "uri": rule_uri, "languageId": "opentide-yaml", "version": 1, "text": text } }),
+        );
+    };
+    let mut kept = start(params.clone());
+    // The index is built once, before the document opens.
+    catalog_frame(&mut kept, 9000);
+    open(&mut kept, &rule(DANGLING));
+    let steps = [
+        rule(DANGLING).replace("Minimal valid", "A minimal é😀"),
+        // The ref resolves, then the name changes, then the object goes.
+        rule(MODEL),
+        rule(MODEL).replace("name: Sentinel KQL Rule", "name: Renamed 😀"),
+        String::new(),
+        "name: [".to_string(),
+        rule(DANGLING),
+    ];
+    for (step, text) in steps.iter().enumerate() {
+        did_change(&mut kept, &rule_uri, text);
+        settle(&mut kept);
+        let id = 9001 + i64::try_from(step).unwrap();
+        let incremental = catalog_frame(&mut kept, id);
+
+        let mut fresh = start(params.clone());
+        open(&mut fresh, text);
+        let opened = catalog_frame(&mut fresh, id);
+        assert_eq!(
+            String::from_utf8_lossy(&incremental),
+            String::from_utf8_lossy(&opened),
+            "step {step}: the kept index and a fresh one with the document open"
+        );
+        drop(fresh);
+    }
+    // Closed, the document is its file on disk again.
+    kept.notify(
+        "textDocument/didClose",
+        json!({ "textDocument": { "uri": rule_uri } }),
+    );
+    settle(&mut kept);
+    let closed = catalog_frame(&mut kept, 9100);
+    let mut fresh = start(params);
+    assert_eq!(
+        String::from_utf8_lossy(&closed),
+        String::from_utf8_lossy(&catalog_frame(&mut fresh, 9100)),
+        "the kept index after didClose and a fresh one"
+    );
+}
