@@ -84,13 +84,14 @@ pub mod messages {
 pub const BUDGET: usize = 100_000;
 
 /// The conversion state: the path to the value being converted, the errors so
-/// far, and the work left.
+/// far, the work left, and whether the models' own checks run.
 #[derive(Debug)]
 pub struct Context {
     path: Vec<PathSegment>,
     errors: Vec<SchemaError>,
     remaining: usize,
     stopped: bool,
+    model_checks: bool,
 }
 
 impl Default for Context {
@@ -107,7 +108,25 @@ impl Context {
             errors: Vec::new(),
             remaining: BUDGET,
             stopped: false,
+            model_checks: true,
         }
+    }
+
+    /// A context at the document's root that runs no model's `before` check
+    /// (`#[from_node(before = ...)]` on a struct), so every model's fields are
+    /// converted: a check that refuses a model stops the conversion of its
+    /// fields, and the faults of their shape behind it go unreported. A
+    /// field's own checks still run.
+    pub fn without_model_checks() -> Self {
+        Self {
+            model_checks: false,
+            ..Self::new()
+        }
+    }
+
+    /// Whether a model's `before` check runs ([`Self::without_model_checks`]).
+    pub fn runs_model_checks(&self) -> bool {
+        self.model_checks
     }
 
     /// Counts one unit of work; `false` once the budget is spent (the
@@ -195,6 +214,7 @@ impl Context {
             errors: Vec::new(),
             remaining: self.remaining,
             stopped: self.stopped,
+            model_checks: self.model_checks,
         }
     }
 
