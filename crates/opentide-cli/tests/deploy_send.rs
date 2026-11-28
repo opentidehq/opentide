@@ -2840,18 +2840,23 @@ fn dry_run_requests(ws: &Path, platform: &str) -> Vec<(String, Option<String>)> 
         .collect()
 }
 
-/// The body a Sentinel deploy sends is, byte for byte, the `api_request` the
-/// dry run shows (#1952: both compile through `compiler::Sentinel`): the
-/// exclusions that apply, their `let` statements, the non-ASCII text of the
+/// The body a Sentinel deploy sends to each tenant is, byte for byte, the
+/// `api_request` the dry run shows for that tenant (#1952: both compile
+/// through `compiler::Sentinel`; #2081: the dry run compiles for the run's
+/// tenants, not a placeholder): the exclusions that apply everywhere, the one
+/// scoped to that tenant, their `let` statements, the non-ASCII text of the
 /// query, and an exclusion scoped to a tenant the run does not reach, left
-/// out of both.
+/// out of both. The dry run shows the first tenant's body and names it, so
+/// each tenant of the run is put first in turn.
 #[test]
 fn a_sentinel_deploy_sends_the_body_its_dry_run_shows() {
     let block = format!(
         "{SENTINEL_STAGING}    exclusions:\n      - query: '| where Account != \"é😀\"'\n        \
          reason: Everywhere\n        let:\n          allowed: \"svc é\"\n      - query: '| \
          where Computer != \"elsewhere\"'\n        reason: Another tenant\n        tenant: \
-         elsewhere\n"
+         elsewhere\n      - query: '| where Computer != \"soc-only é\"'\n        reason: The \
+         SOC\n        tenant: soc\n      - query: '| where Computer != \"lab-only 😀\"'\n        \
+         reason: The lab\n        tenant: lab\n"
     )
     .replace(
         "query: SecurityEvent\n",
@@ -2863,25 +2868,55 @@ fn a_sentinel_deploy_sends_the_body_its_dry_run_shows() {
         "d.",
         &block,
     );
-    let ws = workspace("sentinel", "soc", SENTINEL_SETUP, &[("a.yaml", text)]);
-    let shown = dry_run_requests(ws.path(), "sentinel");
-    let recording: &'static Recording = Box::leak(Box::new(Recording(Mutex::new(Vec::new()))));
-    let mut registry = Registry::new();
-    registry
-        .register(Box::new(Recorded("sentinel", recording)))
-        .unwrap();
-    let env = Env::from_pairs([("AZURE_CLIENT_SECRET", SECRET)]);
-    let (sent, err) = deploy(ws.path(), "sentinel", &env, &registry, 0);
-    assert_eq!(rows(&sent), vec![("deployed".to_owned(), None)], "{err}");
-    let bodies = recording.0.lock().unwrap().clone();
-    assert_eq!(bodies.len(), 1, "{err}");
-    let body = String::from_utf8(bodies[0].clone()).unwrap();
-    assert!(
-        body.contains("é😀") && body.contains("let allowed"),
-        "{body}"
-    );
-    assert!(!body.contains("elsewhere"), "{body}");
-    assert_eq!(shown, vec![(body, None)]);
+    for (first, second) in [("soc", "lab"), ("lab", "soc")] {
+        let ws = workspace(
+            "sentinel",
+            first,
+            SENTINEL_SETUP,
+            &[("a.yaml", text.clone())],
+        );
+        let config = ws
+            .path()
+            .join(".opentide/configurations/platforms/sentinel.toml");
+        let mut toml = std::fs::read_to_string(&config).unwrap();
+        toml.push_str(&format!(
+            "\n[[tenants]]\nname = \"{second}\"\nstrategies = [\"PREVIEW\", \
+             \"RELEASE\"]\n[tenants.setup]\n{SENTINEL_SETUP}"
+        ));
+        std::fs::write(&config, toml).unwrap();
+        let shown = dry_run_requests(ws.path(), "sentinel");
+        let recording: &'static TenantRecording =
+            Box::leak(Box::new(TenantRecording(Mutex::new(Vec::new()))));
+        let mut registry = Registry::new();
+        registry
+            .register(Box::new(TenantRecorded("sentinel", recording)))
+            .unwrap();
+        let env = Env::from_pairs([("AZURE_CLIENT_SECRET", SECRET)]);
+        let (sent, err) = deploy(ws.path(), "sentinel", &env, &registry, 0);
+        assert_eq!(rows(&sent), vec![("deployed".to_owned(), None); 2], "{err}");
+        let bodies = recording.0.lock().unwrap().clone();
+        assert_eq!(bodies.len(), 2, "{err}");
+        let body_of = |tenant: &str| -> String {
+            let (_, body) = bodies.iter().find(|(name, _)| name == tenant).unwrap();
+            String::from_utf8(body.clone()).unwrap()
+        };
+        let (body, other) = (body_of(first), body_of(second));
+        let (own, foreign) = if first == "soc" {
+            ("soc-only é", "lab-only 😀")
+        } else {
+            ("lab-only 😀", "soc-only é")
+        };
+        assert!(
+            body.contains("é😀") && body.contains("let allowed") && body.contains(own),
+            "{body}"
+        );
+        assert!(
+            !body.contains("elsewhere") && !body.contains(foreign),
+            "{body}"
+        );
+        assert!(other.contains(foreign) && !other.contains(own), "{other}");
+        assert_eq!(shown, vec![(body, Some(first.to_owned()))]);
+    }
 }
 
 /// The create body a Graylog deploy sends is, byte for byte, the body of the
@@ -2935,6 +2970,288 @@ fn a_graylog_deploy_sends_the_body_its_dry_run_shows() {
     assert_eq!(shown[0].1.as_deref(), Some("lab"));
     let request = Json::parse(&shown[0].0).unwrap();
     assert_eq!(request.get("body").unwrap().to_compact(), body);
+}
+
+/// The bodies of the requests `server` received with `verb` on `path`, as
+/// text.
+fn bodies_on(
+    rt: &tokio::runtime::Runtime,
+    server: &wiremock::MockServer,
+    verb: &wiremock::http::Method,
+    path: &str,
+) -> Vec<String> {
+    rt.block_on(server.received_requests())
+        .unwrap()
+        .iter()
+        .filter(|request| request.method == *verb && request.url.path() == path)
+        .map(|request| String::from_utf8(request.body.clone()).unwrap())
+        .collect()
+}
+
+/// The create body an Exabeam deploy sends is, byte for byte, the body of
+/// the `api_request` the dry run shows for that tenant (#1952: both compile
+/// through `compiler::Exabeam`): the tenant's `test_mode`, and the non-ASCII
+/// text of the rule.
+#[test]
+fn an_exabeam_deploy_sends_the_body_its_dry_run_shows() {
+    use wiremock::matchers::{method, path};
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let server = rt.block_on(wiremock::MockServer::start());
+    let (setup, env) = exabeam_stand(&server, &rt);
+    rt.block_on(async {
+        wiremock::Mock::given(method("GET"))
+            .and(path("/correlation-rules/v2/rules"))
+            .respond_with(wiremock::ResponseTemplate::new(200).set_body_string("[]"))
+            .mount(&server)
+            .await;
+        wiremock::Mock::given(method("POST"))
+            .and(path("/correlation-rules/v2/rules"))
+            .respond_with(wiremock::ResponseTemplate::new(200).set_body_string(
+                r#"{"id": "016dbc1d-a727-43df-a143-9546dcc81a5a", "name": "Ünïcode rule 😀"}"#,
+            ))
+            .expect(1)
+            .mount(&server)
+            .await;
+    });
+    let block = EXABEAM_BLOCK.replace(
+        "activity_type:\"process-create\"",
+        "activity_type:\"process-create\" AND user:\"é😀\"",
+    );
+    let text = rule(
+        "Ünïcode rule 😀",
+        "00000000-0000-4000-8099-000000000203",
+        "Dé😀.",
+        &block,
+    );
+    let ws = workspace(
+        "exabeam",
+        "lab",
+        &format!("{setup}test_mode = true\n"),
+        &[("a.yaml", text)],
+    );
+    let shown = dry_run_requests(ws.path(), "exabeam");
+    let (sent, err) = deploy(
+        ws.path(),
+        "exabeam",
+        &env,
+        &opentide_connectors::builtin(),
+        0,
+    );
+    rt.block_on(server.verify());
+    assert_eq!(rows(&sent), vec![("deployed".to_owned(), None)], "{err}");
+    let created = bodies_on(
+        &rt,
+        &server,
+        &wiremock::http::Method::POST,
+        "/correlation-rules/v2/rules",
+    );
+    assert_eq!(created.len(), 1, "{err}");
+    let body = &created[0];
+    assert!(
+        body.contains("é😀") && body.contains(r#""testMode":true"#),
+        "{body}"
+    );
+    assert_eq!(shown.len(), 1);
+    assert_eq!(shown[0].1.as_deref(), Some("lab"));
+    let request = Json::parse(&shown[0].0).unwrap();
+    assert_eq!(&request.get("body").unwrap().to_compact(), body);
+}
+
+/// The create body a Datadog deploy sends, and the validation that comes
+/// before it, are, byte for byte, the body of the `api_request` the dry run
+/// shows for that tenant (#1952: both compile through `compiler::Datadog`):
+/// the handle the tenant gives the case's notification alias, its tags, and
+/// the non-ASCII text of the rule.
+#[test]
+fn a_datadog_deploy_sends_the_body_its_dry_run_shows() {
+    use wiremock::matchers::{method, path};
+    const RULES: &str = "/api/v2/security_monitoring/rules";
+    const VALIDATION: &str = "/api/v2/security_monitoring/rules/validation";
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let server = rt.block_on(wiremock::MockServer::start());
+    let (setup, env) = datadog_stand(&server);
+    rt.block_on(async {
+        wiremock::Mock::given(method("POST"))
+            .and(path(VALIDATION))
+            .respond_with(wiremock::ResponseTemplate::new(204))
+            .expect(1)
+            .mount(&server)
+            .await;
+        wiremock::Mock::given(method("POST"))
+            .and(path(RULES))
+            .respond_with(
+                wiremock::ResponseTemplate::new(200)
+                    .set_body_string(r#"{"id": "abc-def-ghi", "version": 1}"#),
+            )
+            .expect(1)
+            .mount(&server)
+            .await;
+    });
+    let block = DATADOG_BLOCK.replace("@evt.outcome:FAILURE", "@usr.name:\"é😀\"");
+    let text = rule(
+        "Ünïcode rule 😀",
+        "00000000-0000-4000-8099-000000000204",
+        "Dé😀.",
+        &block,
+    );
+    let setup = setup.replace(
+        "[tenants.setup.notifications]",
+        "tags = [\"team:soc\"]\n[tenants.setup.notifications]",
+    );
+    let ws = workspace("datadog", "eu", &setup, &[("a.yaml", text)]);
+    let shown = dry_run_requests(ws.path(), "datadog");
+    let (sent, err) = deploy(
+        ws.path(),
+        "datadog",
+        &env,
+        &opentide_connectors::builtin(),
+        0,
+    );
+    rt.block_on(server.verify());
+    assert_eq!(rows(&sent), vec![("deployed".to_owned(), None)], "{err}");
+    let created = bodies_on(&rt, &server, &wiremock::http::Method::POST, RULES);
+    let validated = bodies_on(&rt, &server, &wiremock::http::Method::POST, VALIDATION);
+    assert_eq!((created.len(), validated.len()), (1, 1), "{err}");
+    let body = &created[0];
+    for part in ["@slack-soc", "team:soc", "é😀"] {
+        assert!(body.contains(part), "{part} not in {body}");
+    }
+    assert_eq!(&validated[0], body);
+    assert_eq!(shown.len(), 1);
+    assert_eq!(shown[0].1.as_deref(), Some("eu"));
+    let request = Json::parse(&shown[0].0).unwrap();
+    assert_eq!(&request.get("body").unwrap().to_compact(), body);
+}
+
+/// The API root of the Google SecOps instance the stand serves.
+const SECOPS_INSTANCE: &str = "/v1/projects/p/locations/eu/instances/i";
+
+/// Mounts on `server` what a Google SecOps create reaches: the token, one
+/// `verify`, one create on `rules` that answers `rule_id`, and one
+/// `deployment` update.
+fn mount_secops_create(
+    rt: &tokio::runtime::Runtime,
+    server: &wiremock::MockServer,
+    verify: &str,
+    rules: &str,
+    deployment: &str,
+    rule_id: &str,
+) {
+    use wiremock::matchers::{method, path, path_regex};
+    rt.block_on(async {
+        let ok = |body: serde_json::Value| wiremock::ResponseTemplate::new(200).set_body_json(body);
+        wiremock::Mock::given(method("POST"))
+            .and(path("/token"))
+            .respond_with(ok(
+                serde_json::json!({"access_token": "t", "expires_in": 3600}),
+            ))
+            .mount(server)
+            .await;
+        wiremock::Mock::given(method("POST"))
+            .and(path(verify))
+            .respond_with(ok(serde_json::json!({
+                "success": true,
+                "allowedRunFrequencies": ["LIVE", "HOURLY", "DAILY"]
+            })))
+            .expect(1)
+            .mount(server)
+            .await;
+        wiremock::Mock::given(method("POST"))
+            .and(path(rules))
+            .respond_with(ok(
+                serde_json::json!({"name": format!("{}/rules/{rule_id}", &SECOPS_INSTANCE[4..])}),
+            ))
+            .expect(1)
+            .mount(server)
+            .await;
+        wiremock::Mock::given(method("PATCH"))
+            .and(path_regex(format!("^{deployment}$")))
+            .respond_with(ok(serde_json::json!({})))
+            .expect(1)
+            .mount(server)
+            .await;
+    });
+}
+
+/// What a Google SecOps deploy sends is, byte for byte, what the dry run
+/// shows (#1952: both compile through `compiler::GoogleSecops`): the
+/// `rules.create` body is the shown `text` (the tenant names no scope), the
+/// text verified is that text, and the deployment the new rule gets is the
+/// shown `run_state` (its body, and its mask as `updateMask`). The rule's
+/// non-ASCII text goes through as written.
+#[test]
+fn a_google_secops_deploy_sends_the_body_its_dry_run_shows() {
+    const RULE_ID: &str = "ru_0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d";
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let server = rt.block_on(wiremock::MockServer::start());
+    let uri = server.uri();
+    let rules = format!("{SECOPS_INSTANCE}/rules");
+    let verify = format!("{SECOPS_INSTANCE}:verifyRuleText");
+    let deployment = format!("{SECOPS_INSTANCE}/rules/{RULE_ID}/deployment");
+    mount_secops_create(&rt, &server, &verify, &rules, &deployment, RULE_ID);
+    let text = std::fs::read_to_string(
+        repo().join("tests/fixtures/google_secops/rule-google-secops-process-1.0.yaml"),
+    )
+    .unwrap()
+    .replace("Microsoft Sysmon", "Sysmon é😀")
+    .replace("// Office parent", "// Parent Office (Wörd 😀)");
+    let setup = format!(
+        "ssl = false\nproject = \"p\"\nlocation = \"eu\"\ninstance = \"i\"\nendpoint = \"{uri}\"\n"
+    );
+    let ws = workspace("google_secops", "lab", &setup, &[("a.yaml", text)]);
+    let adc = ws.path().join("adc.json");
+    std::fs::write(
+        &adc,
+        format!(
+            r#"{{"type": "authorized_user", "client_id": "c", "client_secret": "s",
+                "refresh_token": "r", "token_uri": "{uri}/token"}}"#
+        ),
+    )
+    .unwrap();
+    let env = Env::from_pairs([(
+        "GOOGLE_APPLICATION_CREDENTIALS".to_owned(),
+        adc.display().to_string(),
+    )]);
+    let shown = dry_run_requests(ws.path(), "google_secops");
+    let (sent, err) = deploy(
+        ws.path(),
+        "google_secops",
+        &env,
+        &opentide_connectors::builtin(),
+        0,
+    );
+    rt.block_on(server.verify());
+    assert_eq!(rows(&sent), vec![("deployed".to_owned(), None)], "{err}");
+    assert_eq!(shown.len(), 1);
+    let payload = Json::parse(&shown[0].0).unwrap();
+    let shown_text = payload.get("text").unwrap().to_compact();
+    assert!(
+        shown_text.contains("é😀") && shown_text.contains("Wörd 😀"),
+        "{shown_text}"
+    );
+    let created = bodies_on(&rt, &server, &wiremock::http::Method::POST, &rules);
+    assert_eq!(created, [format!("{{\"text\":{shown_text}}}")], "{err}");
+    let verified = bodies_on(&rt, &server, &wiremock::http::Method::POST, &verify);
+    assert_eq!(verified, [format!("{{\"ruleText\":{shown_text}}}")]);
+    let run_state = payload.get("run_state").unwrap();
+    let deployed = rt.block_on(server.received_requests()).unwrap();
+    let patch = deployed
+        .iter()
+        .find(|request| request.url.path() == deployment)
+        .unwrap();
+    assert_eq!(
+        String::from_utf8(patch.body.clone()).unwrap(),
+        run_state.get("body").unwrap().to_compact()
+    );
+    let mask = patch
+        .url
+        .query_pairs()
+        .find(|(key, _)| key == "updateMask")
+        .map(|(_, value)| value.into_owned());
+    assert_eq!(
+        mask.as_deref(),
+        run_state.get("mask").and_then(Json::as_str)
+    );
 }
 
 /// A definition the tenant lost while git ignores deployment state is not
@@ -4821,6 +5138,37 @@ impl Deployer for Recording {
 struct Recorded(&'static str, &'static Recording);
 
 impl Platform for Recorded {
+    fn id(&self) -> &'static str {
+        self.0
+    }
+
+    fn deployer(&self) -> Option<&dyn Deployer> {
+        Some(self.1)
+    }
+}
+
+/// A deployer that keeps the tenant and the body of each request it
+/// receives.
+struct TenantRecording(Mutex<Vec<(String, Vec<u8>)>>);
+
+impl Deployer for TenantRecording {
+    fn deploy<'a>(
+        &'a self,
+        cx: TenantContext<'a>,
+        request: &'a DeployRequest,
+    ) -> BoxFuture<'a, Result<DeployOutcome, DeployError>> {
+        self.0
+            .lock()
+            .unwrap()
+            .push((cx.tenant.label.tenant.clone(), request.body.clone()));
+        deploying(async move { Ok(DeployOutcome::new(None, request.operation)) })
+    }
+}
+
+/// [`TenantRecording`] registered as the platform it names.
+struct TenantRecorded(&'static str, &'static TenantRecording);
+
+impl Platform for TenantRecorded {
     fn id(&self) -> &'static str {
         self.0
     }

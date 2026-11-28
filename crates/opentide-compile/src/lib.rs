@@ -61,6 +61,7 @@ pub mod sentinel_one;
 pub mod splunk;
 pub mod strategy;
 pub mod sysdig;
+mod typed;
 pub mod validate;
 
 pub use json::Json;

@@ -43,7 +43,8 @@ const SENTINEL_SETUP: &str = "ssl = true\nresource_group = \"soc-rg\"\nworkspace
 fn sentinel_block(status: &str) -> String {
     format!(
         "  sentinel:\n    status: {status}\n    query: SecurityEvent\n    scheduling:\n      \
-         frequency: PT1H\n      lookback: PT1H\n    grouping:\n      event: SingleAlert\n      \
+         frequency: PT1H\n      lookback: PT1H\n    alert:\n      create_incident: true\n    \
+         grouping:\n      event: SingleAlert\n      \
          alert:\n        enabled: false\n"
     )
 }

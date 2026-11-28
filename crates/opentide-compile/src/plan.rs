@@ -175,7 +175,7 @@ pub struct Skipped {
     pub rule: String,
     /// Its UUID.
     pub uuid: String,
-    /// The platform.
+    /// The block's key under `configurations` (`sentinel`).
     pub platform: String,
     /// The block's status.
     pub status: String,
@@ -490,7 +490,7 @@ pub struct Tenant {
     pub name: String,
     /// `strategies`: every deployable one when unset.
     pub strategies: RunStrategies,
-    /// `manual`.
+    /// `manual`: only rules that list the tenant under `tenants` reach it.
     pub manual: bool,
 }
 
