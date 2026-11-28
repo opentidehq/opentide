@@ -88,9 +88,10 @@ impl Writer {
             // or after the last (the blocks' separator stands for them).
             let start = text
                 .find(|c: char| !c.is_whitespace())
-                .and_then(|at| text[..at].rfind('\n').map(|line| line + 1))
+                .and_then(|at| text.get(..at)?.rfind('\n').map(|line| line + 1))
                 .unwrap_or(0);
-            text[start..].trim_end().to_owned()
+            // `start` follows a `\n` or is 0, so it is on a char boundary.
+            text.get(start..).unwrap_or(&text).trim_end().to_owned()
         } else {
             match self.options.lines {
                 Lines::Keep => text.trim().to_owned(),
