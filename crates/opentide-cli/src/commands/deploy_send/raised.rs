@@ -6,7 +6,7 @@ use opentide_connectors::ConnectorError;
 use opentide_connectors::connector::{DeployError, DeployScope};
 
 use super::{RuleResult, bounded};
-use crate::json::Json;
+use crate::json::{Json, Object};
 
 /// A tenant (or a whole platform, with no tenant) that could not deploy.
 #[derive(Debug, Clone)]
@@ -18,12 +18,12 @@ pub(super) struct Unusable {
 
 impl Unusable {
     fn to_json(&self) -> Json {
-        let mut fields = vec![("platform".to_owned(), Json::str(&self.platform))];
+        let mut fields = Object::from([("platform".to_owned(), Json::str(&self.platform))]);
         if let Some(tenant) = &self.tenant {
-            fields.push(("tenant".into(), Json::str(tenant)));
+            fields.insert("tenant".into(), Json::str(tenant));
         }
-        fields.push(("error".into(), Json::str(&self.error)));
-        Json::Object(fields.into_iter().collect())
+        fields.insert("error".into(), Json::str(&self.error));
+        Json::Object(fields)
     }
 }
 
@@ -103,13 +103,13 @@ pub(super) fn failures(
         .filter(|result| result.status == "failed")
         .map(|result| {
             let error = result.error.clone().unwrap_or_default();
-            let mut fields = vec![("platform".to_owned(), Json::str(&result.platform))];
+            let mut fields = Object::from([("platform".to_owned(), Json::str(&result.platform))]);
             if let Some(tenant) = &result.tenant {
-                fields.push(("tenant".into(), Json::str(tenant)));
+                fields.insert("tenant".into(), Json::str(tenant));
             }
-            fields.push(("id".into(), Json::str(&result.id)));
-            fields.push(("name".into(), Json::str(&result.name)));
-            fields.push(("error".into(), Json::str(&error)));
+            fields.insert("id".into(), Json::str(&result.id));
+            fields.insert("name".into(), Json::str(&result.name));
+            fields.insert("error".into(), Json::str(&error));
             (
                 format!(
                     "Deployment to {} failed on {}: {error}",

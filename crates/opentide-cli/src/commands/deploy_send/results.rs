@@ -1,11 +1,11 @@
 //! `deploy`'s results, built as a [`CommandResult`], print the document, the
 //! outcome line and the CI job summary their `_`-keys printed (#1949): each
-//! case holds the keys the run used to build, key for key, next to the typed
-//! result that replaced them, read by the old reader
-//! (`CommandResult::from_fields`, kept for tests).
+//! case asserts the typed fields, the keys in order and the document of the
+//! result a run builds, with non-ASCII text throughout.
 
 use super::planning::Settled;
 use super::*;
+use crate::commands::result::FailureDetail;
 use crate::json::document_text;
 use crate::render::summary::deploy_summary;
 
@@ -13,51 +13,43 @@ fn key(name: &str, value: Json) -> (String, Json) {
     (name.to_owned(), value)
 }
 
-/// The `--json` document of `typed`, once it is checked to be what `old`
-/// (the run's keys in order, `_`-keys included) printed: the document key
-/// for key, the warnings, the outcome line, a bare exit, and the CI job
-/// summary.
-fn same(old: &[(String, Json)], typed: &CommandResult) -> String {
-    let before = CommandResult::from_fields(old).report(COMMAND);
-    let after = typed.clone().report(COMMAND);
-    let text = |report: &Report| document_text(&report.outcome.document(0), false);
-    assert_eq!(text(&after), text(&before));
-    assert_eq!(after.warnings, before.warnings);
-    let outcome_line = old.iter().find_map(|(name, value)| match value {
-        Json::Str(line) if name == "_outcome" => Some(line.clone()),
-        _ => None,
-    });
-    assert_eq!(after.outcome_line, outcome_line);
-    let bare_exit = old.iter().any(|(name, _)| name == "_bare_exit");
-    assert_eq!(after.bare_exit, bare_exit);
-    let old_json = Json::Object(
-        old.iter()
-            .filter(|(name, _)| !name.starts_with('_'))
-            .cloned()
-            .collect(),
+/// The keys of a result's data, in order.
+fn keys(result: &CommandResult) -> Vec<&str> {
+    result.data.keys().map(String::as_str).collect()
+}
+
+/// The `--json` document of `typed`, once it is checked to carry what a
+/// deploy result carries: no outcome line and no bare exit unless it says
+/// so, and a CI job summary that opens with the glyph of its status and its
+/// message.
+fn printed(typed: &CommandResult, glyph: &str) -> String {
+    let report = typed.clone().report(COMMAND);
+    assert_eq!(report.outcome_line, None);
+    assert_eq!(report.warnings, typed.warnings);
+    assert_eq!(report.bare_exit, typed.bare_exit);
+    assert_eq!(report.outcome.status, typed.status);
+    assert_eq!(report.outcome.exit_code, typed.exit);
+    assert_eq!(report.outcome.summary, typed.summary);
+    // The summary is Markdown: it escapes the underscores.
+    let message = report.outcome.message.replace('_', "\\_");
+    let summary = deploy_summary(&typed.to_json(), None, Some(false));
+    assert!(
+        summary.starts_with(&format!("### {glyph} opentide deploy\n\n{message}\n")),
+        "{summary}"
     );
-    assert_eq!(
-        deploy_summary(&typed.to_json(), None, Some(false)),
-        deploy_summary(&old_json, None, Some(false))
-    );
-    text(&after)
+    document_text(&report.outcome.document(0), false)
 }
 
 #[test]
 fn a_usage_refusal_names_its_argument_and_suggestion() {
     let message = "--strategy: «PREVEW» is not a strategy 😀";
-    let old = vec![
-        key("status", Json::str("failed")),
-        key("message", Json::str(message)),
-        key("_exit_code", Json::Int(2)),
-        key("_failure_code", Json::str(code::USAGE_INVALID_CHOICE)),
-        key("_failure_argument", Json::str("--strategy")),
-        key("_failure_suggestion", Json::str("PREVIEW")),
-    ];
     let mut typed = usage(message, code::USAGE_INVALID_CHOICE, Some("--strategy"));
     typed.failure.suggestion = Some("PREVIEW".to_owned());
+    assert_eq!(typed.status, Status::Failed);
+    assert_eq!(typed.exit, ExitCode::Usage);
+    assert!(typed.data.is_empty());
     assert_eq!(
-        same(&old, &typed),
+        printed(&typed, "✗"),
         "{\"ok\":false,\"status\":\"failed\",\"message\":\"--strategy: «PREVEW» is not a \
          strategy 😀\",\"error\":\"--strategy: «PREVEW» is not a strategy 😀\",\
          \"schema_version\":1,\"command\":\"deploy\",\"duration_ms\":0,\"exit_code\":2,\
@@ -65,23 +57,31 @@ fn a_usage_refusal_names_its_argument_and_suggestion() {
          \"message\":\"--strategy: «PREVEW» is not a strategy 😀\",\"argument\":\
          \"--strategy\",\"suggestion\":\"PREVIEW\",\"crash_log\":null}}\n"
     );
-    let old = vec![
-        key("status", Json::str("failed")),
-        key("message", Json::str("é")),
-        key("_exit_code", Json::Int(2)),
-        key("_failure_code", Json::str("usage_error")),
-    ];
-    same(&old, &usage("é", "usage_error", None));
+    let typed = usage("é", "usage_error", None);
+    assert_eq!(typed.exit, ExitCode::Usage);
+    assert_eq!(
+        printed(&typed, "✗"),
+        "{\"ok\":false,\"status\":\"failed\",\"message\":\"é\",\"error\":\"é\",\
+         \"schema_version\":1,\"command\":\"deploy\",\"duration_ms\":0,\"exit_code\":2,\
+         \"summary\":{},\"next_actions\":[],\"failure\":{\"code\":\"usage_error\",\
+         \"message\":\"é\",\"argument\":null,\"suggestion\":null,\"crash_log\":null}}\n"
+    );
 }
 
 #[test]
 fn a_failed_run_exits_1() {
-    let old = vec![
-        key("status", Json::str("failed")),
-        key("message", Json::str("rules/é.yaml: problème 😀")),
-        key("_exit_code", Json::Int(1)),
-    ];
-    same(&old, &failed("rules/é.yaml: problème 😀"));
+    let typed = failed("rules/é.yaml: problème 😀");
+    assert_eq!(typed.status, Status::Failed);
+    assert_eq!(typed.exit, ExitCode::Failure);
+    assert!(typed.data.is_empty());
+    assert_eq!(
+        printed(&typed, "✗"),
+        "{\"ok\":false,\"status\":\"failed\",\"message\":\"rules/é.yaml: problème 😀\",\
+         \"error\":\"rules/é.yaml: problème 😀\",\"schema_version\":1,\"command\":\
+         \"deploy\",\"duration_ms\":0,\"exit_code\":1,\"summary\":{},\"next_actions\":[],\
+         \"failure\":{\"code\":\"command_failed\",\"message\":\"rules/é.yaml: problème 😀\",\
+         \"argument\":null,\"suggestion\":null,\"crash_log\":null}}\n"
+    );
 }
 
 #[test]
@@ -90,78 +90,81 @@ fn a_workspace_that_does_not_open_keeps_its_code_and_diagnostics() {
         ("file", Json::str("é/😀.toml")),
         ("line", Json::Int(3)),
     ])]);
-    let old = vec![
-        key("status", Json::str("failed")),
-        key("message", Json::str("é/😀.toml does not parse")),
-        key("diagnostics", diagnostics.clone()),
-        key("_exit_code", Json::Int(1)),
-        key("_failure_code", Json::str("config_parse")),
-    ];
     let typed = refusal(
         "config_parse".to_owned(),
         "é/😀.toml does not parse",
-        Some(diagnostics),
+        Some(diagnostics.clone()),
     );
-    same(&old, &typed);
-    let old = vec![
-        key("status", Json::str("failed")),
-        key("message", Json::str("no workspace 😀")),
-        key("_exit_code", Json::Int(1)),
-        key("_failure_code", Json::str("workspace_not_found")),
-    ];
+    assert_eq!(typed.failure.code.as_deref(), Some("config_parse"));
+    assert_eq!(typed.exit, ExitCode::Failure);
+    assert_eq!(keys(&typed), ["diagnostics"]);
+    assert_eq!(typed.get("diagnostics"), Some(&diagnostics));
+    assert_eq!(
+        printed(&typed, "✗"),
+        "{\"diagnostics\":[{\"file\":\"é/😀.toml\",\"line\":3}],\"ok\":false,\
+         \"status\":\"failed\",\"message\":\"é/😀.toml does not parse\",\"error\":\
+         \"é/😀.toml does not parse\",\"schema_version\":1,\"command\":\"deploy\",\
+         \"duration_ms\":0,\"exit_code\":1,\"summary\":{},\"next_actions\":[],\"failure\":\
+         {\"code\":\"config_parse\",\"message\":\"é/😀.toml does not parse\",\"argument\":\
+         null,\"suggestion\":null,\"crash_log\":null}}\n"
+    );
     let typed = refusal("workspace_not_found".to_owned(), "no workspace 😀", None);
-    same(&old, &typed);
+    assert_eq!(typed.failure.code.as_deref(), Some("workspace_not_found"));
+    assert!(typed.data.is_empty());
+    printed(&typed, "✗");
 }
 
 #[test]
 fn rules_no_file_holds_fail_the_run() {
     let unmatched = vec!["é.yaml".to_owned(), "😀".to_owned()];
-    let old = vec![
-        key("status", Json::str("failed")),
-        key(
-            "message",
-            Json::str("No rule file directly in règles matched: é.yaml, 😀"),
-        ),
-        key("scope", Json::str("selected")),
-        key(
-            "unmatched",
-            Json::Array(vec![Json::str("é.yaml"), Json::str("😀")]),
-        ),
-        key("dry_run", Json::Bool(false)),
-        key("_exit_code", Json::Int(1)),
-    ];
-    same(&old, &unmatched_files("règles", &unmatched));
+    let typed = unmatched_files("règles", &unmatched);
+    assert_eq!(typed.status, Status::Failed);
+    assert_eq!(typed.exit, ExitCode::Failure);
+    assert_eq!(
+        typed.message.as_deref(),
+        Some("No rule file directly in règles matched: é.yaml, 😀")
+    );
+    assert_eq!(keys(&typed), ["scope", "unmatched", "dry_run"]);
+    assert_eq!(typed.get("scope"), Some(&Json::str("selected")));
+    assert_eq!(
+        typed.get("unmatched"),
+        Some(&Json::Array(vec![Json::str("é.yaml"), Json::str("😀")]))
+    );
+    assert_eq!(typed.get("dry_run"), Some(&Json::Bool(false)));
+    assert_eq!(
+        printed(&typed, "✗"),
+        "{\"scope\":\"selected\",\"unmatched\":[\"é.yaml\",\"😀\"],\"dry_run\":false,\
+         \"ok\":false,\"status\":\"failed\",\"message\":\"No rule file directly in règles \
+         matched: é.yaml, 😀\",\"error\":\"No rule file directly in règles matched: \
+         é.yaml, 😀\",\"schema_version\":1,\"command\":\"deploy\",\"duration_ms\":0,\
+         \"exit_code\":1,\"summary\":{},\"next_actions\":[],\"failure\":{\"code\":\
+         \"command_failed\",\"message\":\"No rule file directly in règles matched: \
+         é.yaml, 😀\",\"argument\":null,\"suggestion\":null,\"crash_log\":null}}\n"
+    );
 }
 
 #[test]
 fn nothing_to_deploy_is_skipped_unless_planning_refused_a_rule() {
     for refused in [false, true] {
-        let mut old = vec![
-            key("platform", Json::str("sentinel_é")),
-            key(
-                "status",
-                Json::str(if refused { "failed" } else { "skipped" }),
-            ),
-            key(
-                "message",
-                Json::str(if refused {
-                    "Rien 😀; planning reported rule errors"
-                } else {
-                    "Rien 😀"
-                }),
-            ),
-            key("deployed", Json::Array(Vec::new())),
-            key("dry_run", Json::Bool(false)),
-            key("plan", Json::Object(Object::new())),
-        ];
-        if refused {
-            old.push(key("_exit_code", Json::Int(1)));
-        }
         let typed = nothing("Rien 😀", refused, ("platform", Json::str("sentinel_é")));
-        let document = same(&old, &typed);
-        if !refused {
+        assert_eq!(keys(&typed), ["platform", "deployed", "dry_run", "plan"]);
+        assert_eq!(typed.get("platform"), Some(&Json::str("sentinel_é")));
+        assert_eq!(typed.get("deployed"), Some(&Json::Array(Vec::new())));
+        assert_eq!(typed.get("dry_run"), Some(&Json::Bool(false)));
+        assert_eq!(typed.get("plan"), Some(&Json::Object(Object::new())));
+        if refused {
+            assert_eq!(typed.status, Status::Failed);
+            assert_eq!(typed.exit, ExitCode::Failure);
             assert_eq!(
-                document,
+                typed.message.as_deref(),
+                Some("Rien 😀; planning reported rule errors")
+            );
+            printed(&typed, "✗");
+        } else {
+            assert_eq!(typed.status, Status::Skipped);
+            assert_eq!(typed.exit, ExitCode::Success);
+            assert_eq!(
+                printed(&typed, "–"),
                 "{\"platform\":\"sentinel_é\",\"deployed\":[],\"dry_run\":false,\"plan\":{},\
                  \"ok\":true,\"status\":\"skipped\",\"message\":\"Rien 😀\",\
                  \"schema_version\":1,\"command\":\"deploy\",\"duration_ms\":0,\
@@ -179,32 +182,20 @@ fn platforms_without_tenants_fail_unless_skipped() {
     for (kind, status, message) in [
         (
             Tenantless::Skipped,
-            "skipped",
+            Status::Skipped,
             format!("Skipped deploy: {detail}"),
         ),
         (
             Tenantless::Refused,
-            "failed",
+            Status::Failed,
             format!("Planning refused rules; {detail}"),
         ),
         (
             Tenantless::Failed,
-            "failed",
+            Status::Failed,
             format!("Cannot deploy: {detail}"),
         ),
     ] {
-        let mut old = vec![
-            key("status", Json::str(status)),
-            key("message", Json::str(&message)),
-            key("advice", Json::str("add a [[tenants]] entry in é.toml")),
-            key("missing_tenants", missing.clone()),
-            key("deployed", Json::Array(Vec::new())),
-            key("dry_run", Json::Bool(false)),
-            key("plan", plan.clone()),
-        ];
-        if kind != Tenantless::Skipped {
-            old.push(key("_exit_code", Json::Int(1)));
-        }
         let typed = no_tenants(
             kind,
             detail,
@@ -212,32 +203,58 @@ fn platforms_without_tenants_fail_unless_skipped() {
             missing.clone(),
             plan.clone(),
         );
-        same(&old, &typed);
+        assert_eq!(typed.status, status);
+        assert_eq!(typed.message.as_deref(), Some(message.as_str()));
+        assert_eq!(
+            typed.exit,
+            if kind == Tenantless::Skipped {
+                ExitCode::Success
+            } else {
+                ExitCode::Failure
+            }
+        );
+        assert_eq!(
+            keys(&typed),
+            ["advice", "missing_tenants", "deployed", "dry_run", "plan"]
+        );
+        assert_eq!(
+            typed.get("advice"),
+            Some(&Json::str("add a [[tenants]] entry in é.toml"))
+        );
+        assert_eq!(typed.get("missing_tenants"), Some(&missing));
+        assert_eq!(typed.get("plan"), Some(&plan));
+        printed(
+            &typed,
+            if kind == Tenantless::Skipped {
+                "–"
+            } else {
+                "✗"
+            },
+        );
     }
 }
 
 #[test]
 fn a_stopped_promotion_fails_and_an_invalid_target_exits_bare() {
     use super::super::deploy_promote::{Stop, stopped};
-    let old = vec![
-        key("status", Json::str("failed")),
-        key(
-            "message",
-            Json::str("é.yaml: cannot promote its statuses 😀"),
-        ),
-        key("_exit_code", Json::Int(1)),
-    ];
     let typed = stopped(&Stop::Failed(
         "é.yaml: cannot promote its statuses 😀".to_owned(),
     ));
-    same(&old, &typed);
-    let old = vec![
-        key("status", Json::str("failed")),
-        key("message", Json::str("Invalid promotion target")),
-        key("_exit_code", Json::Int(1)),
-        key("_bare_exit", Json::Bool(true)),
-    ];
-    same(&old, &stopped(&Stop::Exit));
+    assert_eq!(typed.status, Status::Failed);
+    assert_eq!(typed.exit, ExitCode::Failure);
+    assert!(!typed.bare_exit);
+    assert_eq!(
+        typed.message.as_deref(),
+        Some("é.yaml: cannot promote its statuses 😀")
+    );
+    assert!(typed.data.is_empty());
+    printed(&typed, "✗");
+    let typed = stopped(&Stop::Exit);
+    assert_eq!(typed.status, Status::Failed);
+    assert_eq!(typed.exit, ExitCode::Failure);
+    assert!(typed.bare_exit);
+    assert_eq!(typed.message.as_deref(), Some("Invalid promotion target"));
+    printed(&typed, "✗");
 }
 
 #[test]
@@ -253,27 +270,23 @@ fn a_promotion_that_cannot_be_put_back_fails_the_run() {
         ("error", Json::str(line)),
     ]);
     // A run that completed: failed now, its message and error the line.
-    let before = vec![
-        key("message", Json::str("Deployed 1 rule 😀")),
-        key("status", Json::str("completed")),
-        key("deployed", Json::Array(vec![Json::str("sentinel")])),
-        key("_exit_code", Json::Int(0)),
-        key("results", Json::Array(Vec::new())),
-    ];
-    let old = vec![
-        key("message", Json::str(line)),
-        key("status", Json::str("failed")),
-        key("deployed", Json::Array(vec![Json::str("sentinel")])),
-        key("_exit_code", Json::Int(1)),
-        key("results", Json::Array(Vec::new())),
-        key("failures", Json::Array(vec![entry.clone()])),
-        key("error", Json::str(line)),
-    ];
-    let mut typed = CommandResult::from_fields(&before);
+    let mut typed = CommandResult {
+        message: Some("Deployed 1 rule 😀".to_owned()),
+        data: Object::from([
+            key("deployed", Json::Array(vec![Json::str("sentinel")])),
+            key("results", Json::Array(Vec::new())),
+        ]),
+        ..CommandResult::default()
+    };
     let mut warnings = Vec::new();
     settled().apply(&mut typed, &mut warnings);
     assert_eq!(warnings, ["é.yaml was deleted during the deploy 😀"]);
-    let document = same(&old, &typed);
+    assert_eq!(typed.status, Status::Failed);
+    assert_eq!(typed.exit, ExitCode::Failure);
+    assert_eq!(typed.message.as_deref(), Some(line));
+    assert_eq!(keys(&typed), ["deployed", "results", "failures", "error"]);
+    assert_eq!(typed.get("error"), Some(&Json::str(line)));
+    let document = printed(&typed, "✗");
     let failure = format!("{{\"path\":\"règles/b.yaml\",\"error\":\"{line}\"}}");
     assert_eq!(
         document,
@@ -288,25 +301,30 @@ fn a_promotion_that_cannot_be_put_back_fails_the_run() {
     // A run that failed already: its message and error kept, the failure
     // added to its own.
     let own = Json::object([("id", Json::str("ü")), ("error", Json::str("é"))]);
-    let before = vec![
-        key("status", Json::str("failed")),
-        key("message", Json::str("Échec 😀")),
-        key("_exit_code", Json::Int(1)),
-        key("error", Json::str("Échec 😀")),
-        key("failures", Json::Array(vec![own.clone()])),
-        key("_failure_code", Json::str(crate::commands::ISSUES_FOUND)),
-    ];
-    let old = vec![
-        key("status", Json::str("failed")),
-        key("message", Json::str("Échec 😀")),
-        key("_exit_code", Json::Int(1)),
-        key("error", Json::str("Échec 😀")),
-        key("failures", Json::Array(vec![own, entry])),
-        key("_failure_code", Json::str(crate::commands::ISSUES_FOUND)),
-    ];
-    let mut typed = CommandResult::from_fields(&before);
+    let mut typed = CommandResult {
+        status: Status::Failed,
+        message: Some("Échec 😀".to_owned()),
+        exit: ExitCode::Failure,
+        failure: FailureDetail {
+            code: Some(crate::commands::ISSUES_FOUND.to_owned()),
+            ..FailureDetail::default()
+        },
+        data: Object::from([
+            key("error", Json::str("Échec 😀")),
+            key("failures", Json::Array(vec![own.clone()])),
+        ]),
+        ..CommandResult::default()
+    };
     settled().apply(&mut typed, &mut Vec::new());
-    same(&old, &typed);
+    assert_eq!(typed.message.as_deref(), Some("Échec 😀"));
+    assert_eq!(typed.get("error"), Some(&Json::str("Échec 😀")));
+    assert_eq!(keys(&typed), ["error", "failures"]);
+    assert_eq!(typed.get("failures"), Some(&Json::Array(vec![own, entry])));
+    assert_eq!(
+        typed.failure.code.as_deref(),
+        Some(crate::commands::ISSUES_FOUND)
+    );
+    printed(&typed, "✗");
 }
 
 /// A run's shared parts, with non-ASCII data.
@@ -320,17 +338,13 @@ fn ran() -> Ran {
             ("id", Json::str("ü😀")),
             ("status", Json::str("failed")),
         ])]),
-        summary: vec![
+        summary: Object::from([
             ("create".to_owned(), Json::Int(1)),
             ("seconds".to_owned(), Json::Float(0.25)),
             ("platforms".to_owned(), Json::Int(1)),
             ("tenants".to_owned(), Json::Int(1)),
-        ],
+        ]),
     }
-}
-
-fn summary_json(ran: &Ran) -> Json {
-    Json::object(ran.summary.clone())
 }
 
 fn failure_entries() -> Vec<(String, Json)> {
@@ -359,47 +373,57 @@ fn entries() -> Json {
 fn a_run_a_platform_stopped_fails_naming_the_rule_it_stopped_on() {
     let message = "Deployment to sentinel_é failed: refusé 😀";
     // The stop came on no rule.
-    let old = vec![
-        key("status", Json::str("failed")),
-        key("message", Json::str(message)),
-        key("deployed", Json::Array(vec![Json::str("sentinel_é")])),
-        key("dry_run", Json::Bool(false)),
-        key("plan", ran().plan),
-        key("strategies", ran().strategies),
-        key("changes", ran().changes),
-        key("results", ran().results),
-        key("_summary", summary_json(&ran())),
-        key("_exit_code", Json::Int(1)),
-        key("failures", entries()),
-    ];
     let typed = ran().stopped(message.to_owned(), None, failure_entries());
-    same(&old, &typed);
+    assert_eq!(typed.status, Status::Failed);
+    assert_eq!(typed.exit, ExitCode::Failure);
+    assert_eq!(typed.message.as_deref(), Some(message));
+    assert_eq!(typed.failure.code, None);
+    assert_eq!(typed.summary, ran().summary);
+    assert_eq!(
+        keys(&typed),
+        [
+            "deployed",
+            "dry_run",
+            "plan",
+            "strategies",
+            "changes",
+            "results",
+            "failures"
+        ]
+    );
+    assert_eq!(typed.get("failures"), Some(&entries()));
+    assert_eq!(typed.get("plan"), Some(&ran().plan));
+    printed(&typed, "✗");
     // The stop came on a rule: the outcome message, its error and
     // `issues_found`.
     let outcome = "Failed: 1 rule ✗ 😀";
     let error = "Deployment to sentinel_é failed on Règle: refusé 😀";
-    let old = vec![
-        key("status", Json::str("failed")),
-        key("message", Json::str(outcome)),
-        key("deployed", Json::Array(vec![Json::str("sentinel_é")])),
-        key("dry_run", Json::Bool(false)),
-        key("plan", ran().plan),
-        key("strategies", ran().strategies),
-        key("changes", ran().changes),
-        key("results", ran().results),
-        key("_summary", summary_json(&ran())),
-        key("_exit_code", Json::Int(1)),
-        key("error", Json::str(error)),
-        key("_failure_code", Json::str(crate::commands::ISSUES_FOUND)),
-        key("failures", entries()),
-    ];
     let typed = ran().stopped(
         message.to_owned(),
         Some((outcome.to_owned(), error.to_owned())),
         failure_entries(),
     );
+    assert_eq!(typed.message.as_deref(), Some(outcome));
     assert_eq!(
-        same(&old, &typed),
+        typed.failure.code.as_deref(),
+        Some(crate::commands::ISSUES_FOUND)
+    );
+    assert_eq!(
+        keys(&typed),
+        [
+            "deployed",
+            "dry_run",
+            "plan",
+            "strategies",
+            "changes",
+            "results",
+            "error",
+            "failures"
+        ]
+    );
+    assert_eq!(typed.get("error"), Some(&Json::str(error)));
+    assert_eq!(
+        printed(&typed, "✗"),
         "{\"deployed\":[\"sentinel_é\"],\"dry_run\":false,\"plan\":{\"sentinel_é\":\
          [\"ü😀\"]},\"strategies\":[\"PRODUCTION\"],\"changes\":[{\"id\":\"ü😀\"}],\
          \"results\":[{\"id\":\"ü😀\",\"status\":\"failed\"}],\"error\":\"Deployment to \
@@ -426,38 +450,9 @@ fn a_run_that_ended_completes_or_fails_with_its_first_failure() {
         } else {
             "Deployed 1 rule ✓ 😀"
         };
-        let mut old = vec![
-            key("message", Json::str(message)),
-            key(
-                "status",
-                Json::str(if failed { "failed" } else { "completed" }),
-            ),
-            key("deployed", Json::Array(vec![Json::str("sentinel_é")])),
-            key("dry_run", Json::Bool(false)),
-            key("plan", ran().plan),
-            key("changes", ran().changes),
-            key("_summary", summary_json(&ran())),
-            key("_exit_code", Json::Int(i64::from(failed))),
-            key("results", ran().results),
-        ];
-        if failed && rule_failed {
-            old.push(key(
-                "_failure_code",
-                Json::str(crate::commands::ISSUES_FOUND),
-            ));
-        }
-        if let Some((first, _)) = failures.first() {
-            let more = more_failures(failures.len());
-            old.push(key("error", Json::str(format!("{first}{more}"))));
-            old.push(key("failures", entries()));
-        }
-        if warned {
-            old.push(key(
-                "warnings",
-                Json::Array(vec![Json::str("Some rules reported deployment warnings")]),
-            ));
-        }
-        old.push(key("strategies", ran().strategies));
+        let first_error = failures
+            .first()
+            .map(|(first, _)| format!("{first}{}", more_failures(failures.len())));
         let typed = ran().ended(&Ending {
             message: message.to_owned(),
             failed,
@@ -465,7 +460,50 @@ fn a_run_that_ended_completes_or_fails_with_its_first_failure() {
             failures,
             warned,
         });
-        let document = same(&old, &typed);
+        assert_eq!(
+            typed.status,
+            if failed {
+                Status::Failed
+            } else {
+                Status::Completed
+            }
+        );
+        assert_eq!(
+            typed.exit,
+            if failed {
+                ExitCode::Failure
+            } else {
+                ExitCode::Success
+            }
+        );
+        assert_eq!(typed.message.as_deref(), Some(message));
+        assert_eq!(typed.summary, ran().summary);
+        assert_eq!(
+            typed.failure.code.as_deref(),
+            (failed && rule_failed).then_some(crate::commands::ISSUES_FOUND)
+        );
+        assert_eq!(
+            typed.warnings,
+            if warned {
+                vec!["Some rules reported deployment warnings".to_owned()]
+            } else {
+                Vec::new()
+            }
+        );
+        let mut expected = vec!["deployed", "dry_run", "plan", "changes", "results"];
+        if let Some(error) = &first_error {
+            expected.extend(["error", "failures"]);
+            assert_eq!(typed.get("error"), Some(&Json::str(error)));
+            assert_eq!(typed.get("failures"), Some(&entries()));
+        }
+        expected.push("strategies");
+        assert_eq!(keys(&typed), expected);
+        let glyph = match (failed, warned) {
+            (true, _) => "✗",
+            (false, true) => "!",
+            (false, false) => "✓",
+        };
+        let document = printed(&typed, glyph);
         if !failed && !warned {
             assert_eq!(
                 document,

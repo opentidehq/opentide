@@ -283,14 +283,6 @@ impl Sent {
     }
 }
 
-/// `value` set on `result`, in place when the key is there, else last.
-fn set(result: &mut Vec<(String, Json)>, key: &str, value: Json) {
-    match result.iter_mut().find(|(name, _)| name == key) {
-        Some(entry) => entry.1 = value,
-        None => result.push((key.to_owned(), value)),
-    }
-}
-
 fn names(runs: &[StatusStrategy]) -> Json {
     Json::Array(runs.iter().map(|run| Json::str(run.name())).collect())
 }
@@ -325,14 +317,14 @@ fn unmatched_files(folder: &str, unmatched: &[String]) -> CommandResult {
         "No rule file directly in {folder} matched: {}",
         unmatched.join(", ")
     ));
-    result.data = vec![
+    result.data = Object::from([
         ("scope".into(), Json::str("selected")),
         (
             "unmatched".into(),
             Json::Array(unmatched.iter().map(Json::str).collect()),
         ),
         ("dry_run".into(), Json::Bool(false)),
-    ];
+    ]);
     result
 }
 
@@ -379,13 +371,13 @@ fn no_tenants(
         status,
         message: Some(message),
         exit,
-        data: vec![
+        data: Object::from([
             ("advice".into(), Json::str(advice)),
             ("missing_tenants".into(), missing),
             ("deployed".into(), Json::Array(Vec::new())),
             ("dry_run".into(), Json::Bool(false)),
             ("plan".into(), plan),
-        ],
+        ]),
         ..CommandResult::default()
     }
 }
@@ -419,12 +411,12 @@ fn nothing(message: &str, refused: bool, field: (&str, Json)) -> CommandResult {
         status,
         message: Some(message),
         exit,
-        data: vec![
+        data: Object::from([
             (field.0.to_owned(), field.1),
             ("deployed".into(), Json::Array(Vec::new())),
             ("dry_run".into(), Json::Bool(false)),
             ("plan".into(), Json::Object(Object::new())),
-        ],
+        ]),
         ..CommandResult::default()
     }
 }
@@ -1151,7 +1143,7 @@ struct Ran {
     /// `results`: a row per rule and tenant.
     results: Json,
     /// `summary` ([`run_summary`]).
-    summary: Vec<(String, Json)>,
+    summary: Object,
 }
 
 /// How a run that sent to every platform ended.
@@ -1170,15 +1162,15 @@ struct Ending {
 
 impl Ran {
     /// The keys every such result starts with.
-    fn head(&self) -> Vec<(String, Json)> {
-        vec![
+    fn head(&self) -> Object {
+        Object::from([
             (
                 "deployed".into(),
                 Json::Array(self.deployed.iter().map(Json::str).collect()),
             ),
             ("dry_run".into(), Json::Bool(false)),
             ("plan".into(), self.plan.clone()),
-        ]
+        ])
     }
 
     /// A run a platform stopped: failed, exit 1, with `message`, or, when
@@ -1192,19 +1184,19 @@ impl Ran {
     ) -> CommandResult {
         let mut result = failed(&message);
         result.data = self.head();
-        result.data.push(("strategies".into(), self.strategies));
-        result.data.push(("changes".into(), self.changes));
-        result.data.push(("results".into(), self.results));
+        result.data.insert("strategies".into(), self.strategies);
+        result.data.insert("changes".into(), self.changes);
+        result.data.insert("results".into(), self.results);
         result.summary = self.summary;
         if let Some((outcome, error)) = culprit {
             result.message = Some(outcome);
-            result.data.push(("error".into(), Json::Str(error)));
+            result.data.insert("error".into(), Json::Str(error));
             result.failure.code = Some(super::ISSUES_FOUND.to_owned());
         }
-        result.data.push((
+        result.data.insert(
             "failures".into(),
             Json::Array(failures.into_iter().map(|(_, failure)| failure).collect()),
-        ));
+        );
         result
     }
 
@@ -1224,8 +1216,8 @@ impl Ran {
             data: self.head(),
             ..CommandResult::default()
         };
-        result.data.push(("changes".into(), self.changes));
-        result.data.push(("results".into(), self.results));
+        result.data.insert("changes".into(), self.changes);
+        result.data.insert("results".into(), self.results);
         if ending.failed && ending.rule_failed {
             result.failure.code = Some(super::ISSUES_FOUND.to_owned());
         }
@@ -1235,8 +1227,8 @@ impl Ran {
             let more = more_failures(ending.failures.len());
             result
                 .data
-                .push(("error".into(), Json::str(format!("{first}{more}"))));
-            result.data.push((
+                .insert("error".into(), Json::str(format!("{first}{more}")));
+            result.data.insert(
                 "failures".into(),
                 Json::Array(
                     ending
@@ -1245,14 +1237,14 @@ impl Ran {
                         .map(|(_, failure)| failure.clone())
                         .collect(),
                 ),
-            ));
+            );
         }
         if ending.warned {
             result
                 .warnings
                 .push("Some rules reported deployment warnings".to_owned());
         }
-        result.data.push(("strategies".into(), self.strategies));
+        result.data.insert("strategies".into(), self.strategies);
         result
     }
 }
@@ -2505,7 +2497,7 @@ mod tests {
         let refs: Vec<&RuleResult> = results.iter().collect();
         assert_eq!(counts_text(&refs), "2 deployed, 1 failed, 1 not attempted");
         let summary = run_summary(&results, 1, 1, 0.0);
-        let keys: Vec<&str> = summary.iter().map(|(key, _)| key.as_str()).collect();
+        let keys: Vec<&str> = summary.keys().map(String::as_str).collect();
         assert_eq!(
             keys,
             [

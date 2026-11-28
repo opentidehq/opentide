@@ -18,7 +18,7 @@ use opentide_cli::commands::result::ExitCode;
 use opentide_cli::commands::validate_live::{Context, Live, run};
 use opentide_cli::commands::validate_query::Args;
 use opentide_cli::env::Env;
-use opentide_cli::json::Json;
+use opentide_cli::json::{Json, Object};
 use opentide_connectors::connector::{
     BoxFuture, LiveCheck, LiveValidator, Platform, QueryRequest, TenantContext,
 };
@@ -296,10 +296,10 @@ fn sentinel_signs_in_once_and_searches_each_rule() {
     );
     assert_eq!(
         live.result.summary,
-        [
+        Object::from([
             ("queries".to_owned(), Json::Int(2)),
             ("tenants".to_owned(), Json::Int(1))
-        ]
+        ])
     );
 }
 

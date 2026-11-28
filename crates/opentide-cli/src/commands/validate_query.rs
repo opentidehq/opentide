@@ -484,11 +484,11 @@ pub fn live_without_platform() -> CommandResult {
         argument: Some("--platform".to_owned()),
         suggestion: None,
     };
-    result.data = vec![
+    result.data = Object::from([
         ("platform".to_owned(), Json::Null),
         ("mode".to_owned(), Json::str("live")),
         ("supported".to_owned(), Json::Bool(true)),
-    ];
+    ]);
     result
 }
 

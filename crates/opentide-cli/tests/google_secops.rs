@@ -19,7 +19,7 @@ use opentide_cli::commands::result::{ExitCode, Status};
 use opentide_cli::commands::validate_live::{self, Live};
 use opentide_cli::commands::validate_query::Args as QueryArgs;
 use opentide_cli::env::Env;
-use opentide_cli::json::Json;
+use opentide_cli::json::{Json, Object};
 use opentide_cli::render::outcome::Console;
 use opentide_cli::render::text::Colour;
 use opentide_connectors::Registry;
@@ -187,12 +187,10 @@ fn live(ws: &Path, env: &Env) -> Live {
     )
 }
 
-fn value<'a>(result: &'a [(String, Json)], key: &str) -> &'a Json {
-    &result
-        .iter()
-        .find(|(name, _)| name == key)
+fn value<'a>(result: &'a Object, key: &str) -> &'a Json {
+    result
+        .get(key)
         .unwrap_or_else(|| panic!("no {key} in {result:?}"))
-        .1
 }
 
 /// Each result row's `status` and `error`.

@@ -144,12 +144,12 @@ impl Live {
 }
 
 /// The keys every live result starts with (its `status` aside).
-fn head(platform: Option<&str>) -> Vec<(String, Json)> {
-    vec![
+fn head(platform: Option<&str>) -> Object {
+    Object::from([
         ("platform".into(), Json::opt_str(platform)),
         ("mode".into(), Json::str("live")),
         ("supported".into(), Json::Bool(true)),
-    ]
+    ])
 }
 
 /// A failed result with `message`, exiting `exit`.
@@ -157,14 +157,6 @@ fn failed(platform: Option<&str>, message: &str, exit: ExitCode) -> CommandResul
     let mut result = CommandResult::failed(message, exit);
     result.data = head(platform);
     result
-}
-
-/// `value` set on `result`, in place when the key is there, else last.
-fn set(result: &mut Vec<(String, Json)>, key: &str, value: Json) {
-    match result.iter_mut().find(|(name, _)| name == key) {
-        Some(entry) => entry.1 = value,
-        None => result.push((key.to_owned(), value)),
-    }
 }
 
 /// `1 rule`, `2 queries` (`plural`).
@@ -323,10 +315,10 @@ fn rule_scope(
             ),
             ExitCode::Failure,
         );
-        result.data.push((
+        result.data.insert(
             "unmatched".into(),
             Json::Array(unmatched.iter().map(Json::str).collect()),
-        ));
+        );
         return Err(Box::new(result));
     }
     Ok((Some(scope.files), Some("selected")))
@@ -335,7 +327,9 @@ fn rule_scope(
 /// Names the narrowed scope in *result*.
 fn scoped(mut live: Live, label: Option<&str>) -> Live {
     if let Some(label) = label {
-        set(&mut live.result.data, "scope", Json::str(label));
+        live.result
+            .data
+            .insert("scope".to_owned(), Json::str(label));
     }
     live
 }
@@ -639,7 +633,7 @@ fn nothing_selected(
     runs: &RunStrategies,
     label: Option<&str>,
 ) -> CommandResult {
-    let skipped = |message: String, data: Vec<(String, Json)>| CommandResult {
+    let skipped = |message: String, data: Object| CommandResult {
         status: Status::Skipped,
         message: Some(message),
         data,
@@ -650,7 +644,7 @@ fn nothing_selected(
             format!(
                 "Platform {platform} is disabled in configurations, so no rule is checked for it"
             ),
-            vec![
+            Object::from([
                 ("platform".into(), Json::str(platform)),
                 ("mode".into(), Json::str("live")),
                 ("platform_enabled".into(), Json::Bool(false)),
@@ -661,16 +655,16 @@ fn nothing_selected(
                         platform.replace('_', "-")
                     )),
                 ),
-            ],
+            ]),
         );
     }
-    let mut data = vec![
+    let mut data = Object::from([
         ("platform".into(), Json::str(platform)),
         ("mode".into(), Json::str("live")),
         ("strategies".into(), names(runs)),
-    ];
+    ]);
     if let Some(label) = label {
-        data.push(("scope".into(), Json::str(label)));
+        data.insert("scope".into(), Json::str(label));
     }
     skipped(no_rules_message(label).to_owned(), data)
 }
@@ -685,14 +679,14 @@ fn no_tenants(platform: &str) -> CommandResult {
         ),
         ExitCode::Failure,
     );
-    result.data.push((
+    result.data.insert(
         "advice".into(),
         Json::str(format!("add (or uncomment) a [[tenants]] entry in {path}")),
-    ));
-    result.data.push((
+    );
+    result.data.insert(
         "missing_tenants".into(),
         Json::object([(platform, Json::str(&path))]),
-    ));
+    );
     result
 }
 
@@ -724,11 +718,11 @@ fn no_tenant_reached(
         data: head(Some(platform)),
         ..CommandResult::default()
     };
-    result.data.push(("strategies".into(), names(runs)));
-    result.data.push(("queries_validated".into(), Json::Int(0)));
+    result.data.insert("strategies".into(), names(runs));
+    result.data.insert("queries_validated".into(), Json::Int(0));
     result
         .data
-        .push(("queries_per_tenant".into(), Json::Object(Object::new())));
+        .insert("queries_per_tenant".into(), Json::Object(Object::new()));
     if reaches_any {
         let joined: Vec<&str> = runs.iter().map(|run| run.name()).collect();
         result.message = Some(format!(
@@ -743,7 +737,7 @@ fn no_tenant_reached(
         ));
         result
             .data
-            .push(("advice".into(), Json::str(NO_TENANT_ADVICE)));
+            .insert("advice".into(), Json::str(NO_TENANT_ADVICE));
         result.exit = ExitCode::Usage;
         result.failure.code = Some("no_tenant_reached".to_owned());
     }
@@ -775,10 +769,10 @@ impl Reach<'_> {
     }
 
     /// `strategies`, `queries_validated` and `queries_per_tenant`.
-    fn push_counts(&self, result: &mut Vec<(String, Json)>) {
-        result.push(("strategies".into(), names(self.runs)));
-        result.push(("queries_validated".into(), Json::from(self.queries())));
-        result.push((
+    fn push_counts(&self, result: &mut Object) {
+        result.insert("strategies".into(), names(self.runs));
+        result.insert("queries_validated".into(), Json::from(self.queries()));
+        result.insert(
             "queries_per_tenant".into(),
             Json::Object(
                 self.tenants
@@ -786,7 +780,7 @@ impl Reach<'_> {
                     .map(|(tenant, count)| (tenant.clone(), Json::from(*count)))
                     .collect(),
             ),
-        ));
+        );
     }
 }
 
@@ -832,12 +826,12 @@ fn stopped_result(
 ) -> CommandResult {
     let mut result = stopped_early(platform, early, reach);
     if let Some(rejected) = rejected_json(platform, report) {
-        result.data.push(("rejected".into(), rejected));
+        result.data.insert("rejected".into(), rejected);
     }
     if !refused.is_empty() {
         result
             .data
-            .push(("refused_tenants".into(), refused_names(refused)));
+            .insert("refused_tenants".into(), refused_names(refused));
     }
     result
 }
@@ -867,19 +861,19 @@ fn refused_result(
     let mut result = refused.result(platform);
     let extra = &mut result.data;
     if report.refused.len() > 1 {
-        extra.push(("refused_tenants".into(), refused_names(&report.refused)));
+        extra.insert("refused_tenants".into(), refused_names(&report.refused));
     }
     if !report.checks.is_empty() {
-        extra.push(("queries_validated".into(), Json::from(report.checks.len())));
+        extra.insert("queries_validated".into(), Json::from(report.checks.len()));
         let rejected = report
             .checks
             .iter()
             .filter(|check| !check.errors.is_empty())
             .count();
-        extra.push(("queries_rejected".into(), Json::from(rejected)));
+        extra.insert("queries_rejected".into(), Json::from(rejected));
     }
     if let Some(rejected) = rejected_json(platform, report) {
-        extra.push(("rejected".into(), rejected));
+        extra.insert("rejected".into(), rejected);
     }
     let timed_out: Vec<&RuleCheck> = report
         .checks
@@ -887,11 +881,11 @@ fn refused_result(
         .filter(|check| check.code.is_some())
         .collect();
     if !timed_out.is_empty() {
-        extra.push(("check_timeout".into(), Json::Float(timeout)));
-        extra.push((
+        extra.insert("check_timeout".into(), Json::Float(timeout));
+        extra.insert(
             "timed_out".into(),
             Json::Array(timed_out.iter().map(|check| check.to_json()).collect()),
-        ));
+        );
     }
     if report.checks.iter().any(|check| !check.warnings.is_empty()) {
         result.warnings = vec![format!("Query validation reported warnings for {platform}")];
@@ -939,10 +933,10 @@ fn checked_result(
         } else {
             ExitCode::Success
         },
-        summary: vec![
+        summary: Object::from([
             ("queries".into(), Json::from(queries)),
             ("tenants".into(), Json::from(reach.tenants.len())),
-        ],
+        ]),
         data: head(Some(platform)),
         ..CommandResult::default()
     };
@@ -951,14 +945,14 @@ fn checked_result(
         push_timed_out(&mut result, report, &timed_out, timeout);
     }
     if let Some(rejected) = rejected_json(platform, report) {
-        result.data.push(("rejected".into(), rejected));
+        result.data.insert("rejected".into(), rejected);
         result
             .failure
             .code
             .get_or_insert_with(|| QUERY_REJECTED.to_owned());
     }
     if failed_any {
-        result.data.push(("error".into(), Json::str(&message)));
+        result.data.insert("error".into(), Json::str(&message));
     }
     if warned {
         result.warnings = vec![format!("Query validation reported warnings for {platform}")];
@@ -1021,18 +1015,18 @@ fn push_timed_out(
 ) {
     result
         .data
-        .push(("check_timeout".into(), Json::Float(timeout)));
-    result.data.push((
+        .insert("check_timeout".into(), Json::Float(timeout));
+    result.data.insert(
         "timed_out".into(),
         Json::Array(timed_out.iter().map(|check| check.to_json()).collect()),
-    ));
-    result.data.push((
+    );
+    result.data.insert(
         "advice".into(),
         Json::str(format!(
             "raise the check timeout with --check-timeout or {CHECK_TIMEOUT_ENV}, or make the \
              queries cheaper"
         )),
-    ));
+    );
     let rejected = report
         .checks
         .iter()
@@ -1202,11 +1196,11 @@ struct RuleCheck {
 
 impl RuleCheck {
     fn to_json(&self) -> Json {
-        Json::object(self.members())
+        Json::Object(self.members())
     }
 
-    fn members(&self) -> Vec<(String, Json)> {
-        let mut members = vec![
+    fn members(&self) -> Object {
+        let mut members = Object::from([
             ("rule".to_owned(), Json::str(&self.rule)),
             ("name".to_owned(), Json::str(&self.name)),
             ("tenant".to_owned(), Json::str(&self.tenant)),
@@ -1226,12 +1220,12 @@ impl RuleCheck {
                 "warnings".to_owned(),
                 Json::Array(self.warnings.iter().map(Json::str).collect()),
             ),
-        ];
+        ]);
         if let Some(label) = &self.label {
-            members.push(("label".to_owned(), Json::str(label)));
+            members.insert("label".to_owned(), Json::str(label));
         }
         if let Some(code) = self.code {
-            members.push(("code".to_owned(), Json::str(code)));
+            members.insert("code".to_owned(), Json::str(code));
         }
         members
     }
@@ -1246,14 +1240,14 @@ impl RuleCheck {
     /// platform, and what the platform said.
     fn rejection_json(&self, platform: &str) -> Json {
         let mut members = self.members();
-        members.push(("platform".to_owned(), Json::str(platform)));
-        members.push(("file".to_owned(), Json::opt_str(self.place.file.as_deref())));
-        members.push((
+        members.insert("platform".to_owned(), Json::str(platform));
+        members.insert("file".to_owned(), Json::opt_str(self.place.file.as_deref()));
+        members.insert(
             "line".to_owned(),
             self.place.line.map_or(Json::Null, Json::from),
-        ));
-        members.push(("message".to_owned(), Json::str(self.errors.join("; "))));
-        Json::object(members)
+        );
+        members.insert("message".to_owned(), Json::str(self.errors.join("; ")));
+        Json::Object(members)
     }
 }
 
@@ -1293,9 +1287,9 @@ impl Unreachable {
         }
         let mut result =
             failed(Some(platform), &self.message, ExitCode::Failure).with_code(TENANT_UNREACHABLE);
-        result.data.push(("tenant".into(), Json::str(&self.tenant)));
-        result.data.push(("host".into(), Json::str(&self.host)));
-        result.data.push(("advice".into(), Json::str(advice)));
+        result.data.insert("tenant".into(), Json::str(&self.tenant));
+        result.data.insert("host".into(), Json::str(&self.host));
+        result.data.insert("advice".into(), Json::str(advice));
         result
     }
 }
@@ -1330,9 +1324,9 @@ impl Refused {
     fn result(&self, platform: &str) -> CommandResult {
         let mut result = failed(Some(platform), &self.message, ExitCode::Failure)
             .with_code(AUTHENTICATION_FAILED);
-        result.data.push(("tenant".into(), Json::str(&self.tenant)));
-        result.data.push(("host".into(), Json::str(&self.host)));
-        result.data.push((
+        result.data.insert("tenant".into(), Json::str(&self.tenant));
+        result.data.insert("host".into(), Json::str(&self.host));
+        result.data.insert(
             "advice".into(),
             Json::str(format!(
                 "check the credentials of the '{}' tenant in {} (the environment variables its \
@@ -1340,7 +1334,7 @@ impl Refused {
                 self.tenant,
                 config_path(platform)
             )),
-        ));
+        );
         result
     }
 }
@@ -2982,9 +2976,8 @@ mod tests {
         assert_eq!(failure_code(&result), Some(TENANT_UNREACHABLE));
         let rejected = result
             .data
-            .iter()
-            .find(|(key, _)| key == "rejected")
-            .map(|(_, value)| value.clone())
+            .get("rejected")
+            .cloned()
             .expect("the rejected query is reported");
         let entry = rejected
             .as_array()
@@ -3101,9 +3094,8 @@ mod tests {
             third
                 .result("sentinel")
                 .data
-                .iter()
-                .find(|(key, _)| key == "advice")
-                .and_then(|(_, advice)| advice.as_str())
+                .get("advice")
+                .and_then(Json::as_str)
                 .unwrap()
                 .starts_with("if the tenant")
         );
@@ -3111,18 +3103,15 @@ mod tests {
         assert!(stalled.finish().is_ok());
     }
 
-    /// The document and the exit code of a report.
-    fn document_of(report: Report) -> (String, i32) {
-        (
-            crate::json::document_text(&report.outcome.document(0), false),
-            report.outcome.exit_code.code(),
-        )
+    /// The keys of a result's data, in order.
+    fn data_keys(result: &CommandResult) -> Vec<&str> {
+        result.data.keys().map(String::as_str).collect()
     }
 
     #[test]
-    fn a_typed_check_prints_the_document_its_keys_printed() {
-        // The final result, typed (#1949), against the keys it was built as:
-        // a rejected query, one that got no answer in time, a warning.
+    fn a_typed_check_holds_the_keys_the_run_reports() {
+        // The final result (#1949): a rejected query, one that got no answer
+        // in time, a warning.
         let rejected = rejected_check(Some("rules/é.yaml"));
         let mut slow = rejected_check(None);
         slow.code = Some(QUERY_CHECK_TIMEOUT);
@@ -3138,101 +3127,134 @@ mod tests {
         };
         let message = "Queries rejected on splunk · 2 checked on 1 tenant · 1 with no answer \
                        within 5s";
-        let keys: Vec<(String, Json)> = vec![
-            ("platform".into(), Json::str("splunk")),
-            ("mode".into(), Json::str("live")),
-            ("status".into(), Json::str("failed")),
-            ("supported".into(), Json::Bool(true)),
-            ("strategies".into(), names(&runs)),
-            ("queries_validated".into(), Json::Int(2)),
+        let result = checked_result("splunk", &report, &reach, 5.0);
+        assert_eq!(result.status, Status::Failed);
+        assert_eq!(result.exit, ExitCode::Failure);
+        assert_eq!(result.message.as_deref(), Some(message));
+        assert_eq!(result.failure.code.as_deref(), Some(QUERY_REJECTED));
+        assert_eq!(
+            result.warnings,
+            ["Query validation reported warnings for splunk"]
+        );
+        assert_eq!(
+            result.summary,
+            Object::from([
+                ("queries".to_owned(), Json::Int(2)),
+                ("tenants".to_owned(), Json::Int(1)),
+            ])
+        );
+        assert_eq!(
+            data_keys(&result),
+            [
+                "platform",
+                "mode",
+                "supported",
+                "strategies",
+                "queries_validated",
+                "queries_per_tenant",
+                "check_timeout",
+                "timed_out",
+                "advice",
+                "rejected",
+                "error",
+            ]
+        );
+        let expected = Object::from([
+            ("platform".to_owned(), Json::str("splunk")),
+            ("mode".to_owned(), Json::str("live")),
+            ("supported".to_owned(), Json::Bool(true)),
+            ("strategies".to_owned(), names(&runs)),
+            ("queries_validated".to_owned(), Json::Int(2)),
             (
-                "queries_per_tenant".into(),
+                "queries_per_tenant".to_owned(),
                 Json::object([("lé😀", Json::Int(2))]),
             ),
-            ("message".into(), Json::str(message)),
+            ("check_timeout".to_owned(), Json::Float(5.0)),
             (
-                "_summary".into(),
-                Json::object([("queries", Json::Int(2)), ("tenants", Json::Int(1))]),
-            ),
-            ("_exit_code".into(), Json::Int(1)),
-            ("check_timeout".into(), Json::Float(5.0)),
-            (
-                "timed_out".into(),
+                "timed_out".to_owned(),
                 Json::Array(vec![report.checks[1].to_json()]),
             ),
             (
-                "advice".into(),
+                "advice".to_owned(),
                 Json::str(format!(
                     "raise the check timeout with --check-timeout or {CHECK_TIMEOUT_ENV}, or \
                      make the queries cheaper"
                 )),
             ),
             (
-                "rejected".into(),
+                "rejected".to_owned(),
                 Json::Array(vec![report.checks[0].rejection_json("splunk")]),
             ),
-            ("_failure_code".into(), Json::str(QUERY_REJECTED)),
-            ("error".into(), Json::str(message)),
-            (
-                "warnings".into(),
-                Json::Array(vec![Json::str(
-                    "Query validation reported warnings for splunk",
-                )]),
-            ),
-        ];
-        assert_eq!(
-            document_of(checked_result("splunk", &report, &reach, 5.0).report(COMMAND)),
-            document_of(CommandResult::from_fields(&keys).report(COMMAND))
-        );
-        // A run that sent nothing: exit 2, `no_tenant_reached`.
-        let keys: Vec<(String, Json)> = vec![
-            ("platform".into(), Json::str("é")),
-            ("mode".into(), Json::str("live")),
-            ("status".into(), Json::str("skipped")),
-            ("supported".into(), Json::Bool(true)),
-            ("strategies".into(), names(&runs)),
-            ("queries_validated".into(), Json::Int(0)),
-            ("queries_per_tenant".into(), Json::Object(Object::new())),
-            (
-                "message".into(),
-                Json::str(format!(
-                    "No query was sent: none of the 3 é rule(s) goes to a tenant in {}",
-                    config_path("é")
-                )),
-            ),
-            ("advice".into(), Json::str(NO_TENANT_ADVICE)),
-            ("_exit_code".into(), Json::Int(2)),
-            ("_failure_code".into(), Json::str("no_tenant_reached")),
-        ];
-        assert_eq!(
-            document_of(no_tenant_reached("é", 3, &runs, false).report(COMMAND)),
-            document_of(CommandResult::from_fields(&keys).report(COMMAND))
-        );
+            ("error".to_owned(), Json::str(message)),
+        ]);
+        assert_eq!(result.data, expected);
+        let document = result.report(COMMAND).outcome;
+        assert_eq!(document.exit_code, ExitCode::Failure);
+        assert_eq!(document.message, message);
     }
 
     #[test]
-    fn a_typed_failure_prints_the_document_its_keys_printed() {
-        // The tenant's failure, typed (#1949), against the keys it was built
-        // as: the same document, key for key, and the same exit code.
+    fn a_run_that_sent_nothing_exits_2_with_no_tenant_reached() {
+        let runs = vec![StatusStrategy::Preview];
+        let result = no_tenant_reached("é", 3, &runs, false);
+        assert_eq!(result.status, Status::Skipped);
+        assert_eq!(result.exit, ExitCode::Usage);
+        assert_eq!(result.failure.code.as_deref(), Some("no_tenant_reached"));
+        assert_eq!(
+            result.message,
+            Some(format!(
+                "No query was sent: none of the 3 é rule(s) goes to a tenant in {}",
+                config_path("é")
+            ))
+        );
+        assert_eq!(
+            data_keys(&result),
+            [
+                "platform",
+                "mode",
+                "supported",
+                "strategies",
+                "queries_validated",
+                "queries_per_tenant",
+                "advice",
+            ]
+        );
+        assert_eq!(result.get("platform"), Some(&Json::str("é")));
+        assert_eq!(result.get("queries_validated"), Some(&Json::Int(0)));
+        assert_eq!(
+            result.get("queries_per_tenant"),
+            Some(&Json::Object(Object::new()))
+        );
+        assert_eq!(result.get("advice"), Some(&Json::str(NO_TENANT_ADVICE)));
+        assert_eq!(result.report(COMMAND).outcome.exit_code, ExitCode::Usage);
+    }
+
+    #[test]
+    fn a_typed_failure_holds_the_keys_the_tenants_refusal_reports() {
+        // The tenant's failure, typed (#1949): its keys in order, its code
+        // and its exit code.
         let refused = Refused::new("splunk", "lé😀", "h", "401");
         let advice = "check the credentials of the 'lé😀' tenant in \
              .opentide/configurations/platforms/splunk.toml (the environment variables its \
              setup names) and the account's rights on the tenant";
-        let keys: Vec<(String, Json)> = vec![
-            ("platform".into(), Json::str("splunk")),
-            ("mode".into(), Json::str("live")),
-            ("status".into(), Json::str("failed")),
-            ("supported".into(), Json::Bool(true)),
-            ("tenant".into(), Json::str("lé😀")),
-            ("host".into(), Json::str("h")),
-            ("message".into(), Json::str(&refused.message)),
-            ("advice".into(), Json::str(advice)),
-            ("_exit_code".into(), Json::Int(1)),
-            ("_failure_code".into(), Json::str(AUTHENTICATION_FAILED)),
-        ];
+        let result = refused.result("splunk");
+        assert_eq!(result.status, Status::Failed);
+        assert_eq!(result.exit, ExitCode::Failure);
+        assert_eq!(result.failure.code.as_deref(), Some(AUTHENTICATION_FAILED));
+        assert_eq!(result.message.as_deref(), Some(refused.message.as_str()));
         assert_eq!(
-            document_of(refused.result("splunk").report(COMMAND)),
-            document_of(CommandResult::from_fields(&keys).report(COMMAND))
+            data_keys(&result),
+            ["platform", "mode", "supported", "tenant", "host", "advice"]
+        );
+        assert_eq!(result.get("platform"), Some(&Json::str("splunk")));
+        assert_eq!(result.get("tenant"), Some(&Json::str("lé😀")));
+        assert_eq!(result.get("host"), Some(&Json::str("h")));
+        assert_eq!(result.get("advice"), Some(&Json::str(advice)));
+        let report = result.report(COMMAND);
+        assert_eq!(report.outcome.exit_code, ExitCode::Failure);
+        assert_eq!(
+            report.outcome.failure.map(|failure| failure.code),
+            Some(AUTHENTICATION_FAILED.to_owned())
         );
     }
 
@@ -3254,14 +3276,18 @@ mod tests {
             .map(|(k, _)| k.as_str())
             .collect();
         assert_eq!(keys, ["platform", "mode", "supported"]);
-        let skipped = CommandResult::from_fields(&[
-            ("status".into(), Json::str("skipped")),
-            ("_exit_code".into(), Json::Int(2)),
-        ])
+        let skipped = CommandResult {
+            status: Status::Skipped,
+            exit: ExitCode::Usage,
+            ..CommandResult::default()
+        }
         .report(COMMAND);
         assert_eq!(skipped.outcome.failure.unwrap().code, "not_run");
-        let passed =
-            CommandResult::from_fields(&[("status".into(), Json::str("passed"))]).report(COMMAND);
+        let passed = CommandResult {
+            status: Status::Passed,
+            ..CommandResult::default()
+        }
+        .report(COMMAND);
         assert!(passed.outcome.failure.is_none());
         assert!(tenant_names(&[]).is_empty());
     }

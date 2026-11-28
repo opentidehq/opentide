@@ -4,9 +4,7 @@
 //!
 //! [`CommandResult::report`] is the one place a result becomes a [`Report`].
 //! Every command builds its [`CommandResult`] itself; no result is read
-//! back from `_`-keys. The tests keep that reader
-//! (`CommandResult::from_fields`) as the reference the typed results are
-//! compared against.
+//! back from `_`-keys.
 
 use super::Report;
 use crate::envelope::{
@@ -164,11 +162,11 @@ pub struct CommandResult {
     /// `warnings`.
     pub warnings: Vec<String>,
     /// `summary`.
-    pub summary: Vec<(String, Json)>,
+    pub summary: Object,
     /// `next_actions`.
     pub next_actions: Vec<NextAction>,
     /// The command's own keys, in order.
-    pub data: Vec<(String, Json)>,
+    pub data: Object,
     /// The outcome line the text modes print, when it is not the message.
     pub outcome_line: Option<String>,
     /// The run ends with its exit code alone: no document, no outcome line
@@ -196,19 +194,13 @@ impl CommandResult {
 
     /// The value of the command's own key `key`.
     pub fn get(&self, key: &str) -> Option<&Json> {
-        self.data
-            .iter()
-            .find(|(name, _)| name == key)
-            .map(|(_, value)| value)
+        self.data.get(key)
     }
 
     /// `value` set at the command's own key `key`, in place when the key is
     /// there, else last.
     pub fn set(&mut self, key: &str, value: Json) {
-        match self.data.iter_mut().find(|(name, _)| name == key) {
-            Some(entry) => entry.1 = value,
-            None => self.data.push((key.to_owned(), value)),
-        }
+        self.data.insert(key.to_owned(), value);
     }
 
     /// The result as one JSON object: the command's own keys, then
@@ -216,109 +208,17 @@ impl CommandResult {
     /// job summary reads it). The envelope's other fields are not in it.
     pub fn to_json(&self) -> Json {
         let mut members = self.data.clone();
-        members.push(("status".to_owned(), Json::str(self.status.as_str())));
+        members.insert("status".to_owned(), Json::str(self.status.as_str()));
         if let Some(message) = &self.message {
-            members.push(("message".to_owned(), Json::str(message)));
+            members.insert("message".to_owned(), Json::str(message));
         }
         if !self.warnings.is_empty() {
-            members.push((
+            members.insert(
                 "warnings".to_owned(),
                 Json::Array(self.warnings.iter().map(Json::str).collect()),
-            ));
+            );
         }
-        Json::object(members)
-    }
-
-    /// A result built as keys in order, as `deploy` and the live check built
-    /// theirs before #1949: `message`, `status` and `warnings` leave the
-    /// data, as do
-    /// `_exit_code`, `_summary`, `_next_actions`, `_failure_code`,
-    /// `_failure_argument`, `_failure_suggestion` and every other `_`-key.
-    ///
-    /// Two inputs no producer emits fall back rather than pass through, each
-    /// behind a `debug_assert!` that names it: a `status` that is not one of
-    /// [`Status`]'s is [`Status::Failed`] (exiting 1 unless `_exit_code`
-    /// says otherwise), and an `_exit_code` other than 0, 1, 2 or 130 is 1.
-    ///
-    /// Tests only: the reference the typed results are compared against, key
-    /// for key.
-    #[cfg(test)]
-    pub(crate) fn from_fields(result: &[(String, Json)]) -> CommandResult {
-        let take = |key: &str| result.iter().find(|(name, _)| name == key).map(|(_, v)| v);
-        let text = |key: &str| match take(key) {
-            Some(Json::Str(text)) => Some(text.clone()),
-            _ => None,
-        };
-        let unknown_status =
-            take("status").filter(|status| status.as_str().and_then(Status::parse).is_none());
-        debug_assert!(
-            unknown_status.is_none(),
-            "a result's status is unexpected: {unknown_status:?}"
-        );
-        let status = match take("status") {
-            None => Status::Completed,
-            Some(status) => status.as_str().map_or(Status::Failed, |text| {
-                Status::parse(text).unwrap_or(Status::Failed)
-            }),
-        };
-        let exit = match take("_exit_code") {
-            Some(Json::Int(code)) => {
-                debug_assert!(
-                    ExitCode::from_code(*code).is_some(),
-                    "a result's _exit_code is unexpected: {code}"
-                );
-                ExitCode::from_code(*code).unwrap_or(ExitCode::Failure)
-            }
-            _ if unknown_status.is_some() => ExitCode::Failure,
-            _ => ExitCode::Success,
-        };
-        let warnings = match take("warnings") {
-            Some(Json::Array(items)) => items
-                .iter()
-                .map(|item| match item {
-                    Json::Str(text) => text.clone(),
-                    other => crate::json::document_text(other, false),
-                })
-                .collect(),
-            _ => Vec::new(),
-        };
-        let summary = match take("_summary") {
-            Some(Json::Object(members)) => members.clone().into_iter().collect(),
-            _ => Vec::new(),
-        };
-        let next_actions = match take("_next_actions") {
-            Some(Json::Array(items)) => items
-                .iter()
-                .map(|item| {
-                    let field =
-                        |key: &str| item.get(key).and_then(Json::as_str).unwrap_or_default();
-                    NextAction::new(field("command"), field("reason"))
-                })
-                .collect(),
-            _ => Vec::new(),
-        };
-        let data = result
-            .iter()
-            .filter(|(key, _)| {
-                !key.starts_with('_') && !matches!(key.as_str(), "message" | "status" | "warnings")
-            })
-            .cloned()
-            .collect();
-        CommandResult {
-            status,
-            message: text("message"),
-            exit,
-            failure: FailureDetail {
-                code: text("_failure_code"),
-                argument: text("_failure_argument"),
-                suggestion: text("_failure_suggestion"),
-            },
-            warnings,
-            summary,
-            next_actions,
-            data,
-            ..CommandResult::default()
-        }
+        Json::Object(members)
     }
 
     /// The report of `command`'s result: a run that failed or exits
@@ -330,8 +230,8 @@ impl CommandResult {
             .unwrap_or_else(|| "Completed successfully".to_owned());
         let failed = self.status.is_failed() || self.exit != ExitCode::Success;
         let failure = failed.then(|| {
-            let error = match self.data.iter().find(|(key, _)| key == "error") {
-                Some((_, Json::Str(text))) => Some(text.clone()),
+            let error = match self.data.get("error") {
+                Some(Json::Str(text)) => Some(text.clone()),
                 _ => None,
             };
             let code = self
@@ -406,68 +306,56 @@ mod tests {
     }
 
     #[test]
-    #[cfg_attr(
-        debug_assertions,
-        should_panic(expected = "a result's status is unexpected")
-    )]
-    fn an_unknown_status_fails_loudly_rather_than_completing() {
-        // A typo in a producer's status would have read as `completed`,
-        // `ok: true` and exit 0 (#1949).
-        let fields = vec![("status".to_owned(), Json::str("faild"))];
-        let result = CommandResult::from_fields(&fields);
+    fn a_status_no_producer_names_is_not_a_known_status() {
+        // A typo in a producer's status read as `completed`, `ok: true` and
+        // exit 0 (#1949); a typed status cannot be misspelt, and a text that
+        // is none of the known ones does not parse as one.
+        assert_eq!(Status::parse("faild"), None);
+        let result = CommandResult::failed("é", ExitCode::Failure);
         assert_eq!(result.status, Status::Failed);
-        assert_eq!(result.exit, ExitCode::Failure);
         let report = result.report("deploy");
         assert_eq!(report.outcome.exit_code, ExitCode::Failure);
         assert!(report.outcome.failure.is_some());
     }
 
     #[test]
-    #[cfg_attr(
-        debug_assertions,
-        should_panic(expected = "a result's _exit_code is unexpected: 4")
-    )]
-    fn an_exit_code_outside_the_set_exits_1() {
-        let fields = vec![("_exit_code".to_owned(), Json::Int(4))];
-        assert_eq!(CommandResult::from_fields(&fields).exit, ExitCode::Failure);
+    fn an_exit_code_outside_the_set_is_not_an_exit_code() {
+        // The reader of `_exit_code` fell back to 1 for a code outside the
+        // set; a typed `ExitCode` cannot hold one.
+        assert_eq!(ExitCode::from_code(4), None);
+        assert_eq!(ExitCode::from_code(-1), None);
+        assert_eq!(ExitCode::from_code(130), Some(ExitCode::Interrupted));
     }
 
     #[test]
     fn a_result_without_a_status_completes() {
-        let fields = vec![("platform".to_owned(), Json::str("é"))];
-        let result = CommandResult::from_fields(&fields);
+        let mut result = CommandResult::default();
+        result.data.insert("platform".to_owned(), Json::str("é"));
         assert_eq!(result.status, Status::Completed);
         assert_eq!(result.exit, ExitCode::Success);
+        let report = result.report("deploy");
+        assert_eq!(report.outcome.status, Status::Completed);
+        assert_eq!(report.outcome.exit_code, ExitCode::Success);
+        assert_eq!(report.outcome.failure, None);
+        assert_eq!(report.outcome.message, "Completed successfully");
+    }
+
+    #[test]
+    fn setting_a_key_keeps_its_place_and_a_new_key_goes_last() {
+        let mut result = CommandResult::default();
+        result.set("a", Json::Int(1));
+        result.set("b", Json::Int(2));
+        result.set("a", Json::Int(3));
+        let keys: Vec<&str> = result.data.keys().map(String::as_str).collect();
+        assert_eq!(keys, ["a", "b"]);
+        assert_eq!(result.get("a"), Some(&Json::Int(3)));
+        assert_eq!(result.get("c"), None);
     }
 
     #[test]
     fn a_typed_result_prints_the_document_its_fields_printed() {
-        // The `_`-keys and the typed fields make the same document, key for
-        // key, and the same exit code (#1949).
-        let fields = vec![
-            ("platform".to_owned(), Json::str("é😀")),
-            ("status".to_owned(), Json::str("failed")),
-            ("message".to_owned(), Json::str("refusé 😀")),
-            ("_exit_code".to_owned(), Json::Int(2)),
-            (
-                "_failure_code".to_owned(),
-                Json::str(code::USAGE_MISSING_OPTION),
-            ),
-            ("_failure_argument".to_owned(), Json::str("--platform")),
-            ("_failure_suggestion".to_owned(), Json::str("--tenant")),
-            (
-                "_summary".to_owned(),
-                Json::object([("checked", Json::Int(3))]),
-            ),
-            (
-                "_next_actions".to_owned(),
-                Json::Array(vec![Json::object([
-                    ("command", Json::str("opentide info")),
-                    ("reason", Json::str("why")),
-                ])]),
-            ),
-            ("warnings".to_owned(), Json::Array(vec![Json::str("w")])),
-        ];
+        // The typed fields make this document, key for key, and this exit
+        // code (#1949).
         let typed = CommandResult {
             status: Status::Failed,
             message: Some("refusé 😀".to_owned()),
@@ -478,12 +366,11 @@ mod tests {
                 suggestion: Some("--tenant".to_owned()),
             },
             warnings: vec!["w".to_owned()],
-            summary: vec![("checked".to_owned(), Json::Int(3))],
+            summary: Object::from([("checked".to_owned(), Json::Int(3))]),
             next_actions: vec![NextAction::new("opentide info", "why")],
-            data: vec![("platform".to_owned(), Json::str("é😀"))],
+            data: Object::from([("platform".to_owned(), Json::str("é😀"))]),
             ..CommandResult::default()
         };
-        assert_eq!(CommandResult::from_fields(&fields), typed);
         let report = typed.report("validate query");
         assert_eq!(report.outcome.exit_code, ExitCode::Usage);
         assert_eq!(report.warnings, ["w"]);
@@ -502,7 +389,7 @@ mod tests {
     #[test]
     fn a_failure_takes_its_message_from_error_and_its_code_from_the_status() {
         let mut result = CommandResult::failed("the message", ExitCode::Failure);
-        result.data = vec![("error".to_owned(), Json::str("the error"))];
+        result.data = Object::from([("error".to_owned(), Json::str("the error"))]);
         let failure = result.report("deploy").outcome.failure;
         assert_eq!(
             failure,
