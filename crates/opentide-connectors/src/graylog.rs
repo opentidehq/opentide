@@ -49,11 +49,15 @@ pub const MESSAGES_PATH: &str = "/api/search/messages";
 /// The header Graylog requires on every write.
 pub const REQUESTED_BY: &str = "opentide";
 
+/// The connect timeout and the read timeout of each request to the tenant;
+/// with retries, a whole request can take longer.
+pub const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
+
 /// How a Graylog tenant is reached: 30 s, and the connectors' retries (a
 /// create, a `POST`, that got no answer is never sent again).
 pub fn http_defaults() -> HttpSettings {
     HttpSettings {
-        timeout: Duration::from_secs(30),
+        timeout: REQUEST_TIMEOUT,
         retry: RetryPolicy::standard(),
         ..HttpSettings::default()
     }

@@ -216,8 +216,11 @@ pub fn sync_call<T: Send>(work: impl FnOnce() -> T + Send) -> std::thread::Resul
     std::panic::catch_unwind(std::panic::AssertUnwindSafe(work))
 }
 
-/// Cancels *token* once *requested* returns true, checking every 50 ms
-/// until the token is cancelled. For the CLI's Ctrl-C flag.
+/// How often [`cancel_when`] checks its flag.
+const CANCEL_POLL: Duration = Duration::from_millis(50);
+
+/// Cancels *token* once *requested* returns true, checking every
+/// every 50 ms (`CANCEL_POLL`) until the token is cancelled. For the CLI's Ctrl-C flag.
 pub fn cancel_when(
     token: &CancellationToken,
     requested: impl Fn() -> bool + Send + 'static,
@@ -231,7 +234,7 @@ pub fn cancel_when(
             }
             tokio::select! {
                 () = token.cancelled() => return,
-                () = tokio::time::sleep(Duration::from_millis(50)) => {}
+                () = tokio::time::sleep(CANCEL_POLL) => {}
             }
         }
     })

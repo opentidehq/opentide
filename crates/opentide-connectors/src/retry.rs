@@ -51,6 +51,9 @@ use crate::pace::Clock;
 /// one tenant cannot hold a run for an unbounded time.
 pub const MAX_BACKOFF: Duration = Duration::from_secs(120);
 
+/// The standard policy's wait before its first retry.
+pub const STANDARD_FIRST_DELAY: Duration = Duration::from_millis(500);
+
 /// How often, and after how long, a request is sent again.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct RetryPolicy {
@@ -91,7 +94,7 @@ impl RetryPolicy {
     pub const fn standard() -> Self {
         Self {
             max_retries: 3,
-            base_delay: Duration::from_millis(500),
+            base_delay: STANDARD_FIRST_DELAY,
         }
     }
 
