@@ -307,8 +307,9 @@ fn a_workspace_root_has_its_folder_or_a_catalogue() {
     assert!(!is_workspace_root(dir.path()));
     std::fs::create_dir(dir.path().join("objects")).unwrap();
     assert!(is_workspace_root(dir.path()));
-    // Only opentide's markers count: an `__init__.py` changes nothing.
-    std::fs::write(dir.path().join("objects/__init__.py"), "").unwrap();
+    // Only opentide's markers count: a source file in `objects/` changes
+    // nothing.
+    std::fs::write(dir.path().join("objects/mod.rs"), "").unwrap();
     assert!(is_workspace_root(dir.path()));
     std::fs::create_dir(dir.path().join(".opentide")).unwrap();
     assert!(is_workspace_root(dir.path()));
