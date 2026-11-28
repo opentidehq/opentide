@@ -106,19 +106,24 @@ fn word_char(c: char) -> bool {
 /// The word around byte `offset`, and its span.
 fn word_around(source: &str, offset: usize) -> Option<(&str, usize, usize)> {
     let offset = offset.min(source.len());
-    let before = source.get(..offset)?;
+    let (before, after) = source.split_at_checked(offset)?;
     let start = opentide_core::word_start(before, word_char);
-    let end = offset
-        + source[offset..]
-            .char_indices()
-            .find(|(_, c)| !word_char(*c))
-            .map_or(source.len() - offset, |(i, _)| i);
-    (end > start).then(|| (&source[start..end], start, end))
+    let end = offset + after.find(|c| !word_char(c)).unwrap_or(after.len());
+    #[expect(
+        clippy::string_slice,
+        reason = "`word_start` returns a char boundary of `before`, and `end` is `offset` \
+                  plus a char boundary of `after`"
+    )]
+    let word = &source[start..end];
+    (end > start).then_some((word, start, end))
 }
 
 /// The field a value at `start` belongs to: the name before `:` or `=`.
 fn field_before(source: &str, start: usize) -> Option<&str> {
-    let head = source[..start]
+    // `start` is where `word_around` found a word: a char boundary.
+    debug_assert!(source.is_char_boundary(start), "{start}");
+    let head = source
+        .get(..start)?
         .trim_end()
         .trim_end_matches(['"', '\''])
         .trim_end()
@@ -126,8 +131,8 @@ fn field_before(source: &str, start: usize) -> Option<&str> {
         .trim_end();
     let head = head.strip_suffix(':').or_else(|| head.strip_suffix('='))?;
     let head = head.trim_end().trim_end_matches('=');
-    let begin = opentide_core::word_start(head, word_char);
-    let name = &head[begin..];
+    // The run of word characters that ends `head`.
+    let name = head.rsplit(|c| !word_char(c)).next().unwrap_or_default();
     (!name.is_empty()).then_some(name)
 }
 
@@ -197,7 +202,9 @@ pub fn hover(source: &str, offset: usize) -> Option<String> {
             _ => None,
         };
     }
-    let next = source[end..].trim_start();
+    // `end` is where `word_around` found the word's end: a char boundary.
+    debug_assert!(source.is_char_boundary(end), "{end}");
+    let next = source.get(end..).unwrap_or_default().trim_start();
     let upper = word.to_uppercase();
     if next.starts_with('(')
         && let Some((name, signature, doc)) =

@@ -97,7 +97,7 @@ fn unknown_values(query: &str, profile: Profile) -> Vec<(String, String)> {
         .findings
         .into_iter()
         .filter(|f| f.code == codes::EXABEAM_UNKNOWN_VALUE)
-        .map(|f| (query[f.start..f.end].to_string(), f.message))
+        .map(|f| (query.get(f.start..f.end).unwrap().to_string(), f.message))
         .collect()
 }
 
@@ -335,7 +335,12 @@ fn highlighting_uses_the_spec_captures() {
     let text = r#"user IN "Admins"."Name" AND src_ip:[10.0.0.0/8] AND a:RGXi("x") AND parsed:true AND dest_port:null AND user != "x" | SELECT COUNT(*) AS n"#;
     let caps: Vec<(String, String)> = highlight(&spec, text)
         .into_iter()
-        .map(|t| (text[t.span.start..t.span.end].to_string(), t.capture))
+        .map(|t| {
+            (
+                text.get(t.span.start..t.span.end).unwrap().to_string(),
+                t.capture,
+            )
+        })
         .collect();
     for (token, capture) in [
         ("user", "property"),
@@ -415,4 +420,40 @@ fn an_offset_inside_a_character_is_answered_empty() {
     let inside = src.find('\u{e9}').unwrap() + 1;
     assert!(completions(src, inside).is_empty());
     assert_eq!(hover(src, inside), None);
+}
+
+/// Queries with multi-byte text in every place the checker cuts: words,
+/// fields, strings, operators, ranges, functions, statements and the
+/// advanced form's clauses. The spans it cuts are checked in debug builds
+/// (`check::span`), and every finding and token is a span of the query.
+#[test]
+fn multi_byte_text_is_read_whole_everywhere() {
+    let queries = [
+        r#"user:"é😀" AND c-é😀 in ("x") OR é😀 NOT ip:[10.0.0.0/8 ] AND n:[1 TO é😀]"#,
+        r#"time:é😀 AND time:"2024-01-02T03:04:05.6é" AND time > 2024-01-02T03:04:05.678+01:00"#,
+        r#"a:RGXi("é😀", "😀") AND b:é😀("x") AND c>=é AND d:<=😀 AND e:>é AND f==😀"#,
+        r#"WHERE vendor:"é😀" AS é😀 | SELECT é😀, count(é) AS n GROUP-BY é😀 ORDER-BY n LIMIT 5"#,
+        r#"vendor:"x" as t é😀 limit 3 AND 😀 limit é"#,
+        r#"FOREACH x IN (SELECT é😀 GROUP-BY é😀) | ORDER-BY é limité 😀"#,
+        "é😀 \"unterminated é",
+    ];
+    for query in queries {
+        for profile in [Profile::Rule, Profile::Search] {
+            let checked = check(query, profile);
+            for f in &checked.findings {
+                assert!(query.get(f.start..f.end).is_some(), "{query}: {f:?}");
+            }
+            for t in &checked.tokens {
+                assert!(query.get(t.start..t.end).is_some(), "{query}: {t:?}");
+            }
+        }
+        for (offset, _) in query.char_indices().chain([(query.len(), ' ')]) {
+            let _ = hover(query, offset);
+            let _ = completions(query, offset);
+        }
+    }
+    // A value's field is the run of word characters before its `:`.
+    let query = r#"é activity_type:"process-create""#;
+    assert!(hover(query, query.find("process").unwrap() + 2).is_some());
+    assert_eq!(hover("é😀 x", 2), None);
 }
