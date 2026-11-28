@@ -873,6 +873,211 @@ fn setup_ci_detects_the_default_branch() {
     );
 }
 
+/// The default branch is read without the `git` program (#1955): `PATH`
+/// names an empty folder. Outside a repository it is `init.defaultBranch`
+/// from the global file the run's environment names, a `GIT_CONFIG_COUNT`
+/// override winning over it, else `main` with the not-a-repository warning;
+/// in one whose branches are packed, the checked-out branch with the
+/// warning that others exist.
+#[test]
+fn setup_ci_reads_the_default_branch_without_git() {
+    let scratch = tempfile::tempdir().unwrap();
+    let root = std::fs::canonicalize(scratch.path()).unwrap();
+    let ws = root.join("ws");
+    fixture("tide-corpus", &ws);
+    let no_git = root.join("empty-path");
+    std::fs::create_dir_all(&no_git).unwrap();
+    let path = no_git.to_str().unwrap();
+    let global = root.join("global.gitconfig");
+    std::fs::write(&global, "[init]\n\tdefaultBranch = trunk\n").unwrap();
+    let global = global.to_str().unwrap();
+    let branch = |extra: &[(&str, &str)]| {
+        let extra: Vec<(&str, &str)> = [("PATH", path)]
+            .into_iter()
+            .chain(extra.iter().copied())
+            .collect();
+        let (code, stdout) = run_json_with(&ws, &["setup", "ci", "github", "--yes"], &extra);
+        assert_eq!(code, 0, "{stdout}");
+        let written = document(&stdout);
+        (
+            written["default_branch"].as_str().unwrap().to_owned(),
+            written["warnings"].clone(),
+        )
+    };
+    let (found, _) = branch(&[("GIT_CONFIG_GLOBAL", global)]);
+    assert_eq!(found, "trunk");
+    let overridden = [
+        ("GIT_CONFIG_GLOBAL", global),
+        ("GIT_CONFIG_COUNT", "1"),
+        ("GIT_CONFIG_KEY_0", "Init.DefaultBranch"),
+        ("GIT_CONFIG_VALUE_0", "release"),
+    ];
+    assert_eq!(branch(&overridden).0, "release");
+    let (found, warnings) = branch(&[]);
+    assert_eq!(found, "main");
+    assert!(
+        warnings[0]
+            .as_str()
+            .unwrap()
+            .starts_with("This folder is not a git repository yet"),
+        "{warnings}"
+    );
+    if !has_git() {
+        return;
+    }
+    git(&ws, &["init", "-q", "-b", "main"]);
+    git(&ws, &["add", "-A"]);
+    git(&ws, &["commit", "-q", "-m", "catalogue"]);
+    git(&ws, &["checkout", "-q", "-b", "feature/x"]);
+    git(&ws, &["pack-refs", "--all"]);
+    let (found, warnings) = branch(&[]);
+    assert_eq!(found, "feature/x");
+    assert!(
+        warnings[0]
+            .as_str()
+            .unwrap()
+            .starts_with("origin/HEAD is not set, so the pipeline targets the checked-out branch"),
+        "{warnings}"
+    );
+}
+
+/// The first value named `key` anywhere in `value`.
+fn find_key<'a>(value: &'a serde_json::Value, key: &str) -> Option<&'a serde_json::Value> {
+    match value {
+        serde_json::Value::Object(map) => map
+            .get(key)
+            .or_else(|| map.values().find_map(|inner| find_key(inner, key))),
+        serde_json::Value::Array(items) => items.iter().find_map(|inner| find_key(inner, key)),
+        _ => None,
+    }
+}
+
+/// `new` reads its author's `user.name` without the `git` program (#1955):
+/// `PATH` names an empty folder, and the name comes from the global file the
+/// run's environment names, a `GIT_CONFIG_COUNT` override winning over it.
+#[test]
+fn new_reads_the_author_without_git() {
+    let scratch = tempfile::tempdir().unwrap();
+    let root = std::fs::canonicalize(scratch.path()).unwrap();
+    let ws = root.join("ws");
+    fixture("tide-corpus", &ws);
+    let no_git = root.join("empty-path");
+    std::fs::create_dir_all(&no_git).unwrap();
+    let path = no_git.to_str().unwrap();
+    let global = root.join("global.gitconfig");
+    std::fs::write(&global, "[user]\n\tname = Zoë 😀\n").unwrap();
+    let global = global.to_str().unwrap();
+    let author = |name: &str, extra: &[(&str, &str)]| {
+        let extra: Vec<(&str, &str)> = [("PATH", path)]
+            .into_iter()
+            .chain(extra.iter().copied())
+            .collect();
+        let (code, stdout) = run_json_with(&ws, &["new", "threat", "--name", name], &extra);
+        assert_eq!(code, 0, "{stdout}");
+        find_key(&document(&stdout), "author")
+            .cloned()
+            .unwrap_or_else(|| panic!("{stdout}"))
+    };
+    assert_eq!(author("First", &[("GIT_CONFIG_GLOBAL", global)]), "Zoë 😀");
+    let overridden = [
+        ("GIT_CONFIG_GLOBAL", global),
+        ("GIT_CONFIG_COUNT", "1"),
+        ("GIT_CONFIG_KEY_0", "User.Name"),
+        ("GIT_CONFIG_VALUE_0", "Émile"),
+    ];
+    assert_eq!(author("Second", &overridden), "Émile");
+    assert_eq!(author("Third", &[]), serde_json::Value::Null);
+}
+
+/// `setup hooks` finds the repository's layout without the `git` program
+/// (#1955): from a nested workspace, a relative `core.hooksPath` is taken
+/// from the top level, and one outside the repository is shared, so it is
+/// left alone with a warning.
+#[test]
+fn setup_hooks_reads_the_layout_without_git() {
+    if !has_git() {
+        return;
+    }
+    let scratch = tempfile::tempdir().unwrap();
+    let root = std::fs::canonicalize(scratch.path()).unwrap();
+    let repo = root.join("repo");
+    let ws = repo.join("détection");
+    fixture("tide-corpus", &ws);
+    git(&repo, &["init", "-q", "-b", "main"]);
+    git(&repo, &["config", "core.hooksPath", ".githooks"]);
+    let no_git = root.join("empty-path");
+    std::fs::create_dir_all(&no_git).unwrap();
+    let path = no_git.to_str().unwrap();
+    let (code, stdout) = run_json_with(&ws, &["setup", "hooks", "--yes"], &[("PATH", path)]);
+    assert_eq!(code, 0, "{stdout}");
+    let hook = std::fs::read_to_string(repo.join(".githooks/pre-commit")).unwrap();
+    assert!(
+        hook.contains("# opentide-workspace: \"détection\""),
+        "{hook}"
+    );
+    assert!(!repo.join(".git/hooks/pre-commit").exists());
+    let shared = root.join("partagés");
+    let shared = shared.to_str().unwrap();
+    let overridden = [
+        ("PATH", path),
+        ("GIT_CONFIG_COUNT", "1"),
+        ("GIT_CONFIG_KEY_0", "core.hooksPath"),
+        ("GIT_CONFIG_VALUE_0", shared),
+    ];
+    let (code, stdout) = run_json_with(&ws, &["setup", "hooks", "--yes"], &overridden);
+    assert_eq!(code, 0, "{stdout}");
+    assert!(
+        stdout.contains("core.hooksPath points outside this repository"),
+        "{stdout}"
+    );
+    assert!(stdout.contains(shared), "{stdout}");
+    assert!(!root.join("partagés/pre-commit").exists());
+}
+
+/// `setup hooks` finds the repository through the run's `GIT_DIR` and
+/// `GIT_WORK_TREE`, as `git rev-parse` did (#1955): the work tree has no
+/// `.git`, so without them there is no repository to install into.
+#[test]
+fn setup_hooks_follows_the_runs_git_dir() {
+    if !has_git() {
+        return;
+    }
+    let scratch = tempfile::tempdir().unwrap();
+    let root = std::fs::canonicalize(scratch.path()).unwrap();
+    let repo = root.join("repo");
+    let ws = repo.join("détection");
+    fixture("tide-corpus", &ws);
+    let store = root.join("dépôt 😀.git");
+    git(
+        &root,
+        &[
+            "init",
+            "-q",
+            "-b",
+            "main",
+            "--separate-git-dir",
+            store.to_str().unwrap(),
+            repo.to_str().unwrap(),
+        ],
+    );
+    std::fs::remove_file(repo.join(".git")).unwrap();
+    std::fs::create_dir_all(store.join("hooks")).unwrap();
+    let (code, stdout) = run_json_with(&ws, &["setup", "hooks", "--yes"], &[]);
+    assert_eq!(code, 0, "{stdout}");
+    assert!(!store.join("hooks/pre-commit").exists(), "{stdout}");
+    let named = [
+        ("GIT_DIR", store.to_str().unwrap()),
+        ("GIT_WORK_TREE", repo.to_str().unwrap()),
+    ];
+    let (code, stdout) = run_json_with(&ws, &["setup", "hooks", "--yes"], &named);
+    assert_eq!(code, 0, "{stdout}");
+    let hook = std::fs::read_to_string(store.join("hooks/pre-commit")).unwrap();
+    assert!(
+        hook.contains("# opentide-workspace: \"détection\""),
+        "{hook}"
+    );
+}
+
 /// Only the platforms whose file enables them get validate query jobs; and
 /// two different repository paths are refused before anything is written.
 #[test]

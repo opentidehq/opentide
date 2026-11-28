@@ -930,7 +930,8 @@ pub fn run(args: &NewArgs, cx: &Context<'_>) -> Report {
         return with_steps(exists(&destination), &steps);
     }
 
-    let author = super::super::git_baseline::stdout(cx.env, &root, &["config", "user.name"])
+    let lookup = |name: &str| cx.env.get(name).map(str::to_owned);
+    let author = opentide_compile::git::config_value(&root, "user.name", &lookup)
         .filter(|name| !name.is_empty());
     let OrganisationChoice {
         organisation,

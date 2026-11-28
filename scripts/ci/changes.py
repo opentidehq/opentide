@@ -201,8 +201,14 @@ CRATE_PATHS: tuple[tuple[str, tuple[str, ...]], ...] = (
     # A Python file inside a crate.
     ("*.py", ("pylint",)),
     # The facade's public API: every feature, rustdoc, cargo semver-checks.
+    # A source crate's features (Cargo.toml) and build script decide which
+    # of its items exist and what they are, as its sources do.
     ("crates/opentide/*", ("facade",)),
-    *((f"crates/{crate}/src/*", ("facade",)) for crate in FACADE_SOURCES),
+    *(
+        (f"crates/{crate}/{part}", ("facade",))
+        for crate in FACADE_SOURCES
+        for part in ("src/*", "Cargo.toml", "build.rs")
+    ),
     # The Node package.
     ("bindings/node/*", ("node",)),
     # The WebAssembly crate (the WASI and the browser build) and the WASI shims

@@ -1,5 +1,5 @@
-//! The renderers' invariants on the model. The comparisons with the files
-//! the oracle writes read them from disk, so they live in
+//! The renderers' invariants on the model. The comparisons with the
+//! committed files read them from disk, so they live in
 //! `tests/generate_files.rs` (this crate's `src` stays I/O-free); `cargo
 //! xtask codegen --check` compares every golden case that writes them.
 

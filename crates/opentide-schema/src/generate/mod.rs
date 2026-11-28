@@ -1,17 +1,15 @@
 //! The artifacts generated from the model (UC-1.8, #814; plan D-2): what
 //! `opentide generate` writes into a workspace and what is committed for
-//! editors, from the Rust model instead of Pydantic, byte for byte as the
-//! oracle writes them.
+//! editors, from the Rust model.
 //!
 //! - [`json`]: documents with their keys in insertion order, indented by
 //!   four spaces, every character as UTF-8;
-//! - [`annotate`]: the editor annotations of every generated schema
-//!   (`schema_annotations.py`);
-//! - [`router`]: `opentide.schema.json` (`router_schema.py`);
+//! - [`annotate`]: the editor annotations of every generated schema;
+//! - [`router`]: the router, `opentide.schema.json`;
 //! - [`models`]: each model's field order, which the schemas schemars
 //!   derives do not keep;
-//! - [`template`]: YAML skeletons (`pydantic_skeleton.py`);
-//! - [`snippets`]: VS Code snippets (`vscode_snippets.py`);
+//! - [`template`]: YAML skeletons;
+//! - [`snippets`]: VS Code snippets;
 //! - [`schema`]: the editor schema of each object revision and of
 //!   `visibility.toml` (UC-1.8b, #900), schemars' schema with opentide's
 //!   transforms;

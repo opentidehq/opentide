@@ -1,11 +1,11 @@
 //! Elastic Security detection rule, `platform::elastic::1.0` (RFC 0007;
 //! `ElasticConfig` and its nested models), with the named check
-//! `elastic_rule_shape` ([`block_codes`]): the constraint codes of the
-//! oracle's `_validate_raw_elastic_block`, judged on the raw block before its
-//! fields. A key is set when its value is not null (`present`), or, where a
-//! check needs a value, when it is not null and not an empty string,
-//! sequence or mapping (`filled`); a value's type is its YAML node's kind (a mapping, a sequence,
-//! an integer; a boolean is never an integer).
+//! `elastic_rule_shape` ([`block_codes`]): the block's constraint codes,
+//! judged on the raw block before its fields. A key is set when its value is
+//! not null (`present`), or, where a check needs a value, when it is not null
+//! and not an empty string, sequence or mapping (`filled`); a value's type is
+//! its YAML node's kind (a mapping, a sequence, an integer; a boolean is never
+//! an integer).
 
 use std::collections::BTreeSet;
 use std::ops::RangeInclusive;
@@ -695,7 +695,7 @@ pub const REMOVED_FLAT: [&str; 40] = [
     "passthrough",
 ];
 
-/// `_pattern_list`: a non-empty list of non-empty strings.
+/// A non-empty list of non-empty strings.
 fn pattern_list(node: &Node) -> bool {
     match &node.value {
         Value::Seq(items) => {
@@ -719,7 +719,7 @@ fn keys(node: &Node) -> Vec<&str> {
     }
 }
 
-/// `_valid_response`: RFC 0007 `response_action`, the two author shapes only,
+/// RFC 0007 `response_action`, the two author shapes only,
 /// never Kibana's raw form.
 fn valid_response(action: &Node) -> bool {
     let Value::Map(entries) = &action.value else {
@@ -764,13 +764,12 @@ fn int_within(node: Option<&Node>, range: &RangeInclusive<i64>) -> bool {
     }
 }
 
-/// Every constraint code of the oracle's `_validate_raw_elastic_block` on a
-/// raw block, sorted; empty when the block passes, is not a mapping, or has
+/// Every constraint code of `elastic_rule_shape` on a raw block, sorted; empty when the block passes, is not a mapping, or has
 /// no `status` (left to the field: a missing status is "Field required", as
 /// on every platform).
 #[expect(
     clippy::too_many_lines,
-    reason = "one check per constraint, in the oracle's order"
+    reason = "one check per constraint, read top to bottom"
 )]
 pub fn block_codes(raw: &Node) -> BTreeSet<&'static str> {
     let mut codes = BTreeSet::new();

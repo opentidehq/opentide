@@ -40,7 +40,7 @@ opentide validate --file objects/rules/suspicious-lsass-access.yaml
 | `metadata.created`, `modified` | Today, unquoted (`2026-10-23`) |
 | `metadata.version` | `1` |
 | `metadata.tlp` | `amber`, so a new object is never cleared for sharing by accident |
-| `metadata.author` | `git config user.name`, read from the workspace. Left out, with a warning, when git has none |
+| `metadata.author` | Git's `user.name`, as `git config user.name` prints it from the workspace, read from the configuration files without the `git` program (conditional includes are not followed). Left out, with a warning, when it is not set |
 | `metadata.organisation` | The `{uuid, name}` in `.opentide/configurations/organisation.toml`, which `opentide setup --org` writes ([setup](./setup.md#default-callback-flags)). It is configured once per repository: `new` never takes it from objects already written. Left out, with a warning, when no organisation is configured (run `opentide setup --org "<name>"`) or the file has no usable `uuid` and `name` (the warning says which is wrong) |
 | Each `--platform` block | `enabled: true` and the first deployment status whose strategy is `INERT` (`DESIGN` by default), so the block deploys nothing until you move its status on. When no status has strategy `INERT`, the block is `enabled: false` and its status is a placeholder, with a warning |
 | Detection logic in each block | Placeholders for what the platform needs to deploy: the `query`, Defender's `schedule.frequency` (`1H`), SentinelOne's `condition.single_event.query`, HarfangLab's `sigma` block, Sentinel's `scheduling.frequency` and `lookback` (`1h`), Datadog's first case `condition` (`a > 0`: `a` is the first query's default name) |

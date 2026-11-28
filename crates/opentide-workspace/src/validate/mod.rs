@@ -588,7 +588,8 @@ pub struct Validation {
     /// Each check run, with `passed` or `failed`, in the order `checks`
     /// lists them.
     pub checks: Vec<(Check, &'static str)>,
-    /// The report.
+    /// The errors and warnings found, and what the run did:
+    /// `validate --json`'s `report`.
     pub report: Report,
     /// The counts.
     pub summary: Summary,

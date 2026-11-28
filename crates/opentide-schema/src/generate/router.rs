@@ -1,5 +1,5 @@
 //! `opentide.schema.json`, the editor's entry point: one schema that applies
-//! the revision schema `metadata.schema` names (`router_schema.py`).
+//! the revision schema `metadata.schema` names.
 
 use super::annotate::annotate_editor_schema;
 use super::json::{Json, Object};
@@ -8,8 +8,7 @@ use crate::revisions::SchemaId;
 /// The router's title.
 pub const ROUTER_TITLE: &str = "opentide Object Router";
 
-/// The file a revision's schema is written to: `rule.1.1.schema.json`
-/// (`registry/artifacts.py` `schema_artifact_name`).
+/// The file a revision's schema is written to: `rule.1.1.schema.json`.
 pub fn schema_artifact_name(id: &SchemaId) -> String {
     format!("{}.{}.{}.schema.json", id.family(), id.major(), id.minor())
 }
@@ -94,8 +93,8 @@ fn route(id: &SchemaId) -> Json {
     ])
 }
 
-/// The router over `identifiers` (sorted as the oracle sorts them: by their
-/// text), annotated for editors.
+/// The router over `identifiers`, sorted by their text (`rule::1.10` before
+/// `rule::1.2`), annotated for editors.
 pub fn router(identifiers: &[SchemaId]) -> Json {
     let mut ids: Vec<&SchemaId> = identifiers.iter().collect();
     ids.sort_by_key(|id| id.to_string());

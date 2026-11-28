@@ -2,10 +2,11 @@
 //!
 //! Every error the model reports is a [`SchemaError`]: a [`ErrorKind`], the
 //! path of the value it is about and a message. The kind names Pydantic's
-//! error type ([`ErrorKind::pydantic_type`]), so a recording of the oracle and
-//! a Rust result compare kind for kind, and maps to the diagnostic code the CLI
-//! prints today ([`SchemaError::code`]). No new code is minted here: the codes
-//! are the ones `src/opentide/validation` emits at the frozen tag.
+//! error type ([`ErrorKind::pydantic_type`]), which the Python models'
+//! `ValidationError` carries, and maps to the diagnostic code the CLI prints
+//! ([`SchemaError::code`]). The codes are the ones in [`codes`] and the
+//! platform constraints' own ([`ErrorKind::Constraint`]); this module adds no
+//! other.
 
 use std::collections::BTreeMap;
 use std::fmt;
@@ -23,14 +24,13 @@ pub mod codes {
     pub use opentide_core::codes::SCHEMA_VALIDATION;
     /// An object file that is not YAML (`loading/`).
     pub const YAML_PARSE: &str = "yaml_parse";
-    /// A configuration file that is not TOML (`validation/configuration.py`).
+    /// A configuration file that is not TOML.
     pub const CONFIG_PARSE: &str = "config_parse";
-    /// A required configuration key is missing (`validation/configuration.py`).
+    /// A required configuration key is missing.
     pub const MISSING_FIELD: &str = "missing_field";
-    /// A configuration key the model does not declare (`validation/configuration.py`).
+    /// A configuration key the model does not declare.
     pub const UNKNOWN_KEY: &str = "unknown_key";
-    /// An object with no `metadata.schema` (`loading/object_loader.py`
-    /// `SchemaMissingError.code`).
+    /// An object with no `metadata.schema`.
     pub const SCHEMA_MISSING: &str = "schema_missing";
 }
 
@@ -38,14 +38,14 @@ pub mod codes {
 /// diagnostic code for an object file than for a configuration file.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Surface {
-    /// A Tide object (`objects/**/*.yaml`): `validation/errors.py`
-    /// (`issues_from_pydantic`) reports every Pydantic error as
+    /// A Tide object (`objects/**/*.yaml`): a syntax error is `yaml_parse`,
+    /// a platform constraint its own code, and every other error
     /// `schema_validation`.
     Object,
-    /// A configuration file (`configurations/*.toml`):
-    /// `validation/configuration.py` maps `missing` to `missing_field`,
-    /// `extra_forbidden` to `unknown_key`, and every other error to
-    /// `schema_validation`.
+    /// A configuration file (`configurations/*.toml`): a syntax error is
+    /// `config_parse`, `missing` is `missing_field`, `extra_forbidden`
+    /// `unknown_key`, a platform constraint its own code, and every other
+    /// error `schema_validation`.
     Configuration,
 }
 
@@ -75,13 +75,14 @@ pub enum ErrorKind {
     InvalidValue(&'static str),
     /// A platform block's constraint, reported by its own code at the path
     /// the platform's specification fixes for it (exabeam-1.0, graylog-1.0,
-    /// bitdefender-1.0): the oracle raises a `PydanticCustomError` whose
-    /// type is the code, and `validation/errors.py` reports that type as the
-    /// finding's code.
+    /// bitdefender-1.0). Its Pydantic error type is the code itself, and
+    /// [`SchemaError::code`] reports it as the finding's code on every
+    /// surface.
     Constraint(&'static str),
     /// The conversion stopped: the document produced more work than
     /// [`crate::from_node::BUDGET`] allows (a tree of aliases nested to
-    /// billions of nodes). Not a Pydantic error; the oracle would keep going.
+    /// billions of nodes). Not a Pydantic error: it has no Pydantic type
+    /// ([`ErrorKind::pydantic_type`] is `None`).
     Limit,
 }
 
@@ -137,8 +138,8 @@ pub struct SchemaError {
     /// The finding's `yaml_line` (0-based, `attach_yaml_lines`):
     /// [`crate::node::Document::yaml_line`].
     pub yaml_line: Option<usize>,
-    /// Pydantic's `input`, when it is a string (`validation/errors.py` reads
-    /// only string inputs: references, vocabulary values).
+    /// Pydantic's `input`, when it is a string. `opentide validate` reads it
+    /// for references and vocabulary values, which are strings.
     pub input: Option<String>,
     /// Pydantic's `ctx`, each value as `str()` gives it (`class_name`,
     /// `expected`, `field`, `value`, `error`).
@@ -161,9 +162,8 @@ impl SchemaError {
 
     /// The diagnostic code the CLI prints for this error on `surface`: one of
     /// `yaml_parse`, `config_parse`, `schema_validation`, `missing_field` and
-    /// `unknown_key`, or a platform constraint's own code ([`ErrorKind::Constraint`]),
-    /// as `loading/`, `validation/errors.py` and
-    /// `validation/configuration.py` choose them.
+    /// `unknown_key`, or a platform constraint's own code
+    /// ([`ErrorKind::Constraint`]). [`Surface`] lists which kind gives which.
     pub const fn code(&self, surface: Surface) -> &'static str {
         match (self.kind, surface) {
             (ErrorKind::Syntax, Surface::Object) => codes::YAML_PARSE,

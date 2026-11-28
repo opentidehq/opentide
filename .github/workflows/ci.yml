@@ -1117,11 +1117,11 @@ jobs:
 
 
   # The opentide facade crate (UC-5.1, #836), when its public API changes
-  # (crates/opentide/, or the sources of a crate it re-exports from:
-  # FACADE_SOURCES in scripts/ci/changes.py): its docs with every feature, as
-  # docs.rs builds them, and its API against the branch it merges into
-  # (cargo-semver-checks, and scripts/ci/facade_semver.py for what it
-  # re-exports). Its
+  # (crates/opentide/, or the sources, Cargo.toml or build.rs of a crate it
+  # re-exports from: FACADE_SOURCES in scripts/ci/changes.py): its docs with
+  # every feature, as docs.rs builds them, and its API against the branch it
+  # merges into (cargo-semver-checks, and scripts/ci/facade_semver.py for what
+  # it re-exports, items that moved between crates included). Its
   # tests and doctests run in `build` with the tests'
   # features (every feature but `stubs`, which `native`'s stubs check builds).
   facade:

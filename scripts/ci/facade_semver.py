@@ -21,6 +21,13 @@ item that moved between workspace crates is held in the crate that defines it
 now, not reported missing from the one that used to (#2040). A facade path
 that resolves nowhere any more stays with its old crate, and fails there.
 
+A moved item has no baseline in its new crate, so it is also compared at its
+facade path (#1985): its old crate's document at the base and its new crate's
+at the change each expose only the moved items, at their facade paths, under
+the facade's name, and cargo semver-checks runs on that pair. A signature or
+an attribute (`#[non_exhaustive]`) changed in the commit that moves the item
+fails there as it would in place.
+
 Majors only (`--release-type minor`): the facade's release decides the
 version, and an addition, such as a variant of a `#[non_exhaustive]` enum, is
 a minor change, as cargo semver-checks reads it.
@@ -42,7 +49,10 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 FACADE = "opentide"
 #: The facade's crate name in Rust paths, and in rustdoc's JSON.
@@ -154,6 +164,81 @@ def by_crate(
     return found
 
 
+def moved(
+    baseline: dict[ItemPath, tuple[str, ItemPath]],
+    current: dict[ItemPath, tuple[str, ItemPath]],
+    workspace: set[str] | frozenset[str],
+) -> dict[tuple[str, str], dict[ItemPath, tuple[ItemPath, ItemPath]]]:
+    """The re-exports whose defining crate changed between two workspace crates.
+
+    Keyed by (old crate, new crate); each facade path maps to its canonical
+    path in the old crate and in the new one. These are the items `by_crate`
+    holds in their new crate, where the base has no baseline for them.
+    """
+    found: dict[tuple[str, str], dict[ItemPath, tuple[ItemPath, ItemPath]]] = {}
+    for facade_path, (old_crate, old_path) in baseline.items():
+        if facade_path[0] == "<unreached>":
+            continue
+        new = current.get(facade_path)
+        if new is None or new[0] == old_crate or not {old_crate, new[0]} <= set(workspace):
+            continue
+        found.setdefault((old_crate, new[0]), {})[facade_path] = (old_path, new[1])
+    return found
+
+
+def facade_view(doc: JsonDoc, items: dict[ItemPath, ItemPath]) -> tuple[JsonDoc, list[ItemPath]]:
+    """`doc` exposing only `items` (facade path to canonical path), at their facade paths.
+
+    The root takes the facade's name and holds one module per facade module,
+    each with a `use` of its items, so two crates' documents compare item for
+    item at the paths a caller writes. Returns the document and the facade
+    paths whose item `doc` does not define.
+    """
+    index = doc["index"]
+    by_path = {
+        tuple(summary["path"][1:]): int(item_id)
+        for item_id, summary in doc["paths"].items()
+        if summary["crate_id"] == 0
+    }
+    root = index[str(doc["root"])]
+    next_id = max(int(item_id) for item_id in index) + 1
+    modules: dict[ItemPath, JsonDoc] = {(): root}
+    root["name"] = FACADE_CRATE
+    root["inner"]["module"]["items"] = []
+
+    def new_item(name: str | None, inner: JsonDoc) -> int:
+        nonlocal next_id
+        item_id = next_id
+        next_id += 1
+        entry = {key: value for key, value in root.items() if key != "inner"}
+        entry.update(id=item_id, name=name, inner=inner, docs=None, links={}, attrs=[])
+        index[str(item_id)] = entry
+        return item_id
+
+    def module(prefix: ItemPath) -> JsonDoc:
+        if prefix not in modules:
+            parent = module(prefix[:-1])
+            item_id = new_item(
+                prefix[-1], {"module": {"is_crate": False, "items": [], "is_stripped": False}}
+            )
+            parent["inner"]["module"]["items"].append(item_id)
+            modules[prefix] = index[str(item_id)]
+        return modules[prefix]
+
+    missing: list[ItemPath] = []
+    for facade_path, canonical in sorted(items.items()):
+        target = by_path.get(canonical)
+        if target is None:
+            missing.append(facade_path)
+            continue
+        is_glob = facade_path[-1] == "*"
+        parent = module(facade_path[:-2] if is_glob else facade_path[:-1])
+        name = canonical[-1] if is_glob else facade_path[-1]
+        use = {"source": "::".join(canonical), "name": name, "id": target, "is_glob": is_glob}
+        parent["inner"]["module"]["items"].append(new_item(None, {"use": use}))
+    return doc, missing
+
+
 def workspace_packages(root: Path) -> dict[str, str]:
     """Crate name (`opentide_core`) to package name (`opentide-core`)."""
     metadata = json.loads(
@@ -204,10 +289,16 @@ def children(inner: JsonDoc) -> list[int]:
     return [child for child in owned if isinstance(child, int)]
 
 
-def prune(doc: JsonDoc, kept: set[ItemPath]) -> tuple[JsonDoc, list[ItemPath]]:
+def prune(
+    doc: JsonDoc,
+    kept: set[ItemPath],
+    foreign: set[tuple[str, ItemPath]] | None = None,
+) -> tuple[JsonDoc, list[ItemPath]]:
     """`doc` with only the public paths that lead to the `kept` items.
 
-    Returns the pruned document and the kept paths it does not define.
+    Returns the pruned document and the kept paths it does not define. With
+    `foreign`, adds to it each type of another crate that what is kept names
+    (its crate and its canonical path there), as `(crate, path)`.
     """
     index = doc["index"]
     by_path = {
@@ -249,6 +340,11 @@ def prune(doc: JsonDoc, kept: set[ItemPath]) -> tuple[JsonDoc, list[ItemPath]]:
             if named in local and named not in reached:
                 reach(named)
                 pending.append(named)
+            elif named not in local and foreign is not None:
+                summary = doc["paths"].get(str(named))
+                if summary is not None and summary["crate_id"] != 0:
+                    crate = doc["external_crates"][str(summary["crate_id"])]["name"]
+                    foreign.add((crate, tuple(summary["path"][1:])))
         # An impl's items and a struct's or enum's fields and variants are
         # items of their own: scan them as well.
         for child in children(item["inner"]):
@@ -288,6 +384,52 @@ def prune(doc: JsonDoc, kept: set[ItemPath]) -> tuple[JsonDoc, list[ItemPath]]:
     return doc, missing
 
 
+def close_over(
+    exposed: dict[str, set[ItemPath]],
+    packages: dict[str, str],
+    document: Callable[[str], JsonDoc],
+) -> None:
+    """Add to `exposed` the types of other workspace crates its items name, until none is new.
+
+    `packages` maps the side's crate names to package names and `document`
+    builds a package's rustdoc JSON on that side. A crate the side does not
+    have (an item `by_crate` moved to a crate new in the change) is skipped.
+    """
+    pending = sorted(crate for crate in exposed if crate in packages)
+    while pending:
+        crate = pending.pop()
+        if crate == FACADE_CRATE:
+            continue
+        foreign: set[tuple[str, ItemPath]] = set()
+        prune(document(packages[crate]), set(exposed[crate]), foreign)
+        for named_crate, path in sorted(foreign):
+            if named_crate not in packages or named_crate == FACADE_CRATE:
+                continue
+            held = exposed.setdefault(named_crate, set())
+            if path not in held:
+                held.add(path)
+                if named_crate not in pending:
+                    pending.append(named_crate)
+
+
+def semver_checks(current: Path, baseline: Path) -> bool:
+    """Whether cargo semver-checks finds no major change from `baseline` to `current`."""
+    result = subprocess.run(
+        [
+            "cargo",
+            "semver-checks",
+            "--current-rustdoc",
+            str(current),
+            "--baseline-rustdoc",
+            str(baseline),
+            "--release-type",
+            "minor",
+        ],
+        check=False,
+    )
+    return result.returncode == 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("--baseline-root", type=Path, required=True)
@@ -322,6 +464,19 @@ def main() -> int:
         "current": by_crate(found["current"]),
         "baseline": by_crate(found["baseline"], found["current"], set(packages["current"])),
     }
+    # The types of other workspace crates that a re-exported item names (a
+    # field's, a parameter's) are the facade's API too, though the facade
+    # never names them: they are held in their own crates, on each side from
+    # that side's documents (#1985). The base's closure is what the change is
+    # held to: computed from the change alone, a foreign type the facade
+    # exposed only through another crate would have no baseline, and any
+    # break to it would read as an addition.
+    for side, (root, target) in sides.items():
+        close_over(
+            exposed[side],
+            packages[side],
+            lambda package, root=root, target=target: rustdoc_json(root, target, package),
+        )
 
     # The `facade` job runs on a change to these crates' sources
     # (scripts/ci/changes.py): a crate missing there would go unchecked.
@@ -353,8 +508,9 @@ def main() -> int:
             continue
         documents: dict[str, Path] = {}
         for side, (root, target) in sides.items():
-            # The items the facade exposed at the base stay held at the change:
-            # an item the facade stops re-exporting is the facade's own check's.
+            # The items the facade exposed at the base, directly or through a
+            # re-exported item's types, stay held at the change: an item the
+            # facade stops re-exporting is the facade's own check's.
             kept = exposed["baseline"].get(crate, set()) | exposed[side].get(crate, set())
             doc, missing = prune(rustdoc_json(root, target, package), kept)
             if side == "current" and missing:
@@ -363,21 +519,35 @@ def main() -> int:
             documents[side] = work / f"{crate}.{side}.json"
             documents[side].write_text(json.dumps(doc), encoding="utf-8")
         print(f"==> {package}: the API the facade re-exports", flush=True)
-        result = subprocess.run(
-            [
-                "cargo",
-                "semver-checks",
-                "--current-rustdoc",
-                str(documents["current"]),
-                "--baseline-rustdoc",
-                str(documents["baseline"]),
-                "--release-type",
-                "minor",
-            ],
-            check=False,
-        )
-        if result.returncode != 0:
+        if not semver_checks(documents["current"], documents["baseline"]):
             failed.append(package)
+
+    # A moved item, at its facade path: the old crate at the base against the
+    # new crate at the change (#1985).
+    for (old, new), items in sorted(
+        moved(
+            found["baseline"],
+            found["current"],
+            set(packages["baseline"]) | set(packages["current"]),
+        ).items()
+    ):
+        if old not in packages["baseline"]:
+            continue
+        label = f"{packages['baseline'][old]} -> {packages['current'][new]}"
+        documents = {}
+        for side, crate, which in (("baseline", old, 0), ("current", new, 1)):
+            root, target = sides[side]
+            view = {facade_path: paths[which] for facade_path, paths in items.items()}
+            doc, missing = facade_view(rustdoc_json(root, target, packages[side][crate]), view)
+            for path in missing:
+                print(
+                    f"::notice::{label}: {packages[side][crate]} does not define {'::'.join(path)}"
+                )
+            documents[side] = work / f"moved.{old}.{new}.{side}.json"
+            documents[side].write_text(json.dumps(doc), encoding="utf-8")
+        print(f"==> {label}: the items that moved, at their facade paths", flush=True)
+        if not semver_checks(documents["current"], documents["baseline"]):
+            failed.append(label)
 
     if failed:
         print(

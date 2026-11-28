@@ -1,11 +1,10 @@
 //! The text side of a Sysdig block's own macros and lists, as Falco's rule
-//! loader treats them (`platforms/sysdig/expansion.py`): Falco's
-//! `resolve_list` (textual: a list name between delimiters becomes its
-//! items; `opentide_core::falco`'s, shared with the language server), and the
-//! bare names in check positions of a condition, the macros it uses. No crate
-//! does either: they are Falco's loader rules and the oracle's token scan over
-//! them, which `sysdig_definition_order` and `sysdig_list_in_value` are
-//! defined by. The condition's grammar is
+//! loader treats them: Falco's `resolve_list` (textual: a list name between
+//! delimiters becomes its items; `opentide_core::falco`'s, shared with the
+//! language server), and the bare names in check positions of a condition,
+//! the macros it uses. No crate does either: they are Falco's loader rules
+//! and a token scan over them, which `sysdig_definition_order` and
+//! `sysdig_list_in_value` are defined by. The condition's grammar is
 //! `opentide-falco`'s (the `falco_*` findings); this module needs no parser,
 //! so the model builds wherever the crate does (wasm32 included).
 //!
@@ -141,8 +140,8 @@ enum Expect {
 }
 
 /// `text` with each bare identifier in a check position replaced by what
-/// `resolve` gives for it, or kept when it gives `None` (the oracle's
-/// `substitute_macros`). Values (after an operator: a word, a string, a value
+/// `resolve` gives for it, or kept when it gives `None`. Values (after an
+/// operator: a word, a string, a value
 /// list, `val(...)` or a transformer), field names, field arguments,
 /// transformer calls on the left-hand side and quoted strings are never
 /// touched; every other character is kept.

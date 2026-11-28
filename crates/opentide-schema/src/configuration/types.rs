@@ -293,8 +293,9 @@ pattern!(
 /// `$NAME`, resolved when the tenant loads (never here).
 pub type EnvPlaceholder = Matching<EnvPattern>;
 
-/// What `opentide deploy` does with a rule in a status (`StatusStrategy`),
-/// in the order the oracle declares the members.
+/// What `opentide deploy` does with a rule in a status. [`StatusStrategy::ALL`]
+/// lists the members in the order the editor schemas and the `strategy must
+/// be one of` message show them.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize)]
 pub enum StatusStrategy {
     /// Does not interact with deployment.
@@ -340,8 +341,8 @@ impl StatusStrategy {
         }
     }
 
-    /// What the member does (the oracle's member value), which the editor
-    /// schemas show beside a status.
+    /// What the member does, which the editor schemas show beside a
+    /// status.
     pub const fn description(self) -> &'static str {
         match self {
             Self::Inert => "Does not interact with deployment",

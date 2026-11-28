@@ -1,4 +1,4 @@
-//! The findings of configuration files (`validation/configuration.py`).
+//! The findings of configuration files.
 //!
 //! Client files are partial overrides, so a file is merged onto the layers
 //! before it (the bundled file by default) and the model's required keys
@@ -57,11 +57,11 @@ const UNMODELLED_FILES: [&str; 3] = ["resources.toml", "lint.toml", "organisatio
 
 const RESPONDERS: &str = "responders";
 
-/// Whether a file name ends in `.toml`, case-sensitively as the oracle
-/// reads it (`Deployment.TOML` is not a configuration file).
+/// Whether a file name ends in `.toml`, case-sensitively
+/// (`Deployment.TOML` is not a configuration file).
 #[expect(
     clippy::case_sensitive_file_extension_comparisons,
-    reason = "the oracle compares the suffix case-sensitively"
+    reason = "a configuration file's suffix is `.toml` exactly, as the resolver reads it"
 )]
 pub(crate) fn is_toml(name: &str) -> bool {
     name.ends_with(".toml")
@@ -169,7 +169,7 @@ fn finding(
     Finding::new(code, severity, path, message, Some(file))
 }
 
-/// The status names of a `deployment.toml` document (`_status_names`).
+/// The status names of a `deployment.toml` document.
 pub fn status_names(deployment: &Node) -> Vec<String> {
     let Some(Value::Seq(statuses)) = deployment.get("statuses").map(|node| &node.value) else {
         return Vec::new();

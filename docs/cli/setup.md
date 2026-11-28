@@ -219,6 +219,8 @@ Without `--default-branch`, GitHub and Azure pipelines target the first of:
 3. the `init.defaultBranch` Git setting, for a target outside any Git repository or on a detached `HEAD`;
 4. `main`.
 
+opentide reads these from the repository and the Git configuration files itself, so the `git` program need not be installed. It finds the configuration files as Git does, from `HOME`, `XDG_CONFIG_HOME`, `GIT_CONFIG_GLOBAL`, `GIT_CONFIG_SYSTEM` and `GIT_CONFIG_NOSYSTEM`, and applies `GIT_CONFIG_COUNT` overrides. Conditional includes (`includeIf`) are not followed.
+
 The JSON result reports the branch used as `default_branch`. It adds a `warnings` entry, and logs a warning, when the pipeline falls back to a `main` branch the repository does not have, or targets the checked-out branch while other local branches exist. Pass `--default-branch` in either case. A name the pipelines cannot hold unquoted (spaces, shell characters, or a value YAML reads as a number or boolean such as `2024` or `on`) is rejected with exit code 2.
 
 The pipeline has no promotion job: `opentide deploy --strategy RELEASE` promotes rules as the merged `deployment.toml` [configures](../usage/configuration.md#promotion). Omitting the flags keeps that setting. An explicit flag writes the `[promotion]` table of `.opentide/configurations/deployment.toml` when the value differs from the bundled default and the file has no `[promotion]` table yet, and the result lists that file under `files`. The same flags on `opentide setup` without `--ci` write that table too:
@@ -248,6 +250,8 @@ Copy `.env.example` to `.env` and adjust the path if the working directory is no
 ### setup hooks
 
 Configure validate-on-commit hooks. Writes `.pre-commit-config.yaml` (a local `opentide-validate` hook) and a versioned script at `.opentide/hooks/pre-commit`. When the path is inside a Git repository, copies that script into the repository's hooks directory (`.git/hooks/pre-commit`, the shared directory for a linked worktree, or a `core.hooksPath` inside the repository) unless a third-party hook is already there. A `core.hooksPath` outside the repository, such as a user-wide one, serves every repository on the machine, so setup leaves it alone and warns; call `.opentide/hooks/pre-commit` from that shared hook yourself.
+
+opentide finds the repository, its hooks directory and `core.hooksPath` itself, so the `git` program need not be installed to set the hooks up (the hooks themselves run git). `core.hooksPath` is read from the Git configuration files as [`setup ci`](#setup-ci) reads `init.defaultBranch`; a leading `~/` is the home folder and a relative path is taken from the repository's top level, as Git takes it. A linked worktree's own `core.hooksPath` (`git config --worktree`, with `extensions.worktreeConfig` on) is read too. The repository is found as Git finds it, `GIT_DIR`, `GIT_WORK_TREE` and `GIT_CEILING_DIRECTORIES` included; inside the `.git` folder, or inside a bare repository nested in the checkout, there is no work tree to set up, as with Git.
 
 ```bash
 opentide setup hooks --yes

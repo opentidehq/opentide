@@ -448,7 +448,7 @@ pub struct LintReport {
     pub findings: Vec<LintFinding>,
     /// How many `--fix` fixed.
     pub fixed: usize,
-    /// The status.
+    /// Whether the run found nothing, found findings, or failed.
     pub status: LintStatus,
     /// One sentence.
     pub message: String,
