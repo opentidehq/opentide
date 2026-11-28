@@ -27,6 +27,12 @@
 //! [`opentide`](https://docs.rs/opentide) crate, its Rust SDK, instead (its
 //! `connectors` feature, and `plugins` for the plugin host).
 
+// Slicing a `str` by byte index panics off a char boundary, and this crate
+// reads tenant answers and user files: every slice is checked or says why it
+// is safe (#1946; the lint moves to `[workspace.lints]` once every crate is
+// clean).
+#![warn(clippy::string_slice)]
+
 pub mod answer;
 pub mod bitdefender;
 pub mod carbon_black;
@@ -70,6 +76,15 @@ pub use error::ConnectorError;
 pub use http::{HttpClient, HttpSettings};
 pub use plugin::{PluginError, PluginHost};
 pub use tenant::{Tenant, TenantLabel};
+
+/// `text[start..end]`, a range this crate computes: a match's bounds, or an
+/// ASCII byte's, so its ends are char boundaries. A range that is not fails a
+/// debug assertion and reads as empty.
+pub(crate) fn cut(text: &str, start: usize, end: usize) -> &str {
+    let piece = text.get(start..end);
+    debug_assert!(piece.is_some(), "{start}..{end} in {} bytes", text.len());
+    piece.unwrap_or_default()
+}
 
 /// The HTTP settings *platform*'s client mounts: its timeout and retries.
 /// *timeout* is the read timeout of the
