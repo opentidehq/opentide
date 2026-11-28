@@ -29,6 +29,11 @@
     clippy::too_many_lines,
     reason = "engine dispatchers match every node kind in one function"
 )]
+// Slicing a `str` by byte index panics off a char boundary, and this crate
+// reads user rules: every slice is checked or says why it is safe (#1946;
+// the lint moves to `[workspace.lints]` once every crate is clean).
+#![warn(clippy::string_slice)]
+
 mod atoms;
 pub mod catalog;
 mod catalog_model;
@@ -590,6 +595,54 @@ rule Loader_Stage1 : loader {
             assert_eq!(result.diagnostics, analyze(source).diagnostics);
             assert_eq!(result.tokens, analyze(source).tokens);
             assert_eq!(symbols, editor::symbols(source), "{source}");
+        }
+    }
+
+    /// Rules with multi-byte text, and the same rules with `é` or `😀`
+    /// written at every character: every error the parser gives, and every
+    /// editor feature at every offset, reads the text whole.
+    const MULTI_BYTE: &[&str] = &[
+        "import \"pe\"\nrule é { strings: $é = \"😀\" condition: $é and pe.sections[0].name == \"é\" }",
+        "rule a { strings: $h = { 01 [1-é] 02 } condition: $h }",
+        "rule a { strings: $h = { é 01 } $s = \"x\" xor(1-😀) condition: any of (é*) }",
+        "rule a { condition: uint16(é) == 0x5A4D and any of (b, é😀*) }",
+        "rule a { strings: $s = \"x\" xor(é condition: $s }",
+        "rule a : é😀 { meta: d = \"é😀\" condition: true }",
+        "rule a { condition: 99999999999999999999😀 }",
+        "rule a { strings: $h = { 01 [99999999999é] 02 } condition: $h }",
+    ];
+
+    #[test]
+    fn multi_byte_text_is_read_whole_everywhere() {
+        let mut sources: Vec<String> = MULTI_BYTE.iter().map(|s| (*s).to_owned()).collect();
+        for base in MULTI_BYTE.iter().take(4) {
+            for (at, _) in base.char_indices() {
+                for wide in ["é", "😀"] {
+                    let mut text = (*base).to_owned();
+                    text.insert_str(at, wide);
+                    sources.push(text);
+                }
+            }
+        }
+        for source in &sources {
+            let result = analyze(source);
+            for diagnostic in &result.diagnostics {
+                let start = opentide_core::position_to_offset(source, diagnostic.range.start);
+                let end = opentide_core::position_to_offset(source, diagnostic.range.end);
+                assert!(source.get(start..end).is_some(), "{source}");
+            }
+            let _ = editor::symbols(source);
+            let _ = editor::folding(source);
+        }
+        // Every byte offset: an offset inside a character answers nothing.
+        for source in MULTI_BYTE {
+            for offset in 0..=source.len() + 1 {
+                let _ = editor::hover(source, offset);
+                let _ = editor::completions(source, offset);
+                let _ = editor::signature_help(source, offset);
+                let _ = editor::definition(source, offset);
+                let _ = editor::references(source, offset, true);
+            }
         }
     }
 }

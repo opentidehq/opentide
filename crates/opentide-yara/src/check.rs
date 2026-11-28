@@ -846,7 +846,7 @@ impl<'a> Checker<'a> {
     /// `$a`, `#a`, `@a`, `!a`: the string they name.
     fn use_pattern(&mut self, ident: &Ident) {
         let at = span(&ident.span());
-        let name = format!("${}", &ident.name[1..]);
+        let name = format!("${}", crate::editor::unsigiled(ident.name));
         if name == "$" {
             if self.in_for_of == 0 {
                 self.error(
