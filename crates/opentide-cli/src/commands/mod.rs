@@ -51,8 +51,9 @@ use std::sync::Arc;
 
 use opentide_workspace::{OsFs, RootOptions, Workspace, root};
 
+use crate::commands::result::{ExitCode, Status};
 use crate::env::Env;
-use crate::envelope::{Failure, NextAction, Outcome, USAGE_EXIT_CODE, code};
+use crate::envelope::{Failure, NextAction, Outcome, code};
 use crate::json::Json;
 use crate::render::outcome::OutcomeKind;
 use crate::render::text::Text;
@@ -266,10 +267,10 @@ impl Report {
         Report {
             outcome: Outcome {
                 command: command.to_owned(),
-                status: "completed".into(),
+                status: Status::Completed.as_str().into(),
                 message: "Completed successfully".into(),
                 data: data.into_iter().collect(),
-                exit_code: 0,
+                exit_code: ExitCode::Success.code(),
                 summary: Vec::new(),
                 next_actions: Vec::new(),
                 failure: None,
@@ -330,12 +331,16 @@ impl Report {
                     .filter(|choice| *choice != value)
             })
             .map(str::to_owned);
-        Report::failed(command, USAGE_EXIT_CODE, failure)
+        Report::failed(command, ExitCode::Usage.code(), failure)
     }
 
     /// An error the command stopped on: exit 1, `command_failed`.
     pub fn error(command: &str, message: impl Into<String>) -> Report {
-        Report::failed(command, 1, Failure::new(COMMAND_FAILED, message))
+        Report::failed(
+            command,
+            ExitCode::Failure.code(),
+            Failure::new(COMMAND_FAILED, message),
+        )
     }
 
     /// Adds a next step.
@@ -419,7 +424,7 @@ pub fn no_workspace(command: &str, repo: Option<&str>, env: &Env, cwd: &Path) ->
     let root = unplaced_root(repo, env, cwd)?;
     let mut report = Report::failed(
         command,
-        1,
+        ExitCode::Failure.code(),
         Failure::new(
             new::WORKSPACE_NOT_FOUND,
             format!(
@@ -523,7 +528,11 @@ pub fn open_for(command: &str, options: RootOptions) -> Result<Workspace, Box<Re
     } else {
         format!("{place}: {problem}")
     };
-    let mut report = Report::failed(command, 1, Failure::new(CONFIG_PARSE, message));
+    let mut report = Report::failed(
+        command,
+        ExitCode::Failure.code(),
+        Failure::new(CONFIG_PARSE, message),
+    );
     report
         .outcome
         .data
@@ -601,7 +610,7 @@ mod tests {
         };
         let failure = report.outcome.failure.as_ref().unwrap();
         assert_eq!(failure.code, "config_parse");
-        assert_eq!(report.outcome.exit_code, 1);
+        assert_eq!(report.outcome.exit(), ExitCode::Failure);
         assert!(
             report.outcome.message.contains("sentinel.toml:2:"),
             "{}",
@@ -681,10 +690,10 @@ mod tests {
             Some("rulez"),
             &["rules", "threats"],
         );
+        assert_eq!(report.outcome.exit(), ExitCode::Usage);
         let failure = report.outcome.failure.unwrap();
         assert_eq!(failure.suggestion.as_deref(), Some("rules"));
         assert_eq!(failure.argument.as_deref(), Some("section"));
-        assert_eq!(report.outcome.exit_code, 2);
         let none = Report::usage(
             "info",
             "bad",
