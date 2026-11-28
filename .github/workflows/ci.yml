@@ -97,7 +97,10 @@ env:
 #   engine-variants `engine-lint-variants`: clippy without `terminal`, on
 #                   wasm32 and on opentide-schema's `stubs`
 #   wasm            `wasm`: the browser module, the WASI server and command line
-#   full-set-Linux  `node`, the `facade-*` jobs and the nightly's Linux Rust jobs:
+#   facade-semver-Linux, facade-reexports-Linux
+#                   the two facade jobs that build rustdoc JSON (`cargo rustdoc
+#                   --all-features` builds each package's dependencies again)
+#   full-set-Linux  `node`, the other `facade-*` jobs and the nightly's Linux Rust jobs:
 #                   `conformance` saves it, by the nightly and on pushes to
 #                   development and integration/unified-core
 #
@@ -1269,6 +1272,10 @@ jobs:
       SCCACHE_CACHE_SIZE: 2G
       # The server stays up for the whole job: its statistics are the run's.
       SCCACHE_IDLE_TIMEOUT: "0"
+      # The change and the baseline build from two directories: strip both
+      # from the paths in a key, so that identical sources share entries.
+      BASELINE_ROOT: ${{ github.workspace }}-baseline
+      SCCACHE_BASEDIRS: ${{ github.workspace }}:${{ github.workspace }}-baseline
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -1278,10 +1285,11 @@ jobs:
           persist-credentials: false
 
       - name: Set up Rust
+        id: sccache
         uses: ./.github/actions/rust-setup
         with:
           tools: sccache@0.19.0,cargo-semver-checks@0.51.0
-          cache: full-set-${{ runner.os }}
+          cache: facade-semver-${{ runner.os }}
 
       - name: Baseline commit
         id: base
@@ -1323,8 +1331,8 @@ jobs:
           fi
           pid=""
           if [[ ! -f "${baseline_json}" ]]; then
-            git worktree add --detach "${RUNNER_TEMP}/opentide-baseline" "${BASELINE}"
-            rustdoc_json "${RUNNER_TEMP}/opentide-baseline" "${RUNNER_TEMP}/baseline-target" "${baseline_json}" &
+            git worktree add --detach "${BASELINE_ROOT}" "${BASELINE}"
+            rustdoc_json "${BASELINE_ROOT}" "${RUNNER_TEMP}/baseline-target" "${baseline_json}" &
             pid=$!
           fi
           rustdoc_json "${PWD}" "${RUNNER_TEMP}/current-target" "${current}"
@@ -1337,6 +1345,13 @@ jobs:
         with:
           path: ${{ runner.temp }}/facade-rustdoc-current
           key: facade-semver-rustdoc-${{ hashFiles('rust-toolchain.toml') }}-${{ github.sha }}
+
+      - name: Save the compiler cache
+        if: ${{ !cancelled() }}
+        uses: ./.github/actions/sccache-save
+        with:
+          key: ${{ steps.sccache.outputs.key }}
+          save: ${{ job.status == 'success' && steps.sccache.outputs.save == 'true' }}
 
   # `facade-reexports`: what the facade re-exports, in the crates that define it,
   # and items that moved between them at their facade path (#1985).
@@ -1363,6 +1378,10 @@ jobs:
       SCCACHE_CACHE_SIZE: 2G
       # The server stays up for the whole job: its statistics are the run's.
       SCCACHE_IDLE_TIMEOUT: "0"
+      # The change and the baseline build from two directories: strip both
+      # from the paths in a key, so that identical sources share entries.
+      BASELINE_ROOT: ${{ github.workspace }}-baseline
+      SCCACHE_BASEDIRS: ${{ github.workspace }}:${{ github.workspace }}-baseline
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -1372,10 +1391,11 @@ jobs:
           persist-credentials: false
 
       - name: Set up Rust
+        id: sccache
         uses: ./.github/actions/rust-setup
         with:
           tools: sccache@0.19.0,cargo-semver-checks@0.51.0
-          cache: full-set-${{ runner.os }}
+          cache: facade-reexports-${{ runner.os }}
 
       - name: Baseline commit
         id: base
@@ -1398,7 +1418,7 @@ jobs:
           BASELINE: ${{ steps.base.outputs.sha }}
         run: |
           if git cat-file -e "${BASELINE}:crates/opentide/Cargo.toml" 2>/dev/null; then
-            git worktree add --detach "${RUNNER_TEMP}/opentide-baseline" "${BASELINE}"
+            git worktree add --detach "${BASELINE_ROOT}" "${BASELINE}"
             args=(--baseline-cache "${RUNNER_TEMP}/facade-rustdoc-baseline")
             if [[ "${GITHUB_EVENT_NAME}" == push ]]; then
               args+=(--save-dir "${RUNNER_TEMP}/facade-rustdoc-current")
@@ -1409,7 +1429,7 @@ jobs:
             # LanguageId (opentide-core) and passed. This checks, in each crate
             # the facade re-exports from, what the facade exposes (#1911).
             python3 scripts/ci/facade_semver.py \
-              --baseline-root "${RUNNER_TEMP}/opentide-baseline" \
+              --baseline-root "${BASELINE_ROOT}" \
               --work-dir "${RUNNER_TEMP}/facade-semver" \
               "${args[@]}"
           else
@@ -1422,6 +1442,13 @@ jobs:
         with:
           path: ${{ runner.temp }}/facade-rustdoc-current
           key: facade-reexports-rustdoc-${{ hashFiles('rust-toolchain.toml', 'scripts/ci/facade_semver.py') }}-${{ github.sha }}
+
+      - name: Save the compiler cache
+        if: ${{ !cancelled() }}
+        uses: ./.github/actions/sccache-save
+        with:
+          key: ${{ steps.sccache.outputs.key }}
+          save: ${{ job.status == 'success' && steps.sccache.outputs.save == 'true' }}
 
   # The Node binding (bindings/node, UC-5.3, #838): @opentide/opentide built
   # with napi-rs for linux-x64-gnu (the other seven targets are declared, and
