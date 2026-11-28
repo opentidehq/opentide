@@ -7,7 +7,7 @@
 //! ([`crate::schemas`]). The document is held byte for byte by its snapshot
 //! case (`commands` in `tests/golden/cases.toml`).
 
-use crate::json::Json;
+use crate::json::{Json, Object};
 use crate::tree::Cli;
 use crate::tree_meta;
 use clap::{Arg, ArgAction, Command, CommandFactory};
@@ -444,11 +444,8 @@ fn command_entry(entry: &Entry, schema: Json) -> Json {
     ])
 }
 
-/// An object's members, in order.
-pub type Members = Vec<(String, Json)>;
-
 /// The command's keys of the `opentide commands` document, and its summary.
-pub fn document(version: &str) -> (Members, Members) {
+pub fn document(version: &str) -> (Object, Object) {
     let root = root();
     let entries = entries(&root);
     let schemas = crate::schemas::Schemas::load();
@@ -461,7 +458,7 @@ pub fn document(version: &str) -> (Members, Members) {
         .map(|entry| command_entry(entry, schemas.output_schema(&entry.path)))
         .collect();
     let count = commands.len();
-    let data = vec![
+    let data = Object::from([
         ("program".to_owned(), Json::str(PROGRAM)),
         ("version".to_owned(), Json::str(version)),
         (
@@ -485,8 +482,8 @@ pub fn document(version: &str) -> (Members, Members) {
         ),
         ("commands".to_owned(), Json::Array(commands)),
         ("$defs".to_owned(), schemas.defs()),
-    ];
-    let summary = vec![
+    ]);
+    let summary = Object::from([
         (
             "commands".to_owned(),
             Json::Int(i64::try_from(count).unwrap_or(i64::MAX)),
@@ -495,7 +492,7 @@ pub fn document(version: &str) -> (Members, Members) {
             "groups".to_owned(),
             Json::Int(i64::try_from(groups).unwrap_or(i64::MAX)),
         ),
-    ];
+    ]);
     (data, summary)
 }
 

@@ -734,13 +734,13 @@ fn outcome(
             ])
         })
         .collect();
-    let mut data = vec![
+    let mut data = Object::from([
         ("migrated".to_owned(), Json::Array(migrated)),
         ("unused".to_owned(), Json::Array(unused)),
         ("errors".to_owned(), Json::Array(error_items)),
         ("shards_written".to_owned(), int(shards_written)),
         ("rules_edited".to_owned(), int(rules)),
-    ];
+    ]);
     let mut report = Report::completed(COMMAND, Vec::new());
     report.outcome.summary = Object::from([
         ("ids".to_owned(), int(ids)),
@@ -752,14 +752,14 @@ fn outcome(
             .iter()
             .map(|(code, file, _, message)| format!("{code}: {file}: {message}"))
             .collect();
-        data.push(("detail".to_owned(), Json::str(detail.join("; "))));
+        data.insert("detail".to_owned(), Json::str(detail.join("; ")));
         let message = format!(
             "{} rule file(s) could not be migrated; {rules} migrated. Fix them and re-run",
             errors.len()
         );
         failed(&mut report, message, ExitCode::Failure);
     } else if rules > 0 {
-        data.push(("advice".to_owned(), Json::str(COMMIT_ADVICE)));
+        data.insert("advice".to_owned(), Json::str(COMMIT_ADVICE));
         report.outcome.message = format!(
             "Moved {} to .opentide/states/deployment/ · {} edited, {} written",
             counted(ids, "vendor id"),
@@ -769,7 +769,7 @@ fn outcome(
     } else {
         "No vendor rule ids left on rules".clone_into(&mut report.outcome.message);
     }
-    report.outcome.data = Object::from_iter(data);
+    report.outcome.data = data;
     report.warnings = warnings;
     report
 }

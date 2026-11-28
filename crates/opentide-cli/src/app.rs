@@ -641,9 +641,9 @@ impl Run<'_> {
                     command: "commands".into(),
                     status: Status::Completed,
                     message: format!("{count} commands"),
-                    data: Object::from_iter(data),
+                    data,
                     exit_code: ExitCode::Success,
-                    summary: Object::from_iter(summary),
+                    summary,
                     next_actions: Vec::new(),
                     failure: None,
                 };

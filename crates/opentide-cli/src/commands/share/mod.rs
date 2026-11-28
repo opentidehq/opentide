@@ -239,11 +239,11 @@ struct Payload {
     status: String,
     exit_code: i32,
     warnings: Vec<String>,
-    data: Vec<(String, Json)>,
+    data: Object,
     failure_code: Option<String>,
     failure_argument: Option<String>,
     failure_suggestion: Option<String>,
-    summary: Vec<(String, Json)>,
+    summary: Object,
     plan: bool,
     outcome: Option<String>,
     /// The rows the text modes print.
@@ -262,10 +262,7 @@ impl Payload {
     }
 
     fn put(&mut self, key: &str, value: Json) {
-        match self.data.iter_mut().find(|(name, _)| name == key) {
-            Some((_, existing)) => *existing = value,
-            None => self.data.push((key.to_owned(), value)),
-        }
+        self.data.insert(key.to_owned(), value);
     }
 
     /// A usage error the run found itself.
@@ -331,7 +328,7 @@ impl Payload {
         report.outcome.message = self.message;
         report.outcome.status = Status::from_text(&self.status);
         report.outcome.exit_code = ExitCode::of_service(self.exit_code);
-        report.outcome.summary = Object::from_iter(self.summary);
+        report.outcome.summary = self.summary;
         report.warnings = self.warnings;
         report.body = self.body;
         if self.exit_code != 0 {
@@ -857,7 +854,7 @@ fn action_word(action: &str) -> &str {
 
 /// `Shared 4 objects to misp-prod · 3 new, 1 updated`, and the counts
 /// behind it (`share_outcome`).
-fn share_outcome(mode: Mode, records: &[Record]) -> (String, Vec<(String, Json)>) {
+fn share_outcome(mode: Mode, records: &[Record]) -> (String, Object) {
     let mut targets: Vec<&str> = records
         .iter()
         .map(|record| record.target.as_str())
@@ -933,12 +930,12 @@ fn share_outcome(mode: Mode, records: &[Record]) -> (String, Vec<(String, Json)>
             })
         })
         .collect();
-    let mut summary: Vec<(String, Json)> = vec![("objects".into(), Json::from(done))];
+    let mut summary = Object::from([("objects".into(), Json::from(done))]);
     for word in order {
-        summary.push((
+        summary.insert(
             word.into(),
             Json::from(counts.get(word).copied().unwrap_or(0)),
-        ));
+        );
     }
     let message = if facts.is_empty() {
         lead
