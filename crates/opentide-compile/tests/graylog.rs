@@ -416,6 +416,94 @@ fn a_duration_past_the_deployable_bound_refuses_the_rule() {
     );
 }
 
+/// The error `rule` fails to compile with, offline at the preview version.
+fn error_of(rule: &str) -> opentide_compile::CompileError {
+    let workspace = workspace(rule);
+    let owned = Owned::new(
+        &Vocabularies::bundled(),
+        &workspace.configuration().resolved,
+    );
+    let index = workspace.index().clone();
+    let cx = owned.context(&index);
+    let object = index.get("rule", &uuid_of(rule)).unwrap();
+    let parsed = Rule::new(object.root().unwrap(), None);
+    match compile_definition(&cx, &parsed, PREVIEW_VERSION, None, None) {
+        Ok(_) => panic!("compiled:\n{rule}"),
+        Err(error) => error,
+    }
+}
+
+/// #1951: the block is read by `GraylogConfig`, the model `validate` checks
+/// it with. A block whose shape the model refuses fails with
+/// `compile_failed` at the field the rule got wrong, where it used to deploy
+/// with a fallback (`alert: true`, the field dropped, `query: null`).
+#[test]
+fn a_block_the_model_refuses_fails_at_its_field() {
+    let cases: [(String, &str); 4] = [
+        (block_rule("alert: 'yes'"), "alert"),
+        (block_rule("surprise: 1"), "surprise"),
+        (block_rule("streams: [1, 2]"), "streams"),
+        (
+            fixture("block-graylog.yaml").replace(
+                "    query: 'EventID:1 AND image_lc:/.*\\\\mshta\\.exe/'",
+                "",
+            ),
+            "query",
+        ),
+    ];
+    for (rule, field) in cases {
+        let error = error_of(&rule);
+        assert_eq!(error.code, "compile_failed", "{field}: {error}");
+        assert_eq!(
+            error.field,
+            ["configurations", "graylog", field],
+            "{field}: {error}"
+        );
+        assert!(
+            error
+                .reason
+                .contains(&format!("configurations.graylog.{field}")),
+            "{field}: {error}"
+        );
+        assert!(
+            error
+                .hint
+                .as_deref()
+                .is_some_and(|hint| hint.contains("opentide validate")),
+            "{field}: {error}"
+        );
+    }
+}
+
+/// #1951: a value only the block's own check refuses (`graylog_constraints`:
+/// an event limit past 1,000) is compiled as before; `validate` reports it.
+/// Text the rule writes is sent as written: a YAML timestamp, non-ASCII text,
+/// and the event fields in the rule's order.
+#[test]
+fn a_value_the_check_refuses_compiles_and_text_is_kept() {
+    let rule = block_rule(
+        "event_limit: 5000\nsummary: 2026-01-01\nremediation: Isoler l'hôte 😀\n\
+         event_fields: {zé: source, a😀: '${source.x}', m: {template: 'é ${source.y}'}}",
+    );
+    let compiled = compiled(&rule, PREVIEW_VERSION, None).unwrap();
+    let definition = definition(&compiled);
+    assert_eq!(definition["config"]["event_limit"], 5000);
+    assert_eq!(definition["event_summary_template"], "2026-01-01");
+    assert_eq!(definition["remediation_steps"], "Isoler l'hôte 😀");
+    let spec = Json::Object(compiled.definition.clone());
+    let Some(Json::Object(fields)) = spec.get("field_spec") else {
+        panic!("no field_spec");
+    };
+    assert_eq!(
+        fields.keys().map(String::as_str).collect::<Vec<_>>(),
+        ["zé", "a😀", "m"]
+    );
+    let template = |name: &str| definition["field_spec"][name]["providers"][0]["template"].clone();
+    assert_eq!(template("zé"), "${source.source}");
+    assert_eq!(template("a😀"), "${source.x}");
+    assert_eq!(template("m"), "é ${source.y}");
+}
+
 #[test]
 fn tags_are_normalised_unique_and_capped() {
     let mut tenant = tenant();
