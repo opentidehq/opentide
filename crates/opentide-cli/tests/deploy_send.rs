@@ -3435,6 +3435,79 @@ fn a_bitdefender_deploy_sends_the_body_its_dry_run_shows() {
     assert_eq!(shown[0].0, body);
 }
 
+/// The Kibana rule an Elastic deploy creates is, byte for byte, the
+/// `payload` of the `api_request` the dry run shows for that tenant (#1952:
+/// both compile through `compiler::Elastic`): the tenant's `tags` and
+/// `index`, the `[[modifiers]]` scoped to it, and the non-ASCII text of the
+/// rule. The `block` beside it is the rule's block with the modifier.
+#[test]
+fn an_elastic_deploy_sends_the_body_its_dry_run_shows() {
+    use wiremock::matchers::{method, path, path_regex};
+    const RULES: &str = "/api/detection_engine/rules";
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let server = rt.block_on(wiremock::MockServer::start());
+    rt.block_on(async {
+        wiremock::Mock::given(method("GET"))
+            .and(path_regex("/_field_caps$"))
+            .respond_with(
+                wiremock::ResponseTemplate::new(200)
+                    .set_body_json(serde_json::json!({"indices": ["soc-1"], "fields": {}})),
+            )
+            .mount(&server)
+            .await;
+        wiremock::Mock::given(method("GET"))
+            .and(path(RULES))
+            .respond_with(wiremock::ResponseTemplate::new(404))
+            .mount(&server)
+            .await;
+        wiremock::Mock::given(method("POST"))
+            .and(path(RULES))
+            .respond_with(wiremock::ResponseTemplate::new(200).set_body_json(serde_json::json!({})))
+            .expect(1)
+            .mount(&server)
+            .await;
+    });
+    // No index of its own: the tenant's applies.
+    let block = "  elastic:\n    status: STAGING\n    type: query\n    language: kuery\n    \
+                 query: 'user.name: \"é😀\"'\n    scheduling:\n      interval: 5m\n";
+    let text = rule(
+        "Ünïcode rule 😀",
+        "00000000-0000-4000-8099-000000000204",
+        "Dé😀.",
+        block,
+    );
+    let setup = format!(
+        "url = \"{0}\"\nelasticsearch_url = \"{0}\"\napi_key = \"$ELASTIC_API_KEY\"\ntags = \
+         [\"équipe 😀\"]\nindex = [\"soc-*\"]\n\n[[modifiers]]\nname = \"lab hourly\"\n\
+         [modifiers.conditions]\ntenants = [\"lab\"]\n[modifiers.modifications]\n\
+         \"scheduling.interval\" = \"1h\"\n",
+        server.uri()
+    );
+    let ws = workspace("elastic", "lab", &setup, &[("a.yaml", text)]);
+    let shown = dry_run_requests(ws.path(), "elastic");
+    let (code, err) = elastic_deploy(ws.path());
+    rt.block_on(server.verify());
+    assert_eq!(code, 0, "{err}");
+    let created = bodies_on(&rt, &server, &wiremock::http::Method::POST, RULES);
+    assert_eq!(created.len(), 1, "{err}");
+    let body = &created[0];
+    for part in [
+        "é😀",
+        "Ünïcode rule 😀",
+        "\"équipe 😀\"",
+        "\"index\":[\"soc-*\"]",
+        "\"interval\":\"1h\"",
+    ] {
+        assert!(body.contains(part), "{part} not in {body}");
+    }
+    assert_eq!(shown.len(), 1);
+    assert_eq!(shown[0].1.as_deref(), Some("lab"));
+    let request = Json::parse(&shown[0].0).unwrap();
+    assert_eq!(&request.get("payload").unwrap().to_compact(), body);
+    let shown_block = request.get("block").unwrap().to_compact();
+    assert!(shown_block.contains("\"interval\":\"1h\""), "{shown_block}");
+}
+
 /// A definition the tenant lost while git ignores deployment state is not
 /// created again: the warning, then the state's refusal; and a tenant that
 /// refuses the token on a rule stops there.
