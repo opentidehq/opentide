@@ -96,6 +96,52 @@ pub(crate) fn default_catalog_if_ready() -> Option<Arc<Catalog>> {
     DEFAULT.get().cloned()
 }
 
+/// Whether `catalog` holds what the catalogs compiled into the engine hold,
+/// their version label aside (#2169): installed in their place, it changes
+/// no analysis. The bundled configuration's catalogs do ([`default_catalog`],
+/// whose answer is kept: the warm-up thread asks once they are generated).
+pub(crate) fn is_compiled_in(catalog: &Arc<Catalog>) -> bool {
+    static DEFAULT_IS: OnceLock<bool> = OnceLock::new();
+    if DEFAULT
+        .get()
+        .is_some_and(|default| Arc::ptr_eq(default, catalog))
+    {
+        return *DEFAULT_IS.get_or_init(|| holds_compiled_in(catalog));
+    }
+    holds_compiled_in(catalog)
+}
+
+/// [`is_compiled_in`], compared part by part as JSON without the keys that
+/// say where a catalog came from (`LABEL_KEYS`).
+fn holds_compiled_in(catalog: &Catalog) -> bool {
+    static COMPILED: OnceLock<(Option<serde_json::Value>, Option<serde_json::Value>)> =
+        OnceLock::new();
+    let (fields, deprecations) = COMPILED.get_or_init(|| {
+        let bundled = opentide_analysis::bundled_catalog();
+        (
+            unlabelled(bundled.fields.as_deref()),
+            unlabelled(bundled.deprecations.as_deref()),
+        )
+    });
+    catalog.visibility.is_none()
+        && fields.is_some()
+        && deprecations.is_some()
+        && unlabelled(catalog.fields.as_deref()) == *fields
+        && unlabelled(catalog.deprecations.as_deref()) == *deprecations
+}
+
+/// A catalog part's JSON without its label; `None` for a part that is
+/// missing or does not parse.
+fn unlabelled(text: Option<&str>) -> Option<serde_json::Value> {
+    let mut value: serde_json::Value = serde_json::from_str(text?).ok()?;
+    if let Some(object) = value.as_object_mut() {
+        for key in opentide_schema::generate::catalog::LABEL_KEYS {
+            object.remove(key);
+        }
+    }
+    Some(value)
+}
+
 /// A root's Tide field and deprecation catalogs, generated from the models
 /// for its configuration, again only when the configuration changes, and on
 /// a thread of their own where there are threads, so no request waits for
@@ -172,6 +218,42 @@ impl FieldCatalog {
 /// The catalogs `opentide generate schemas` writes for `sources`, labelled
 /// with this engine's version.
 fn build(sources: &Sources) -> Catalog {
+    #[cfg(all(debug_assertions, not(fuzzing)))]
+    test_hooks::hold();
+    let catalog = generate(sources);
+    #[cfg(all(debug_assertions, not(fuzzing)))]
+    test_hooks::BUILT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    catalog
+}
+
+/// Debug builds: what lets a test have the catalogs arrive late (#2169).
+#[cfg(all(debug_assertions, not(fuzzing)))]
+pub(crate) mod test_hooks {
+    use std::sync::atomic::AtomicU64;
+
+    /// How many catalogs this process generated (`opentide/__stats`'s
+    /// `catalogsBuilt`).
+    pub(crate) static BUILT: AtomicU64 = AtomicU64::new(0);
+
+    /// With `OPENTIDE_LSP_HOLD_CATALOGS` set to a path, no catalog is
+    /// generated before that path exists (two minutes at most): a test
+    /// decides when the catalogs arrive, rather than race the threads that
+    /// generate them. (The browser build reads no environment: it never
+    /// waits.)
+    pub(crate) fn hold() {
+        let Some(path) = std::env::var_os("OPENTIDE_LSP_HOLD_CATALOGS") else {
+            return;
+        };
+        let path = std::path::PathBuf::from(path);
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(120);
+        while !path.exists() && std::time::Instant::now() < deadline {
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+    }
+}
+
+/// [`build`]'s catalogs.
+fn generate(sources: &Sources) -> Catalog {
     let _span = crate::timing::Span::new("catalog: the models' field catalogs");
     let fields = {
         let _span = crate::timing::Span::new("catalog: fields_catalog");
@@ -248,25 +330,48 @@ mod tests {
     /// compiled into the engine, but for their version label.
     #[test]
     fn the_default_catalogs_are_the_bundled_ones() {
-        let unlabelled = |text: &str| {
-            let mut value: serde_json::Value = serde_json::from_str(text).expect("JSON");
-            if let Some(object) = value.as_object_mut() {
-                for key in opentide_schema::generate::catalog::LABEL_KEYS {
-                    object.remove(key);
-                }
-            }
-            value
-        };
         let generated = default_catalog();
         let bundled = opentide_analysis::bundled_catalog();
         for (ours, theirs) in [
             (&generated.fields, &bundled.fields),
             (&generated.deprecations, &bundled.deprecations),
         ] {
-            assert_eq!(
-                unlabelled(ours.as_deref().expect("generated")),
-                unlabelled(theirs.as_deref().expect("bundled"))
-            );
+            let ours = unlabelled(ours.as_deref());
+            assert!(ours.is_some(), "generated");
+            assert_eq!(ours, unlabelled(theirs.as_deref()));
         }
+        assert!(is_compiled_in(&generated));
+    }
+
+    /// A catalog that holds anything else than the compiled-in ones is not
+    /// them (#2169); one with another label alone is.
+    #[test]
+    fn a_catalog_is_compiled_in_only_when_it_holds_what_they_hold() {
+        let bundled = opentide_analysis::bundled_catalog();
+        let relabelled = |text: Option<&String>| {
+            let mut value: serde_json::Value =
+                serde_json::from_str(text.expect("bundled")).expect("JSON");
+            value["opentide"] = serde_json::Value::from("9.9.9-é😀");
+            Some(value.to_string())
+        };
+        let catalog = Arc::new(Catalog {
+            fields: relabelled(bundled.fields.as_ref()),
+            deprecations: relabelled(bundled.deprecations.as_ref()),
+            visibility: None,
+        });
+        assert!(is_compiled_in(&catalog));
+        let mut fields: serde_json::Value =
+            serde_json::from_str(catalog.fields.as_deref().expect("fields")).expect("JSON");
+        fields["fields"]
+            .as_array_mut()
+            .expect("rows")
+            .push(serde_json::json!({"schema": "rule", "path": "é😀", "name": "é😀"}));
+        let other = Arc::new(Catalog {
+            fields: Some(fields.to_string()),
+            deprecations: catalog.deprecations.clone(),
+            visibility: None,
+        });
+        assert!(!is_compiled_in(&other));
+        assert!(!is_compiled_in(&Arc::new(Catalog::default())));
     }
 }

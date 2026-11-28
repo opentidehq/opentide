@@ -20,7 +20,7 @@ use crate::rule::{CompileError, Rule};
 use crate::strategy::StatusStrategy;
 use crate::{
     Context, bitdefender, datadog, deploy, elastic, exabeam, google_secops, graylog,
-    microsoft_defender, preview, sentinel, sysdig,
+    microsoft_defender, preview, sentinel, splunk, sysdig,
 };
 
 /// The compile of one platform's rules, shared by the dry run and the deploy.
@@ -330,5 +330,44 @@ impl Compiler for MicrosoftDefender {
 
     fn body(compiled: &microsoft_defender::Compiled) -> Json {
         compiled.0.clone()
+    }
+}
+
+/// What a Splunk saved search depends on besides the rule.
+#[derive(Debug, Clone, Copy)]
+pub struct SplunkTarget<'t> {
+    /// The tenant's table: its `setup` (the app, the actions it allows,
+    /// whether it runs Enterprise Security) and the name its modifiers match.
+    pub tenant: &'t Json,
+    /// The minute and hour a frequency schedule runs at. `None` in a dry
+    /// run: a schedule read at send time is written with placeholders
+    /// ([`splunk::compile`]).
+    pub clock: Option<splunk::Clock>,
+}
+
+/// Splunk: the saved search's writes for one tenant (the create, its
+/// settings, then the late settings), which the dry run shows; none for a
+/// DELETION status. Its body is the settings the deploy sends
+/// ([`splunk::settings_body`]): every update after the create, merged.
+#[derive(Debug, Clone, Copy)]
+pub struct Splunk;
+
+impl Compiler for Splunk {
+    const PLATFORM: PlatformId = PlatformId::Splunk;
+
+    type Target<'t> = SplunkTarget<'t>;
+
+    type Compiled = splunk::Compiled;
+
+    fn compile(
+        cx: &Context<'_>,
+        rule: &Rule,
+        target: SplunkTarget<'_>,
+    ) -> Result<splunk::Compiled, CompileError> {
+        splunk::compile(cx, rule, target.tenant, target.clock)
+    }
+
+    fn body(compiled: &splunk::Compiled) -> Json {
+        splunk::settings_body(compiled)
     }
 }
