@@ -3115,7 +3115,7 @@ mod tests {
     fn document_of(report: Report) -> (String, i32) {
         (
             crate::json::document_text(&report.outcome.document(0), false),
-            report.outcome.exit_code,
+            report.outcome.exit_code.code(),
         )
     }
 
@@ -3241,8 +3241,8 @@ mod tests {
         let mut result = failed(Some("splunk"), "nope", ExitCode::Usage).with_code("usage_error");
         result.warnings.push("w".to_owned());
         let report = result.report(COMMAND);
-        assert_eq!(report.outcome.exit(), ExitCode::Usage);
-        assert_eq!(report.outcome.status(), Status::Failed);
+        assert_eq!(report.outcome.exit_code, ExitCode::Usage);
+        assert_eq!(report.outcome.status, Status::Failed);
         assert_eq!(report.warnings, ["w"]);
         let failure = report.outcome.failure.unwrap();
         assert_eq!(failure.code, "usage_error");

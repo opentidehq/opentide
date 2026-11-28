@@ -13,6 +13,7 @@
 //! `%LOCALAPPDATA%\opentide\logs` on Windows. Everything written goes through
 //! [`crate::redact`] first.
 
+use crate::commands::result::ExitCode;
 use crate::env::Env;
 use crate::envelope::{CRASH_EXIT_CODE, Failure, Outcome, code};
 use crate::json::document_text;
@@ -364,7 +365,7 @@ pub fn report(
     if report.mode == Mode::Json {
         let mut failure = Failure::new(code::INTERNAL, summary.clone());
         failure.crash_log = written.ok().map(|path| path.display().to_string());
-        let outcome = Outcome::failed(report.command, CRASH_EXIT_CODE, failure);
+        let outcome = Outcome::failed(report.command, ExitCode::Failure, failure);
         let _ignored = out.write_all(document_text(&outcome.document(0), report.indent).as_bytes());
     }
     let _ignored = out.flush();

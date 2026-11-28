@@ -776,9 +776,9 @@ fn outcome(
 
 /// Marks `report` failed with `message`, `command_failed`.
 fn failed(report: &mut Report, message: String, exit: ExitCode) {
-    report.outcome.set_status(Status::Failed);
+    report.outcome.status = Status::Failed;
     report.outcome.message.clone_from(&message);
-    report.outcome.set_exit(exit);
+    report.outcome.exit_code = exit;
     report.outcome.failure = Some(Failure::new(super::COMMAND_FAILED, message));
 }
 
@@ -862,7 +862,7 @@ mod tests {
         );
         let dir = workspace(&[("objects/rules/r.yaml", &text)]);
         let report = migrate(dir.path(), &rules(&dir));
-        assert_eq!(report.outcome.exit(), ExitCode::Success, "{report:?}");
+        assert_eq!(report.outcome.exit_code, ExitCode::Success, "{report:?}");
         assert_eq!(
             report.outcome.message,
             "Moved 2 vendor ids to .opentide/states/deployment/ · 1 rule edited, 1 shard written"
@@ -886,7 +886,7 @@ mod tests {
         // A second run finds nothing left.
         let again = migrate(dir.path(), &rules(&dir));
         assert_eq!(again.outcome.message, "No vendor rule ids left on rules");
-        assert_eq!(again.outcome.exit(), ExitCode::Success);
+        assert_eq!(again.outcome.exit_code, ExitCode::Success);
     }
 
     #[test]
@@ -895,7 +895,7 @@ mod tests {
         let text = rule("  sentinel_one:\n    rule_id::prodé😀: 12345\n    query: é😀\n");
         let dir = workspace(&[("objects/rules/é😀.yaml", &text)]);
         let report = migrate(dir.path(), &rules(&dir));
-        assert_eq!(report.outcome.exit(), ExitCode::Success, "{report:?}");
+        assert_eq!(report.outcome.exit_code, ExitCode::Success, "{report:?}");
         let shard = Shard::load(dir.path(), UUID).unwrap();
         assert_eq!(shard.get("sentinel_one", "prodé😀"), Some("12345"));
         let edited = std::fs::read_to_string(rules(&dir).join("é😀.yaml")).unwrap();
@@ -910,7 +910,7 @@ mod tests {
         );
         let dir = workspace(&[("objects/rules/r.yml", &text)]);
         let report = migrate(dir.path(), &rules(&dir));
-        assert_eq!(report.outcome.exit(), ExitCode::Success, "{report:?}");
+        assert_eq!(report.outcome.exit_code, ExitCode::Success, "{report:?}");
         let edited = std::fs::read_to_string(dir.path().join("objects/rules/r.yml")).unwrap();
         assert_eq!(
             edited,
@@ -926,8 +926,8 @@ mod tests {
         let text = rule("  sentinel_one:\n    rule_id::lab: \"007\"\n    query: q\n");
         let dir = workspace(&[("objects/rules/r.yaml", &text)]);
         let report = migrate(dir.path(), &rules(&dir));
-        assert_eq!(report.outcome.exit(), ExitCode::Failure);
-        assert_eq!(report.outcome.status(), Status::Failed);
+        assert_eq!(report.outcome.exit_code, ExitCode::Failure);
+        assert_eq!(report.outcome.status, Status::Failed);
         assert_eq!(
             report.outcome.message,
             "1 rule file(s) could not be migrated; 0 migrated. Fix them and re-run"
@@ -993,7 +993,11 @@ mod tests {
         for (configurations, code, message) in cases {
             let dir = workspace(&[("objects/rules/r.yaml", &rule(configurations))]);
             let report = migrate(dir.path(), &rules(&dir));
-            assert_eq!(report.outcome.exit(), ExitCode::Failure, "{configurations}");
+            assert_eq!(
+                report.outcome.exit_code,
+                ExitCode::Failure,
+                "{configurations}"
+            );
             let Json::Array(errors) = data(&report, "errors") else {
                 panic!("errors")
             };
@@ -1033,7 +1037,7 @@ mod tests {
         let text = "name: R\nmetadata:\n  uuid: 7\nconfigurations:\n  splunk:\n    rule_id::us: a\n    query: q\n";
         let dir = workspace(&[("objects/rules/r.yaml", text)]);
         let report = migrate(dir.path(), &rules(&dir));
-        assert_eq!(report.outcome.exit(), ExitCode::Success);
+        assert_eq!(report.outcome.exit_code, ExitCode::Success);
         let Json::Array(unused) = data(&report, "unused") else {
             panic!("unused")
         };
@@ -1057,7 +1061,7 @@ mod tests {
             (&format!(".opentide/states/deployment/{UUID}.json"), &shard),
         ]);
         let report = migrate(dir.path(), &rules(&dir));
-        assert_eq!(report.outcome.exit(), ExitCode::Failure);
+        assert_eq!(report.outcome.exit_code, ExitCode::Failure);
         let Json::Str(detail) = data(&report, "detail") else {
             panic!("detail")
         };
@@ -1077,7 +1081,7 @@ mod tests {
             (&format!(".opentide/states/deployment/{UUID}.json"), &shard),
         ]);
         let report = migrate(dir.path(), &rules(&dir));
-        assert_eq!(report.outcome.exit(), ExitCode::Success, "{report:?}");
+        assert_eq!(report.outcome.exit_code, ExitCode::Success, "{report:?}");
         assert_eq!(data(&report, "shards_written"), &Json::Int(0));
     }
 
@@ -1094,7 +1098,7 @@ mod tests {
             panic!("errors")
         };
         assert_eq!(errors.len(), 2);
-        assert_eq!(report.outcome.exit(), ExitCode::Failure);
+        assert_eq!(report.outcome.exit_code, ExitCode::Failure);
     }
 
     #[test]
@@ -1103,7 +1107,7 @@ mod tests {
             .replace("# keep me\n", "# keep\rme\n");
         let dir = workspace(&[("objects/rules/r.yaml", &text)]);
         let report = migrate(dir.path(), &rules(&dir));
-        assert_eq!(report.outcome.exit(), ExitCode::Failure);
+        assert_eq!(report.outcome.exit_code, ExitCode::Failure);
         assert!(unsupported_breaks("a\u{2028}b"));
         assert!(!unsupported_breaks("a\r\nb\n"));
     }
@@ -1113,7 +1117,7 @@ mod tests {
         let dir = workspace(&[]);
         let report = migrate(dir.path(), &rules(&dir));
         assert_eq!(report.outcome.message, "No vendor rule ids left on rules");
-        assert_eq!(report.outcome.exit(), ExitCode::Success);
+        assert_eq!(report.outcome.exit_code, ExitCode::Success);
     }
 
     #[test]
@@ -1133,7 +1137,7 @@ mod tests {
             return;
         }
         let report = migrate(dir.path(), &rules(&dir));
-        assert_eq!(report.outcome.exit(), ExitCode::Failure);
+        assert_eq!(report.outcome.exit_code, ExitCode::Failure);
         assert_eq!(
             data(&report, "code"),
             &Json::str("deployment_state_ignored")

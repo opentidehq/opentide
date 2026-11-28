@@ -201,24 +201,24 @@ fn finished(
     failed: Option<String>,
     message: String,
 ) -> Report {
-    let mut report = Report::failed(command, ExitCode::Failure.code(), Failure::new("", ""));
+    let mut report = Report::failed(command, ExitCode::Failure, Failure::new("", ""));
     report.outcome = match failed {
         Some(first) => Outcome {
             command: command.to_owned(),
-            status: Status::Failed.as_str().into(),
+            status: Status::Failed,
             message: first.clone(),
             data,
-            exit_code: ExitCode::Failure.code(),
+            exit_code: ExitCode::Failure,
             summary,
             next_actions: Vec::new(),
             failure: Some(Failure::new(super::COMMAND_FAILED, first)),
         },
         None => Outcome {
             command: command.to_owned(),
-            status: Status::Completed.as_str().into(),
+            status: Status::Completed,
             message,
             data,
-            exit_code: ExitCode::Success.code(),
+            exit_code: ExitCode::Success,
             summary,
             next_actions: Vec::new(),
             failure: None,
@@ -249,7 +249,7 @@ pub fn validate_live(
     else {
         let mut report = Report::failed(
             COMMAND,
-            ExitCode::Failure.code(),
+            ExitCode::Failure,
             Failure::new(
                 super::COMMAND_FAILED,
                 format!("query validation not supported for {platform}"),

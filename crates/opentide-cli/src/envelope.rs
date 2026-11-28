@@ -47,6 +47,8 @@ pub const USAGE_EXIT_CODE: i32 = 2;
 pub const CRASH_EXIT_CODE: i32 = 1;
 /// Exit code of a run stopped by Ctrl-C: 128 + SIGINT.
 pub const INTERRUPTED_EXIT_CODE: i32 = 130;
+/// The exit code of a run that did part of its work (`share`'s partial push).
+pub const PARTIAL_EXIT_CODE: i32 = 3;
 
 /// `failure.code` values the framework produces.
 pub mod code {
@@ -142,13 +144,13 @@ pub struct Outcome {
     /// The command path (`validate query`); empty when none was recognised.
     pub command: String,
     /// `completed`, `passed`, `issues`, `skipped` or `failed`.
-    pub status: String,
+    pub status: Status,
     /// The outcome in one sentence.
     pub message: String,
     /// The command's own keys, in order.
     pub data: Vec<(String, Json)>,
     /// The process exit code.
-    pub exit_code: i32,
+    pub exit_code: ExitCode,
     /// Counts behind the outcome.
     pub summary: Vec<(String, Json)>,
     /// What to run next.
@@ -159,10 +161,10 @@ pub struct Outcome {
 
 impl Outcome {
     /// A failed run: `error` and `message` are the failure's message.
-    pub fn failed(command: &str, exit_code: i32, failure: Failure) -> Outcome {
+    pub fn failed(command: &str, exit_code: ExitCode, failure: Failure) -> Outcome {
         Outcome {
             command: command.to_owned(),
-            status: "failed".into(),
+            status: Status::Failed,
             message: failure.message.clone(),
             data: vec![("error".into(), Json::str(&failure.message))],
             exit_code,
@@ -172,44 +174,20 @@ impl Outcome {
         }
     }
 
-    /// The status, typed; a status no [`Status`] names reads as
-    /// [`Status::Failed`], so it never passes for a success. Transitional
-    /// (#1949 slice 7): the field becomes a [`Status`].
-    pub fn status(&self) -> Status {
-        Status::parse(&self.status).unwrap_or(Status::Failed)
-    }
-
-    /// Sets the status. Transitional, as [`Outcome::status`].
-    pub fn set_status(&mut self, status: Status) {
-        status.as_str().clone_into(&mut self.status);
-    }
-
-    /// The exit code, typed; a non-zero code no [`ExitCode`] names reads as
-    /// [`ExitCode::Failure`], so it stays non-zero. Transitional (#1949
-    /// slice 7): the field becomes an [`ExitCode`].
-    pub fn exit(&self) -> ExitCode {
-        ExitCode::from_code(i64::from(self.exit_code)).unwrap_or(ExitCode::Failure)
-    }
-
-    /// Sets the exit code. Transitional, as [`Outcome::exit`].
-    pub fn set_exit(&mut self, exit: ExitCode) {
-        self.exit_code = exit.code();
-    }
-
-    /// Whether the run succeeded.
+    /// Whether the run succeeded: its status is not [`Status::Failed`].
     pub fn ok(&self) -> bool {
-        self.status != "failed"
+        !self.status.is_failed()
     }
 
     /// The document, with `duration_ms` as given.
     pub fn document(&self, duration_ms: i64) -> Json {
         let mut members: Vec<(String, Json)> = self.data.clone();
         members.push(("ok".into(), Json::Bool(self.ok())));
-        members.push(("status".into(), Json::str(&self.status)));
+        members.push(("status".into(), Json::str(self.status.as_str())));
         members.push(("message".into(), Json::str(&self.message)));
         // `error`, unless the command put it among its own keys, goes after
         // those keys and the message.
-        if self.exit_code != 0 && !members.iter().any(|(k, _)| k == "error") {
+        if self.exit_code != ExitCode::Success && !members.iter().any(|(k, _)| k == "error") {
             let message = if self.message.is_empty() {
                 self.failure
                     .as_ref()
@@ -223,7 +201,10 @@ impl Outcome {
         members.push(("schema_version".into(), Json::Int(SCHEMA_VERSION)));
         members.push(("command".into(), Json::str(&self.command)));
         members.push(("duration_ms".into(), Json::Int(duration_ms)));
-        members.push(("exit_code".into(), Json::Int(i64::from(self.exit_code))));
+        members.push((
+            "exit_code".into(),
+            Json::Int(i64::from(self.exit_code.code())),
+        ));
         members.push(("summary".into(), Json::object(self.summary.clone())));
         members.push((
             "next_actions".into(),
@@ -252,41 +233,49 @@ mod tests {
     use super::*;
     use crate::json::document_text;
 
+    /// `ok`, the outcome's kind and the document's `ok` and `status` read one
+    /// status: they cannot disagree (#1949).
     #[test]
-    fn the_typed_status_and_exit_read_and_write_the_fields() {
-        let mut outcome = Outcome::failed("migrate", 1, Failure::new("command_failed", "é 😀"));
-        assert_eq!(outcome.status(), Status::Failed);
-        assert_eq!(outcome.exit(), ExitCode::Failure);
+    fn ok_and_the_kind_agree_with_the_status_for_every_status() {
         for status in [
             Status::Completed,
             Status::Passed,
             Status::Issues,
             Status::Skipped,
             Status::Failed,
+            Status::Other("success".to_owned()),
+            Status::Other("réussi 😀".to_owned()),
         ] {
-            outcome.set_status(status);
-            assert_eq!(outcome.status, status.as_str());
-            assert_eq!(outcome.status(), status);
-        }
-        for (exit, code) in [
-            (ExitCode::Success, 0),
-            (ExitCode::Failure, 1),
-            (ExitCode::Usage, 2),
-            (ExitCode::Interrupted, 130),
-        ] {
-            outcome.set_exit(exit);
-            assert_eq!(outcome.exit_code, code);
-            assert_eq!(outcome.exit(), exit);
+            let mut outcome = Outcome::failed("x", ExitCode::Failure, Failure::new("c", "m"));
+            outcome.status = status.clone();
+            let failed = status == Status::Failed;
+            assert_eq!(outcome.ok(), !failed, "{status:?}");
+            assert_eq!(status.is_failed(), failed, "{status:?}");
+            assert_eq!(
+                crate::render::outcome::OutcomeKind::of(outcome.status.as_str(), outcome.ok())
+                    == crate::render::outcome::OutcomeKind::Failed,
+                failed,
+                "{status:?}"
+            );
+            let doc = outcome.document(0);
+            assert_eq!(doc.get("ok"), Some(&Json::Bool(!failed)), "{status:?}");
+            assert_eq!(doc.get("status"), Some(&Json::str(status.as_str())));
         }
     }
 
     #[test]
-    fn an_unknown_status_reads_failed_and_an_unknown_code_stays_non_zero() {
-        let mut outcome = Outcome::failed("migrate", 1, Failure::new("command_failed", "x"));
-        "réussi".clone_into(&mut outcome.status);
-        outcome.exit_code = 3;
-        assert_eq!(outcome.status(), Status::Failed);
-        assert_eq!(outcome.exit(), ExitCode::Failure);
+    fn every_exit_code_prints_its_number() {
+        let mut outcome = Outcome::failed("x", ExitCode::Failure, Failure::new("c", "m"));
+        for (exit, code) in [
+            (ExitCode::Success, 0),
+            (ExitCode::Failure, 1),
+            (ExitCode::Usage, 2),
+            (ExitCode::Partial, 3),
+            (ExitCode::Interrupted, 130),
+        ] {
+            outcome.exit_code = exit;
+            assert_eq!(outcome.document(0).get("exit_code"), Some(&Json::Int(code)));
+        }
     }
 
     #[test]
@@ -294,7 +283,7 @@ mod tests {
         let mut failure = Failure::new(code::USAGE_UNKNOWN_COMMAND, "No such command 'valdiate'.");
         failure.argument = Some("valdiate".into());
         failure.suggestion = Some("validate".into());
-        let outcome = Outcome::failed("", USAGE_EXIT_CODE, failure);
+        let outcome = Outcome::failed("", ExitCode::Usage, failure);
         assert_eq!(
             document_text(&outcome.document(0), false),
             "{\"error\":\"No such command 'valdiate'.\",\"ok\":false,\"status\":\"failed\",\
@@ -309,7 +298,7 @@ mod tests {
     fn framework_envelope_error_follows_the_message_when_the_command_set_none() {
         let mut outcome = Outcome::failed(
             "generate exports",
-            1,
+            ExitCode::Failure,
             Failure::new("command_failed", "exports: broken"),
         );
         outcome.data = vec![("phase".into(), Json::str("exports"))];
@@ -327,10 +316,10 @@ mod tests {
     fn framework_envelope_a_success_has_no_error_and_a_null_failure() {
         let outcome = Outcome {
             command: "commands".into(),
-            status: "completed".into(),
+            status: Status::Completed,
             message: "58 commands".into(),
             data: vec![("program".into(), Json::str("opentide"))],
-            exit_code: 0,
+            exit_code: ExitCode::Success,
             summary: vec![("commands".into(), Json::Int(58))],
             next_actions: vec![NextAction::new("opentide validate", "check")],
             failure: None,
@@ -349,10 +338,10 @@ mod tests {
     fn framework_envelope_a_non_zero_exit_always_carries_error() {
         let outcome = Outcome {
             command: "x".into(),
-            status: "issues".into(),
+            status: Status::Issues,
             message: String::new(),
             data: Vec::new(),
-            exit_code: 1,
+            exit_code: ExitCode::Failure,
             summary: Vec::new(),
             next_actions: Vec::new(),
             failure: Some(Failure::new("issues_found", "found")),

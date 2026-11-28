@@ -192,7 +192,7 @@ fn retitled(mut report: Box<Report>, command: &str) -> Box<Report> {
 fn usage(command: &str, failure_code: &str, message: &str) -> Report {
     Report::failed(
         command,
-        ExitCode::Usage.code(),
+        ExitCode::Usage,
         Failure::new(failure_code, message),
     )
 }
@@ -205,7 +205,7 @@ fn empty_option(command: &str, flag: &str, value: Option<&str>) -> Option<Report
         let mut failure =
             Failure::new(code::USAGE_INVALID_VALUE, format!("{flag} cannot be empty"));
         failure.argument = Some(flag.to_owned());
-        Report::failed(command, ExitCode::Usage.code(), failure)
+        Report::failed(command, ExitCode::Usage, failure)
     })
 }
 
@@ -335,7 +335,7 @@ fn interactive(
                             command,
                             vec![("steps".to_owned(), Json::Array(Vec::new()))],
                         );
-                        report.outcome.set_status(Status::Skipped);
+                        report.outcome.status = Status::Skipped;
                         "Setup cancelled; no files were written"
                             .clone_into(&mut report.outcome.message);
                         report.warnings = warnings;
@@ -413,7 +413,7 @@ fn promotion_enabled(root: &Path, cx: &Context<'_>) -> bool {
 /// A cancelled confirmation.
 fn cancelled(command: &str, message: &str) -> Report {
     let mut report = Report::completed(command, Vec::new());
-    report.outcome.set_status(Status::Skipped);
+    report.outcome.status = Status::Skipped;
     message.clone_into(&mut report.outcome.message);
     report
 }
@@ -714,9 +714,9 @@ fn vscode(options: super::vscode::Options, shown: &Path, plan: bool, cx: &Contex
 /// `report` as a run that failed with `message`: status `failed`, exit 1,
 /// `command_failed` (a service's `status: failed` with `_exit_code`).
 fn failed(report: &mut Report, message: &str) {
-    report.outcome.set_status(Status::Failed);
+    report.outcome.status = Status::Failed;
     message.clone_into(&mut report.outcome.message);
-    report.outcome.set_exit(ExitCode::Failure);
+    report.outcome.exit_code = ExitCode::Failure;
     report.outcome.failure = Some(Failure::new(crate::commands::COMMAND_FAILED, message));
     report.outcome.next_actions.clear();
 }
@@ -1171,7 +1171,7 @@ fn finish(
             let message = report.outcome.message.clone();
             failed(&mut report, &message);
         } else {
-            report.outcome.status = status;
+            report.outcome.status = Status::from_text(&status);
         }
     }
     report
@@ -1795,7 +1795,12 @@ mod tests {
             ..GroupArgs::default()
         };
         let plan = group(&args, &cx);
-        assert_eq!(plan.outcome.exit(), ExitCode::Success, "{:?}", plan.outcome);
+        assert_eq!(
+            plan.outcome.exit_code,
+            ExitCode::Success,
+            "{:?}",
+            plan.outcome
+        );
         let listed = files_of(&plan);
         assert!(
             listed.contains(&("repo".into(), ".gitignore".into(), "merge".into())),
@@ -1840,7 +1845,12 @@ mod tests {
             },
             &cx,
         );
-        assert_eq!(run.outcome.exit(), ExitCode::Success, "{:?}", run.outcome);
+        assert_eq!(
+            run.outcome.exit_code,
+            ExitCode::Success,
+            "{:?}",
+            run.outcome
+        );
         for (_, path, action) in &listed {
             if action != "skip" {
                 assert!(cwd.join(path).is_file(), "{path}");

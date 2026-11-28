@@ -393,7 +393,7 @@ fn a_missing_name_is_asked_for_at_a_terminal() {
     );
     assert_eq!(asked, ["text Threat name [] Some(\"a name\")"]);
     assert_eq!(
-        report.outcome.exit(),
+        report.outcome.exit_code,
         ExitCode::Success,
         "{:?}",
         report.outcome
@@ -419,7 +419,7 @@ fn a_rule_asks_for_its_platform_blocks() {
         "checkbox Platform blocks [\"Microsoft Sentinel\", \"Splunk Enterprise Security\"] [] required=false"
     );
     assert_eq!(
-        report.outcome.exit(),
+        report.outcome.exit_code,
         ExitCode::Success,
         "{:?}",
         report.outcome
@@ -456,7 +456,7 @@ fn an_unanswered_question_stops_the_run() {
     assert_eq!(failure.message, "The name cannot be empty");
     assert_eq!(failure.argument.as_deref(), Some("--name"));
     let (report, _) = prompted(dir.path(), "threat", &[], vec![Reply::CtrlC], true);
-    assert_eq!(report.outcome.exit(), ExitCode::Interrupted);
+    assert_eq!(report.outcome.exit_code, ExitCode::Interrupted);
     let (report, _) = prompted(
         dir.path(),
         "rule",
@@ -464,7 +464,7 @@ fn an_unanswered_question_stops_the_run() {
         vec![Reply::Text(Some("Watch")), Reply::CtrlC],
         true,
     );
-    assert_eq!(report.outcome.exit(), ExitCode::Interrupted);
+    assert_eq!(report.outcome.exit_code, ExitCode::Interrupted);
     assert!(
         !dir.path().join("objects/rules").exists()
             || std::fs::read_dir(dir.path().join("objects/rules"))
@@ -495,7 +495,7 @@ fn a_rule_with_every_platform_block_is_valid() {
         true,
     );
     assert_eq!(
-        report.outcome.exit(),
+        report.outcome.exit_code,
         ExitCode::Success,
         "{:?}",
         report.outcome

@@ -10,12 +10,13 @@
 
 use super::Report;
 use crate::envelope::{
-    CRASH_EXIT_CODE, Failure, INTERRUPTED_EXIT_CODE, NextAction, Outcome, USAGE_EXIT_CODE,
+    CRASH_EXIT_CODE, Failure, INTERRUPTED_EXIT_CODE, NextAction, Outcome, PARTIAL_EXIT_CODE,
+    USAGE_EXIT_CODE,
 };
 use crate::json::Json;
 
 /// The envelope's `status` (`docs/cli/json-output.md`).
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub enum Status {
     /// The run did what it was asked.
     #[default]
@@ -28,26 +29,35 @@ pub enum Status {
     Skipped,
     /// The run failed.
     Failed,
+    /// A status a command copied from its data (`generate extract` writes
+    /// the importer's `success`), printed as it came. It is not a failure:
+    /// [`Status::is_failed`] is false for it, and so is [`Outcome::ok`].
+    Other(String),
 }
 
 impl Status {
     /// The status as the document writes it.
-    pub fn as_str(self) -> &'static str {
+    pub fn as_str(&self) -> &str {
         match self {
             Status::Completed => "completed",
             Status::Passed => "passed",
             Status::Issues => "issues",
             Status::Skipped => "skipped",
             Status::Failed => "failed",
+            Status::Other(text) => text,
         }
     }
 
-    /// The status `text` names, else [`Status::Failed`]: every producer is
-    /// in this crate, so an unknown status is a programming error, and it
-    /// must not read as a success.
-    #[cfg(test)]
-    fn parse_or_failed(text: &str) -> Status {
-        Status::parse(text).unwrap_or(Status::Failed)
+    /// Whether the run failed: the one test `ok`, the exit code's default
+    /// and the outcome's kind all share.
+    pub fn is_failed(&self) -> bool {
+        matches!(self, Status::Failed)
+    }
+
+    /// The status `text` is: a known one, else [`Status::Other`] with the
+    /// text kept as it is.
+    pub fn from_text(text: &str) -> Status {
+        Status::parse(text).unwrap_or_else(|| Status::Other(text.to_owned()))
     }
 
     /// The status `text` names, if it names one.
@@ -63,7 +73,7 @@ impl Status {
     }
 
     /// `failure.code` when the result names none (`default_failure_code`).
-    fn default_failure_code(self) -> &'static str {
+    fn default_failure_code(&self) -> &'static str {
         match self {
             Status::Issues => super::ISSUES_FOUND,
             Status::Skipped => "not_run",
@@ -80,8 +90,12 @@ pub enum ExitCode {
     Success,
     /// 1: the run failed, or found what it was asked to fail on.
     Failure,
-    /// 2: a usage error ([`USAGE_EXIT_CODE`]).
+    /// 2 ([`USAGE_EXIT_CODE`]): the command could not do what was asked:
+    /// usage, a decision only a person can make, authentication or
+    /// connectivity.
     Usage,
+    /// 3: the run did part of its work (`share`'s partial push).
+    Partial,
     /// 130: stopped by Ctrl-C ([`INTERRUPTED_EXIT_CODE`]).
     Interrupted,
 }
@@ -93,15 +107,22 @@ impl ExitCode {
             ExitCode::Success => 0,
             ExitCode::Failure => CRASH_EXIT_CODE,
             ExitCode::Usage => USAGE_EXIT_CODE,
+            ExitCode::Partial => PARTIAL_EXIT_CODE,
             ExitCode::Interrupted => INTERRUPTED_EXIT_CODE,
         }
     }
 
-    /// The exit code `code` is, else [`ExitCode::Failure`]: non-zero stays
-    /// non-zero.
-    #[cfg(test)]
-    fn from_code_or_failure(code: i64) -> ExitCode {
-        ExitCode::from_code(code).unwrap_or(ExitCode::Failure)
+    /// The exit code of a process or service outside this crate: one this
+    /// enum names, else [`ExitCode::Failure`] so a non-zero code stays
+    /// non-zero. An unnamed code is a bug in that producer, so a debug
+    /// build stops on it.
+    pub fn of_service(code: i32) -> ExitCode {
+        let named = ExitCode::from_code(i64::from(code));
+        debug_assert!(
+            named.is_some(),
+            "a service's exit code is unexpected: {code}"
+        );
+        named.unwrap_or(ExitCode::Failure)
     }
 
     /// The exit code `code` is, if it is one a result exits with.
@@ -110,6 +131,7 @@ impl ExitCode {
             0 => Some(ExitCode::Success),
             1 => Some(ExitCode::Failure),
             2 => Some(ExitCode::Usage),
+            3 => Some(ExitCode::Partial),
             130 => Some(ExitCode::Interrupted),
             _ => None,
         }
@@ -235,9 +257,9 @@ impl CommandResult {
         );
         let status = match take("status") {
             None => Status::Completed,
-            Some(status) => status
-                .as_str()
-                .map_or(Status::Failed, Status::parse_or_failed),
+            Some(status) => status.as_str().map_or(Status::Failed, |text| {
+                Status::parse(text).unwrap_or(Status::Failed)
+            }),
         };
         let exit = match take("_exit_code") {
             Some(Json::Int(code)) => {
@@ -245,7 +267,7 @@ impl CommandResult {
                     ExitCode::from_code(*code).is_some(),
                     "a result's _exit_code is unexpected: {code}"
                 );
-                ExitCode::from_code_or_failure(*code)
+                ExitCode::from_code(*code).unwrap_or(ExitCode::Failure)
             }
             _ if unknown_status.is_some() => ExitCode::Failure,
             _ => ExitCode::Success,
@@ -306,7 +328,7 @@ impl CommandResult {
         let message = self
             .message
             .unwrap_or_else(|| "Completed successfully".to_owned());
-        let failed = self.status == Status::Failed || self.exit != ExitCode::Success;
+        let failed = self.status.is_failed() || self.exit != ExitCode::Success;
         let failure = failed.then(|| {
             let error = match self.data.iter().find(|(key, _)| key == "error") {
                 Some((_, Json::Str(text))) => Some(text.clone()),
@@ -324,10 +346,10 @@ impl CommandResult {
         let mut report = Report::completed(command, self.data);
         report.outcome = Outcome {
             command: command.to_owned(),
-            status: self.status.as_str().to_owned(),
+            status: self.status,
             message,
             data: report.outcome.data,
-            exit_code: self.exit.code(),
+            exit_code: self.exit,
             summary: self.summary,
             next_actions: self.next_actions,
             failure,
@@ -357,9 +379,15 @@ mod tests {
         }
         assert_eq!(Status::parse("unknown"), None);
         // An unknown status is a failure, never a success.
-        assert_eq!(Status::parse_or_failed("faild"), Status::Failed);
-        assert_eq!(Status::parse_or_failed("échoué 😀"), Status::Failed);
-        assert_eq!(Status::parse_or_failed("passed"), Status::Passed);
+        // A status no variant names is kept as it is, and is not a failure.
+        assert_eq!(Status::from_text("passed"), Status::Passed);
+        for text in ["success", "échoué 😀", ""] {
+            let status = Status::from_text(text);
+            assert_eq!(status, Status::Other(text.to_owned()));
+            assert_eq!(status.as_str(), text);
+            assert!(!status.is_failed());
+        }
+        assert!(Status::from_text("failed").is_failed());
     }
 
     #[test]
@@ -368,16 +396,13 @@ mod tests {
             ExitCode::Success,
             ExitCode::Failure,
             ExitCode::Usage,
+            ExitCode::Partial,
             ExitCode::Interrupted,
         ] {
             assert_eq!(ExitCode::from_code(i64::from(exit.code())), Some(exit));
         }
-        assert_eq!(ExitCode::from_code(3), None);
-        // An exit code outside the set stays non-zero.
-        for code in [3, -1, 255, i64::MAX] {
-            assert_eq!(ExitCode::from_code_or_failure(code), ExitCode::Failure);
-        }
-        assert_eq!(ExitCode::from_code_or_failure(130), ExitCode::Interrupted);
+        assert_eq!(ExitCode::from_code(4), None);
+        assert_eq!(ExitCode::from_code(3), Some(ExitCode::Partial));
     }
 
     #[test]
@@ -393,17 +418,17 @@ mod tests {
         assert_eq!(result.status, Status::Failed);
         assert_eq!(result.exit, ExitCode::Failure);
         let report = result.report("deploy");
-        assert_eq!(report.outcome.exit_code, 1);
+        assert_eq!(report.outcome.exit_code, ExitCode::Failure);
         assert!(report.outcome.failure.is_some());
     }
 
     #[test]
     #[cfg_attr(
         debug_assertions,
-        should_panic(expected = "a result's _exit_code is unexpected: 3")
+        should_panic(expected = "a result's _exit_code is unexpected: 4")
     )]
     fn an_exit_code_outside_the_set_exits_1() {
-        let fields = vec![("_exit_code".to_owned(), Json::Int(3))];
+        let fields = vec![("_exit_code".to_owned(), Json::Int(4))];
         assert_eq!(CommandResult::from_fields(&fields).exit, ExitCode::Failure);
     }
 
@@ -460,7 +485,7 @@ mod tests {
         };
         assert_eq!(CommandResult::from_fields(&fields), typed);
         let report = typed.report("validate query");
-        assert_eq!(report.outcome.exit_code, 2);
+        assert_eq!(report.outcome.exit_code, ExitCode::Usage);
         assert_eq!(report.warnings, ["w"]);
         assert_eq!(
             crate::json::document_text(&report.outcome.document(0), false),
@@ -500,6 +525,6 @@ mod tests {
         }
         .report("validate query");
         assert_eq!(passed.outcome.failure, None);
-        assert_eq!(passed.outcome.exit_code, 0);
+        assert_eq!(passed.outcome.exit_code, ExitCode::Success);
     }
 }

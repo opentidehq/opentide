@@ -10,7 +10,7 @@ use opentide_workspace::lint::{Changed, LintCheck, LintOptions, NO_COMMITS_ADVIC
 use opentide_workspace::{FileSystem as _, OsFs};
 
 use super::findings::{self, diagnostic};
-use super::result::ExitCode;
+use super::result::{ExitCode, Status};
 use super::{Block, Report, Terminal, placement};
 use crate::env::Env;
 use crate::envelope::{Failure, NextAction};
@@ -126,7 +126,7 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
         args.output.is_some(),
         terminal.mode == crate::mode::Mode::Json,
     ) {
-        return Report::failed(COMMAND, ExitCode::Usage.code(), failure);
+        return Report::failed(COMMAND, ExitCode::Usage, failure);
     }
     let (_, root_options) = placement(cx.repo, cx.env, cx.cwd);
     let ws = match super::open_for(COMMAND, root_options) {
@@ -139,7 +139,7 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
                 failure.code == super::CONFIG_PARSE
                     && failure.message.contains("configurations/lint.toml")
             }) {
-                report.outcome.set_exit(ExitCode::Usage);
+                report.outcome.exit_code = ExitCode::Usage;
             }
             return *report;
         }
@@ -192,9 +192,9 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
         })
         .collect();
     let mut report = Report::completed(COMMAND, data);
-    report.outcome.status = lint.status.as_str().into();
+    report.outcome.status = Status::from_text(lint.status.as_str());
     report.outcome.message.clone_from(&lint.message);
-    report.outcome.exit_code = lint.exit_code;
+    report.outcome.exit_code = ExitCode::of_service(lint.exit_code);
     if lint.exit_code != 0 {
         report.outcome.failure = Some(Failure::new(
             lint.failure_code.unwrap_or(super::COMMAND_FAILED),
@@ -256,7 +256,7 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
         &diagnostics,
         COMMAND,
         &outcome,
-        findings::kind_name(&report.outcome.status, lint.exit_code == 0),
+        findings::kind_name(report.outcome.status.as_str(), lint.exit_code == 0),
         terminal.mode,
         cx.env,
         cx.cwd,

@@ -818,7 +818,7 @@ mod tests {
                 network(&failing.env),
                 80,
             );
-            assert_eq!(report.outcome.exit(), ExitCode::Failure);
+            assert_eq!(report.outcome.exit_code, ExitCode::Failure);
             let failure = report.outcome.failure.as_ref().unwrap();
             assert_eq!(failure.code, "command_failed");
             assert!(
@@ -857,7 +857,7 @@ mod tests {
             network(&served.env),
             80,
         );
-        assert_eq!(report.outcome.exit(), ExitCode::Success);
+        assert_eq!(report.outcome.exit_code, ExitCode::Success);
         let Json::Array(listed) = data(&report, "skills") else {
             panic!("skills is not a list")
         };
@@ -923,7 +923,7 @@ mod tests {
         let repo = tempfile::tempdir().unwrap();
         for name in ["Fancy Name", " fancy name ", "FANCY-SKILL"] {
             let report = show(name, repo.path(), false, network(&served.env), true);
-            assert_eq!(report.outcome.exit(), ExitCode::Success, "{name}");
+            assert_eq!(report.outcome.exit_code, ExitCode::Success, "{name}");
             assert_eq!(
                 data(&report, "skill").get("slug"),
                 Some(&Json::str("fancy-skill")),
@@ -931,6 +931,6 @@ mod tests {
             );
         }
         let report = show("Fancy", repo.path(), false, network(&served.env), true);
-        assert_eq!(report.outcome.exit(), ExitCode::Failure);
+        assert_eq!(report.outcome.exit_code, ExitCode::Failure);
     }
 }

@@ -419,11 +419,11 @@ fn with_retirements(
         Some(entry) => entry.1 = value,
         None => items.push((key.to_owned(), value)),
     };
-    let was_skipped = dry.outcome.status() == Status::Skipped;
+    let was_skipped = dry.outcome.status == Status::Skipped;
     if was_skipped {
         // Nothing else to deploy: the retirements are the plan.
-        dry.outcome.set_status(Status::Completed);
-        dry.outcome.set_exit(ExitCode::Success);
+        dry.outcome.status = Status::Completed;
+        dry.outcome.exit_code = ExitCode::Success;
         dry.outcome.failure = None;
         dry.outcome.next_actions.clear();
         dry.outcome
@@ -444,7 +444,7 @@ fn with_retirements(
         let mut items: Vec<(String, Json)> = std::mem::take(members).into_iter().collect();
         set(&mut items, "changes", changes);
         set(&mut items, "message", Json::str(message));
-        set(&mut items, "status", Json::str(dry.outcome.status.clone()));
+        set(&mut items, "status", Json::str(dry.outcome.status.as_str()));
         if was_skipped {
             items.retain(|(key, _)| !matches!(key.as_str(), "advice" | "detail"));
         }
@@ -547,7 +547,7 @@ fn promotion_warnings(args: &Args, cx: &Context, owned: &Owned) -> Vec<String> {
 fn refused(message: String, failure_code: &str, argument: &str) -> DryRun {
     let mut failure = Failure::new(failure_code, message);
     failure.argument = Some(argument.to_owned());
-    let outcome = Outcome::failed(COMMAND, ExitCode::Usage.code(), failure);
+    let outcome = Outcome::failed(COMMAND, ExitCode::Usage, failure);
     DryRun {
         result: Json::Null,
         outcome,
@@ -564,7 +564,7 @@ fn refused(message: String, failure_code: &str, argument: &str) -> DryRun {
 fn failed(message: String) -> DryRun {
     let outcome = Outcome::failed(
         COMMAND,
-        ExitCode::Failure.code(),
+        ExitCode::Failure,
         Failure::new(COMMAND_FAILED, message.clone()),
     );
     DryRun {
@@ -658,10 +658,10 @@ fn from_outcome(outcome: dry_run::Outcome, at_root: bool) -> DryRun {
     DryRun {
         outcome: Outcome {
             command: COMMAND.to_owned(),
-            status,
+            status: Status::from_text(&status),
             message,
             data,
-            exit_code,
+            exit_code: ExitCode::of_service(exit_code),
             summary,
             next_actions,
             failure,

@@ -140,7 +140,7 @@ pub(crate) fn bad_parameter(message: &str, hint: &[&str], argument: Option<&str>
     };
     let mut failure = Failure::new(USAGE_INVALID_VALUE, shown);
     failure.argument = argument.map(str::to_owned);
-    Box::new(Report::failed(COMMAND, ExitCode::Usage.code(), failure))
+    Box::new(Report::failed(COMMAND, ExitCode::Usage, failure))
 }
 
 /// A prompt nobody can answer: exit 2 naming the flag that answers it.
@@ -148,7 +148,7 @@ pub(crate) fn bad_parameter(message: &str, hint: &[&str], argument: Option<&str>
 pub(crate) fn needs_input_for(command: &str, message: String) -> Box<Report> {
     Box::new(Report::failed(
         command,
-        ExitCode::Usage.code(),
+        ExitCode::Usage,
         Failure::new(USAGE_NEEDS_INPUT, message),
     ))
 }
@@ -1132,7 +1132,7 @@ pub fn ci(args: &CiArgs, cx: &Context<'_>) -> Report {
             Ok(true) => {}
             Ok(false) => {
                 let mut report = Report::completed(COMMAND, Vec::new());
-                report.outcome.set_status(Status::Skipped);
+                report.outcome.status = Status::Skipped;
                 report.outcome.message = "CI/CD setup cancelled".into();
                 return report;
             }
@@ -1186,7 +1186,7 @@ pub fn ci(args: &CiArgs, cx: &Context<'_>) -> Report {
     let mut report = Report::completed(COMMAND, fields);
     report.outcome.message = match files.as_slice() {
         [] => {
-            report.outcome.set_status(Status::Skipped);
+            report.outcome.status = Status::Skipped;
             "Nothing written".to_owned()
         }
         [one] => format!("Wrote {one}"),
@@ -1587,7 +1587,7 @@ mod tests {
             unknown.outcome.message,
             "--promotion-target: \"NOPE\" is not a status in this repository's deployment.toml; use one of: STAGING, PRODUCTION"
         );
-        assert_eq!(unknown.outcome.exit(), ExitCode::Usage);
+        assert_eq!(unknown.outcome.exit_code, ExitCode::Usage);
     }
 
     /// A `deployment.toml` that cannot be read is refused and left as it
@@ -1623,7 +1623,7 @@ mod tests {
             group_only: Vec::new(),
         };
         let refused = po(root, &args, || Ok(Vec::new())).unwrap_err();
-        assert_eq!(refused.outcome.exit(), ExitCode::Usage);
+        assert_eq!(refused.outcome.exit_code, ExitCode::Usage);
         assert!(
             refused.outcome.message.starts_with(
                 "--no-promotion: .opentide/configurations/deployment.toml cannot be read ("

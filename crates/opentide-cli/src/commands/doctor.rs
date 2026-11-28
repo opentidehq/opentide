@@ -2020,7 +2020,7 @@ fn report(checks: &[Check], text: bool) -> Report {
         Json::Array(checks.iter().map(Check::to_json).collect()),
     )];
     let mut report = Report::completed(COMMAND, data);
-    report.outcome.set_status(status);
+    report.outcome.status = status;
     report.outcome.message.clone_from(&message);
     report.outcome.summary = vec![
         ("checks".to_owned(), int(checks.len())),
@@ -2030,7 +2030,7 @@ fn report(checks: &[Check], text: bool) -> Report {
         ("skipped".to_owned(), int(skipped)),
     ];
     if failed > 0 {
-        report.outcome.set_exit(ExitCode::Failure);
+        report.outcome.exit_code = ExitCode::Failure;
         report.outcome.failure = Some(Failure::new(CHECKS_FAILED, message));
     }
     if text {
@@ -2412,8 +2412,8 @@ mod tests {
             workspace.2.starts_with("No workspace at ./"),
             "{workspace:?}"
         );
-        assert_eq!(report.outcome.exit(), ExitCode::Failure);
-        assert_eq!(report.outcome.status(), Status::Failed);
+        assert_eq!(report.outcome.exit_code, ExitCode::Failure);
+        assert_eq!(report.outcome.status, Status::Failed);
         assert_eq!(report.outcome.failure.unwrap().code, CHECKS_FAILED);
         let codes: Vec<&str> = found.iter().map(|(code, ..)| code.as_str()).collect();
         assert_eq!(
@@ -2464,8 +2464,8 @@ mod tests {
                 .starts_with("4 template(s) missing")
         );
         assert_eq!(get("schemas_fresh")[0].0, "warn");
-        assert_eq!(report.outcome.status(), Status::Issues);
-        assert_eq!(report.outcome.exit(), ExitCode::Success);
+        assert_eq!(report.outcome.status, Status::Issues);
+        assert_eq!(report.outcome.exit_code, ExitCode::Success);
     }
 
     #[test]
@@ -2532,7 +2532,7 @@ mod tests {
         };
         let report = super::super::generate::phases(&["schemas".to_owned()], &cx, "9.9.9");
         assert_eq!(
-            report.outcome.exit(),
+            report.outcome.exit_code,
             ExitCode::Success,
             "{}",
             report.outcome.message

@@ -737,7 +737,7 @@ mod tests {
         assert!(result.bare_exit);
         let report = result.report("deploy");
         assert!(report.bare_exit);
-        assert_eq!(report.outcome.exit_code, 1);
+        assert_eq!(report.outcome.exit_code, ExitCode::Failure);
     }
 
     #[test]
