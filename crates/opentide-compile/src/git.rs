@@ -2060,8 +2060,12 @@ pub fn local_branches(start: &Path) -> Vec<String> {
 /// in the system, global and, in a checkout, repository configuration, then
 /// in the `GIT_CONFIG_COUNT` overrides. The files are found through `env`
 /// (`HOME`, `XDG_CONFIG_HOME`, `GIT_CONFIG_GLOBAL`, `GIT_CONFIG_NOSYSTEM`,
-/// `GIT_CONFIG_SYSTEM`), as git finds them in its own environment. Includes
-/// are followed; conditional ones (`includeIf`) are not.
+/// `GIT_CONFIG_SYSTEM`), as git finds them in its own environment, and the
+/// checkout through it too (`GIT_DIR`, `GIT_WORK_TREE`,
+/// `GIT_CEILING_DIRECTORIES`; see [`discover_with`]). With
+/// `extensions.worktreeConfig` on, the worktree's own `config.worktree` is
+/// read after the repository's file, as git reads it. Includes are
+/// followed; conditional ones (`includeIf`) are not.
 pub fn config_value(start: &Path, key: &str, env: Env<'_>) -> Option<String> {
     if let Some(value) = config_override(key, env) {
         return Some(value);
@@ -2080,7 +2084,7 @@ pub fn config_value(start: &Path, key: &str, env: Env<'_>) -> Option<String> {
             .then(|| gix_config::file::Metadata::from(source).at(path))
     })
     .collect();
-    if let Some((_, git_dir)) = discover(start) {
+    if let Some((_, git_dir)) = discover_with(start, &os_env(env)) {
         let common = match gix_discover::path::from_plain_file_relative_to_file(
             &git_dir.join("commondir"),
         ) {
@@ -2090,6 +2094,12 @@ pub fn config_value(start: &Path, key: &str, env: Env<'_>) -> Option<String> {
         metas.push(
             gix_config::file::Metadata::from(gix_config::Source::Local).at(common.join("config")),
         );
+        if worktree_config(&git_dir) {
+            metas.push(
+                gix_config::file::Metadata::from(gix_config::Source::Worktree)
+                    .at(git_dir.join("config.worktree")),
+            );
+        }
     }
     metas.retain(|meta| meta.path.as_deref().is_some_and(Path::is_file));
     let home = env("HOME").map(PathBuf::from);
@@ -2100,6 +2110,36 @@ pub fn config_value(start: &Path, key: &str, env: Env<'_>) -> Option<String> {
     let config = gix_config::File::from_paths_metadata(metas, options).ok()??;
     let value = config.string(key)?;
     Some(String::from_utf8_lossy(&value).into_owned())
+}
+
+/// `env` as discovery reads it: each value as an [`std::ffi::OsString`].
+fn os_env(env: Env<'_>) -> impl Fn(&str) -> Option<std::ffi::OsString> + '_ {
+    move |name| env(name).map(std::ffi::OsString::from)
+}
+
+/// Whether the repository `git_dir` belongs to has `extensions.worktreeConfig`
+/// on, so each worktree's `config.worktree` is read (git reads the extension
+/// whatever `core.repositoryFormatVersion` says).
+fn worktree_config(git_dir: &Path) -> bool {
+    config(git_dir)
+        .and_then(|config| config.boolean("extensions.worktreeConfig").ok().flatten())
+        .unwrap_or(false)
+}
+
+/// Whether `start`, below the work tree `top` of the checkout whose git
+/// directory is `git_dir`, is where git finds no work tree: inside the git
+/// directory itself, or inside a repository nested in the work tree (a bare
+/// `nested.git`, say), which git finds first.
+fn outside_the_work_tree(start: &Path, top: &Path, git_dir: &Path) -> bool {
+    let real = |path: &Path| gix_path::realpath(path).unwrap_or_else(|_| absolute(path));
+    let (start, top) = (real(start), real(top));
+    if start.starts_with(real(git_dir)) {
+        return true;
+    }
+    start
+        .ancestors()
+        .take_while(|dir| *dir != top && dir.starts_with(&top))
+        .any(|dir| gix_discover::is_git(dir).is_ok())
 }
 
 /// The last `GIT_CONFIG_KEY_<n>` naming `key` among the first
@@ -2141,11 +2181,20 @@ pub struct HooksLayout {
     pub hooks_dir: PathBuf,
 }
 
-/// The hooks layout of the checkout at or above `start`, `None` outside one
-/// (or in a bare repository). `core.hooksPath` is read as
-/// [`config_value`] reads it, through `env`.
+/// The hooks layout of the checkout at or above `start`, `None` outside one,
+/// in a bare repository, or where git finds no work tree (inside the git
+/// directory, or inside a repository nested in the work tree). The checkout
+/// is found through `env` (`GIT_DIR`, `GIT_WORK_TREE`,
+/// `GIT_CEILING_DIRECTORIES`; see [`discover_with`]), and `core.hooksPath`
+/// is read as [`config_value`] reads it, through `env` too.
 pub fn hooks_layout(start: &Path, env: Env<'_>) -> Option<HooksLayout> {
-    let (top, git_dir) = discover(start)?;
+    let (top, git_dir) = discover_with(start, &os_env(env))?;
+    // With `GIT_DIR` set git searches nothing, so nothing nested hides it.
+    if env("GIT_DIR").is_none_or(|dir| dir.is_empty())
+        && outside_the_work_tree(start, &top, &git_dir)
+    {
+        return None;
+    }
     let common_dir =
         match gix_discover::path::from_plain_file_relative_to_file(&git_dir.join("commondir")) {
             Some(Ok(common)) => common,

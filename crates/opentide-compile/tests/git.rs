@@ -1953,6 +1953,152 @@ fn the_hooks_layout_is_read_as_git_rev_parse_prints_it() {
     assert_eq!(git::hooks_layout(&outside, &|_: &str| None), None);
 }
 
+/// `hooks_layout` and `config_value` find the checkout through the run's
+/// environment, as `git rev-parse` and `git config` did (#1955): `GIT_DIR`
+/// and `GIT_WORK_TREE` from outside the checkout, and a
+/// `GIT_CEILING_DIRECTORIES` that hides it.
+#[test]
+fn the_hooks_layout_and_configuration_follow_the_runs_git_variables() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dunce::canonicalize(dir.path()).unwrap();
+    let repo = root.join("dépôt");
+    let deep = repo.join("sous/😀");
+    std::fs::create_dir_all(&deep).unwrap();
+    git_cmd(&repo, &["init", "-q", "-b", "main"]);
+    git_cmd(&repo, &["config", "core.hooksPath", "mes-hooks"]);
+    git_cmd(&repo, &["config", "user.name", "Zoë 😀"]);
+    std::fs::create_dir_all(repo.join("mes-hooks")).unwrap();
+    let outside = root.join("ailleurs");
+    std::fs::create_dir_all(&outside).unwrap();
+    let git_dir = repo.join(".git").display().to_string();
+    let work_tree = repo.display().to_string();
+    let named = |name: &str| match name {
+        "GIT_DIR" => Some(git_dir.clone()),
+        "GIT_WORK_TREE" => Some(work_tree.clone()),
+        "GIT_CONFIG_NOSYSTEM" => Some("1".to_owned()),
+        _ => None,
+    };
+    let layout = git::hooks_layout(&outside, &named).unwrap();
+    let printed = Command::new("git")
+        .args(["rev-parse", "--show-toplevel"])
+        .current_dir(&outside)
+        .env("GIT_DIR", &git_dir)
+        .env("GIT_WORK_TREE", &work_tree)
+        .env("GIT_CONFIG_NOSYSTEM", "1")
+        .output()
+        .unwrap();
+    assert!(printed.status.success());
+    let printed = String::from_utf8(printed.stdout).unwrap();
+    assert_eq!(
+        dunce::canonicalize(&layout.top).unwrap(),
+        dunce::canonicalize(printed.trim_end()).unwrap()
+    );
+    // A relative `core.hooksPath` is taken from the top level, where git
+    // runs its hooks.
+    assert_eq!(layout.hooks_dir, repo.join("mes-hooks"));
+    assert_eq!(layout.common_dir, repo.join(".git"));
+    assert_eq!(
+        git::config_value(&outside, "user.name", &named).as_deref(),
+        Some("Zoë 😀")
+    );
+    let bare = |name: &str| match name {
+        "GIT_CONFIG_NOSYSTEM" => Some("1".to_owned()),
+        _ => None,
+    };
+    assert_eq!(git::hooks_layout(&outside, &bare), None);
+    assert_eq!(git::config_value(&outside, "user.name", &bare), None);
+    // A ceiling at the top level hides the checkout from a subfolder.
+    let ceiling = |name: &str| match name {
+        "GIT_CEILING_DIRECTORIES" => Some(work_tree.clone()),
+        "GIT_CONFIG_NOSYSTEM" => Some("1".to_owned()),
+        _ => None,
+    };
+    assert_eq!(git::hooks_layout(&deep, &ceiling), None);
+    assert_eq!(git::config_value(&deep, "user.name", &ceiling), None);
+    assert!(git::hooks_layout(&deep, &bare).is_some());
+}
+
+/// With `extensions.worktreeConfig` on, a linked worktree's
+/// `git config --worktree core.hooksPath` is where git runs its hooks, and
+/// `hooks_layout` reads it there; the main worktree keeps its own hooks
+/// (#1955).
+#[test]
+fn a_worktree_hooks_path_is_read_with_the_worktree_config_extension() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dunce::canonicalize(dir.path()).unwrap();
+    let repo = root.join("dépôt");
+    std::fs::create_dir_all(&repo).unwrap();
+    git_cmd(&repo, &["init", "-q", "-b", "main"]);
+    write(&repo, "a.txt", "a\n");
+    commit(&repo, "a");
+    let linked = root.join("lié");
+    git_cmd(
+        &repo,
+        &["worktree", "add", "-q", "-b", "w", linked.to_str().unwrap()],
+    );
+    git_cmd(&repo, &["config", "extensions.worktreeConfig", "true"]);
+    let only = root.join("seulement 😀");
+    std::fs::create_dir_all(&only).unwrap();
+    std::fs::create_dir_all(repo.join(".git/hooks")).unwrap();
+    git_cmd(
+        &linked,
+        &[
+            "config",
+            "--worktree",
+            "core.hooksPath",
+            only.to_str().unwrap(),
+        ],
+    );
+    let layout = read_layout(&linked, &repo);
+    assert_eq!(layout, rev_parse_layout(&linked));
+    assert_eq!(layout[1], only);
+    assert_eq!(read_layout(&repo, &repo), rev_parse_layout(&repo));
+    assert_eq!(read_layout(&repo, &repo)[1], repo.join(".git/hooks"));
+}
+
+/// Where git finds no work tree, `hooks_layout` finds no layout rather than
+/// the checkout around it (#1955): inside the git directory, and inside a
+/// bare repository nested in the work tree.
+#[test]
+fn no_hooks_layout_inside_the_git_directory_or_a_nested_bare_repository() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dunce::canonicalize(dir.path()).unwrap();
+    let repo = root.join("dépôt");
+    std::fs::create_dir_all(&repo).unwrap();
+    git_cmd(&repo, &["init", "-q", "-b", "main"]);
+    git_cmd(&repo, &["init", "-q", "--bare", "imbriqué 😀.git"]);
+    let nested = repo.join("imbriqué 😀.git");
+    let hooks = repo.join(".git/hooks");
+    std::fs::create_dir_all(&hooks).unwrap();
+    let lookup = |name: &str| match name {
+        "GIT_CONFIG_NOSYSTEM" => Some("1".to_owned()),
+        _ => None,
+    };
+    for probe in [
+        hooks.as_path(),
+        repo.join(".git").as_path(),
+        nested.as_path(),
+        nested.join("refs").as_path(),
+    ] {
+        let status = Command::new("git")
+            .args(["rev-parse", "--show-toplevel"])
+            .current_dir(probe)
+            .env_remove("GIT_DIR")
+            .env_remove("GIT_WORK_TREE")
+            .output()
+            .unwrap()
+            .status;
+        assert!(!status.success(), "{}", probe.display());
+        assert_eq!(
+            git::hooks_layout(probe, &lookup),
+            None,
+            "{}",
+            probe.display()
+        );
+    }
+    assert!(git::hooks_layout(&repo, &lookup).is_some());
+}
+
 /// Discovery without the process's git variables (a hook running the tests
 /// exports `GIT_DIR`).
 fn no_env(_: &str) -> Option<std::ffi::OsString> {

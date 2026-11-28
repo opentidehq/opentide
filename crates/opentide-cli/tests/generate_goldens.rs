@@ -1034,6 +1034,50 @@ fn setup_hooks_reads_the_layout_without_git() {
     assert!(!root.join("partagés/pre-commit").exists());
 }
 
+/// `setup hooks` finds the repository through the run's `GIT_DIR` and
+/// `GIT_WORK_TREE`, as `git rev-parse` did (#1955): the work tree has no
+/// `.git`, so without them there is no repository to install into.
+#[test]
+fn setup_hooks_follows_the_runs_git_dir() {
+    if !has_git() {
+        return;
+    }
+    let scratch = tempfile::tempdir().unwrap();
+    let root = std::fs::canonicalize(scratch.path()).unwrap();
+    let repo = root.join("repo");
+    let ws = repo.join("détection");
+    fixture("tide-corpus", &ws);
+    let store = root.join("dépôt 😀.git");
+    git(
+        &root,
+        &[
+            "init",
+            "-q",
+            "-b",
+            "main",
+            "--separate-git-dir",
+            store.to_str().unwrap(),
+            repo.to_str().unwrap(),
+        ],
+    );
+    std::fs::remove_file(repo.join(".git")).unwrap();
+    std::fs::create_dir_all(store.join("hooks")).unwrap();
+    let (code, stdout) = run_json_with(&ws, &["setup", "hooks", "--yes"], &[]);
+    assert_eq!(code, 0, "{stdout}");
+    assert!(!store.join("hooks/pre-commit").exists(), "{stdout}");
+    let named = [
+        ("GIT_DIR", store.to_str().unwrap()),
+        ("GIT_WORK_TREE", repo.to_str().unwrap()),
+    ];
+    let (code, stdout) = run_json_with(&ws, &["setup", "hooks", "--yes"], &named);
+    assert_eq!(code, 0, "{stdout}");
+    let hook = std::fs::read_to_string(store.join("hooks/pre-commit")).unwrap();
+    assert!(
+        hook.contains("# opentide-workspace: \"détection\""),
+        "{hook}"
+    );
+}
+
 /// Only the platforms whose file enables them get validate query jobs; and
 /// two different repository paths are refused before anything is written.
 #[test]
